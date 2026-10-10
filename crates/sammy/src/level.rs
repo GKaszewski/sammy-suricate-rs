@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use formats::wmb::{entity_flags, Entity as WmbEntity, LevelMesh, Object, Wmb};
 
 use crate::actions;
+use crate::collision::Brush;
 use crate::coords;
 use crate::material::LevelMaterial;
 use crate::model::{LoadedModel, ModelAnimator};
@@ -30,7 +31,7 @@ pub struct LevelObject(pub Object);
 #[derive(Default)]
 struct Cache {
     models: HashMap<String, Option<Arc<LoadedModel>>>,
-    prefabs: HashMap<String, Option<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>>>,
+    prefabs: HashMap<String, Option<(Arc<Wmb>, Vec<(Handle<Mesh>, Handle<StandardMaterial>)>)>>,
     sprites: HashMap<String, Option<(Handle<Mesh>, Handle<StandardMaterial>, u32)>>,
 }
 
@@ -71,6 +72,15 @@ impl Spawner<'_, '_, '_> {
         let start = player.map(|o| (coords::pos(o.origin), o.angles[0]));
         let pov_z = player.map_or(0.0, |o| o.origin[2]);
         let mut cache = Cache::default();
+        let mut gems = actions::pickups::GemSprites::default();
+        for color in [1, 2, 3, 4, 5, 6, crate::game::MASTER_KEY] {
+            let file = actions::pickups::gem_file(color).unwrap();
+            if let Some((mesh, mat, frames)) = self.load_sprite(file) {
+                // Runtime keys animate, so each gets its own material copy later.
+                gems.0.insert(color, (mesh, mat, frames));
+            }
+        }
+        self.commands.insert_resource(gems);
         for ent in &wmb.entities {
             let WmbEntity::Object(obj) = ent else { continue };
             self.spawn_object(obj.clone(), pov_z, root, &mut cache);
@@ -178,15 +188,19 @@ impl Spawner<'_, '_, '_> {
                 .prefabs
                 .entry(file.clone())
                 .or_insert_with(|| {
-                    let wmb = formats::wmb::parse(&self.files.read(&file).ok()?).ok()?;
-                    Some(self.prefab_meshes(&wmb))
+                    let wmb = Arc::new(formats::wmb::parse(&self.files.read(&file).ok()?).ok()?);
+                    let meshes = self.prefab_meshes(&wmb);
+                    Some((wmb, meshes))
                 })
                 .clone();
-            let Some(parts) = parts else {
+            let Some((wmb, parts)) = parts else {
                 self.commands.entity(id).despawn();
                 return warn!("missing prefab {file}");
             };
-            self.commands.entity(id).insert(base).with_children(|c| {
+            // Map entities are solid unless passable (A4 collides with their BSP hulls).
+            let solid = obj.flags & entity_flags::PASSABLE == 0 && !actions::is_passable(&obj.action);
+            let brush = Brush { wmb, origin: obj.origin, pan: obj.angles[0], solid };
+            self.commands.entity(id).insert((base, brush)).with_children(|c| {
                 for (mesh, mat) in parts {
                     c.spawn((Mesh3d(mesh), MeshMaterial3d(mat)));
                 }

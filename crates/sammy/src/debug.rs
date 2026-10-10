@@ -26,7 +26,14 @@ fn screenshot(
     mut exit: MessageWriter<AppExit>,
     cam: Query<&GlobalTransform, With<crate::camera::MainCamera>>,
     objs: Query<(&GlobalTransform, &crate::level::LevelObject)>,
+    player: Query<&crate::actions::player::Player>,
+    game: Res<crate::game::GameState>,
 ) {
+    if job.frame % 50 == 0
+        && let Ok(p) = player.single()
+    {
+        info!("f{} player pos {:?} pan {:.0} state {:?} grounded {} on {:?}; game {:?}", job.frame, p.pos, p.pan, p.state, p.grounded, p.ground_entity, *game);
+    }
     job.frame += 1;
     if [150, 250].contains(&job.frame) {
         let p = job.path.replace(".png", &format!("_{}.png", job.frame));

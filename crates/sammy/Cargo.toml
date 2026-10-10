@@ -5,6 +5,6 @@ edition.workspace = true
 
 [dependencies]
 formats.workspace = true
-bevy = "0.20"
+bevy = { version = "0.20", features = ["wav"] }
 serde_json = "1"
 anyhow.workspace = true

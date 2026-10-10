@@ -25,4 +25,7 @@ cargo run -p formats --example wmbinfo -- extracted/levels/10001.wmb
 
 Debug env vars for `sammy`: `SAMMY_SCREENSHOT=out.png` (capture frames 150/250 and exit),
 `SAMMY_SKIP=action1,action2` (hide objects by action), `SAMMY_NOLM=1` (no lightmaps),
-`SAMMY_NODUMMY=1` (hide `*dummy*`-textured brushes).
+`SAMMY_NODUMMY=1` (hide `*dummy*`-textured brushes),
+`SAMMY_START=x,y,z[,pan]` (spawn point), `SAMMY_KEY=255` (start with a key), `SAMMY_AUTOWALK=1` (hold forward).
+
+Controls: arrows walk/turn, Ctrl jump, Enter dismiss help sign, F1 free-fly camera.

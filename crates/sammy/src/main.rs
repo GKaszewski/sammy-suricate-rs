@@ -1,7 +1,11 @@
 mod actions;
+mod audio;
 mod camera;
+mod collision;
 mod coords;
 mod debug;
+mod game;
+mod hud;
 mod image;
 mod level;
 mod material;
@@ -46,10 +50,10 @@ fn main() -> anyhow::Result<()> {
             primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
             ..default()
         }))
-        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, debug::DebugPlugin))
+        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, debug::DebugPlugin))
         .insert_resource(files)
         .insert_resource(args)
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (audio::load_sounds, setup))
         .add_systems(Update, (level::face_camera, level::animate_sprites))
         .run();
     Ok(())
@@ -122,6 +126,7 @@ fn setup(
         Camera { order: 2, clear_color: ClearColorConfig::None, ..default() },
         Tonemapping::Linear,
         level::NEAR_LAYER,
+        IsDefaultUiCamera,
         cam_tf,
         SkyCamera,
     ));

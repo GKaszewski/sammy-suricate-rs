@@ -2,6 +2,8 @@
 //! action name is dispatched here when the level is spawned.
 
 mod decor;
+pub mod door;
+pub mod pickups;
 pub mod player;
 pub mod title;
 
@@ -9,6 +11,7 @@ use bevy::prelude::*;
 use formats::wmb::Object;
 
 use crate::camera::CameraParams;
+use crate::game::GameState;
 
 
 pub struct ActionsPlugin;
@@ -16,7 +19,19 @@ pub struct ActionsPlugin;
 impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<player::JumpParams>()
-            .add_systems(Update, (player::move_player, title::update_titles))
+            .init_resource::<GameState>()
+            .add_systems(PostStartup, |mut g: ResMut<GameState>| g.apply_debug_env())
+            .init_resource::<pickups::GemSprites>()
+            .add_systems(
+                Update,
+                (
+                    door::run_doors,
+                    player::move_player,
+                    (pickups::snap_pickups, pickups::collect, pickups::bounce_keys, pickups::shrink, door::run_exits),
+                    title::update_titles,
+                )
+                    .chain(),
+            )
             .add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
     }
 }
@@ -32,11 +47,17 @@ pub struct ActionInit {
     pub title: bool,
 }
 
+/// Map entities the player walks through (pickups, triggers).
+pub fn is_passable(action: &str) -> bool {
+    let a = action.to_ascii_lowercase();
+    ["initteleport", "initrestart", "initbonusvie", "initeyeoftruth", "initsmallheart"].contains(&a.as_str())
+}
+
 /// Config and marker entities: their actions only read skills into globals
 /// and hide the entity (mm1.wdl InitGame*, InitCamera*, ...).
 fn is_marker(action: &str) -> bool {
     const PREFIXES: &[&str] = &[
-        "initgame", "initcamera", "initextraballes", "initnextraballes", "initpublic", "initinvisible",
+        "initgame", "initcamera", "setcamera", "initextraballes", "initnextraballes", "initpublic", "initinvisible",
         "initset", "initpath", "initprotection", "initlionskills", "initrangemdl",
     ];
     PREFIXES.iter().any(|p| action.starts_with(p))
@@ -48,6 +69,14 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
     let action = obj.action.to_ascii_lowercase();
     // Camera config entities feed the follow camera before being hidden.
     match action.as_str() {
+        "initgame" => {
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<GameState>().apply_init_game(&o));
+        }
+        "initgame2" => {
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<GameState>().apply_init_game2(&o));
+        }
         "initcamera1" => {
             let o = obj.clone();
             entity.commands().queue(move |w: &mut World| w.resource_mut::<CameraParams>().apply_init_camera1(&o));
@@ -69,6 +98,22 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initskymenu" => decor::init_sky_menu(obj, pov_z, entity),
         "initmarche" => {
             player::init_player(obj, entity);
+            ActionInit::default()
+        }
+        "initbonus3" => {
+            pickups::init_bonus3(obj, entity);
+            ActionInit::default()
+        }
+        "initkey" => {
+            pickups::init_key(obj, entity);
+            ActionInit::default()
+        }
+        "initdoor" => {
+            door::init_door(obj, entity);
+            ActionInit::default()
+        }
+        "initexit" => {
+            door::init_exit(entity);
             ActionInit::default()
         }
         "inittitle" => {

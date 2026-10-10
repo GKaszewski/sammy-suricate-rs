@@ -9,6 +9,7 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use formats::wmb::{Object, Wmb};
 
+use crate::collision::CollisionWorld;
 use crate::coords;
 use crate::model::ModelAnimator;
 
@@ -92,6 +93,10 @@ pub struct Player {
     pub vz: f32,
     pub fric: f32,
     pub grounded: bool,
+    /// Brush entity Sammy stands on (None = level geometry).
+    pub ground_entity: Option<Entity>,
+    /// `BlobZoneScan` (WED Skill5, default 104): pickup scan radius.
+    pub scan_radius: f32,
     pub state: State,
     snapped: bool,
 }
@@ -99,33 +104,48 @@ pub struct Player {
 pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
     obj.scale = [SCALE; 3];
     let speed = obj.skills.get(1).copied().filter(|&s| s > 0.0).unwrap_or(25.0);
+    let scan_radius = obj.skills.get(4).copied().filter(|&s| s > 0.0).unwrap_or(104.0);
+    // Debug: SAMMY_START="x,y,z[,pan]" overrides the spawn point.
+    let (mut pos, mut pan) = (obj.origin, obj.angles[0]);
+    if let Ok(v) = std::env::var("SAMMY_START") {
+        let n: Vec<f32> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+        if n.len() >= 3 {
+            pos = [n[0], n[1], n[2]];
+        }
+        if let Some(&a) = n.get(3) {
+            pan = a;
+        }
+    }
     entity.insert(Player {
-        pos: obj.origin,
-        pan: obj.angles[0],
+        pos,
+        pan,
         speed,
         vz: 0.0,
         fric: 0.0,
         grounded: true,
+        ground_entity: None,
+        scan_radius,
         state: State::Stand,
         snapped: false,
     });
 }
 
-/// Height of the floor below `p` (sonar from z+8, `playerClimb`), or None over the void.
-fn floor_below(wmb: &Wmb, p: [f32; 3]) -> Option<f32> {
+/// Height of the floor below `p` (sonar from z+8, `playerClimb`) and the brush it
+/// belongs to, or None over the void.
+fn floor_below(world: &CollisionWorld, p: [f32; 3]) -> Option<(f32, Option<Entity>)> {
     let start = [p[0], p[1], p[2] + 8.0];
-    let tr = wmb.trace(0, 1, start, [p[0], p[1], p[2] - 2000.0]);
-    (tr.hit() && !tr.start_solid).then(|| tr.end[2] - HULL1_HALF)
+    let hit = world.trace(1, start, [p[0], p[1], p[2] - 2000.0], None);
+    (hit.trace.hit() && !hit.trace.start_solid).then(|| (hit.trace.end[2] - HULL1_HALF, hit.entity))
 }
 
 /// Moves along `delta`, sliding along walls (approximates A4's `MOVE` glide).
-fn slide_move(wmb: &Wmb, mut pos: [f32; 3], mut delta: [f32; 3]) -> [f32; 3] {
+fn slide_move(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 3]) -> [f32; 3] {
     for _ in 0..4 {
         if delta.iter().all(|d| d.abs() < 1e-4) {
             break;
         }
         let end = [pos[0] + delta[0], pos[1] + delta[1], pos[2] + delta[2]];
-        let tr = wmb.trace(0, HULL, pos, end);
+        let tr = world.trace(HULL, pos, end, None).trace;
         if tr.start_solid {
             return pos;
         }
@@ -145,15 +165,16 @@ pub fn move_player(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     jump: Res<JumpParams>,
-    level: Option<Res<LevelCollision>>,
+    world: CollisionWorld,
     mut q: Query<(&mut Player, &mut Transform, Option<&mut ModelAnimator>)>,
 ) {
-    let Some(level) = level else { return };
-    let wmb = &level.0;
+    if !world.ready() {
+        return;
+    }
     let t = (time.delta_secs() * TICKS).min(4.0); // `time` in ticks, clamped like A4's time_smooth
     for (mut p, mut tf, mut anim) in &mut q {
         if !p.snapped {
-            if let Some(f) = floor_below(wmb, p.pos) {
+            if let Some((f, _)) = floor_below(&world, p.pos) {
                 p.pos[2] = f + BLOB_HAUT;
             }
             p.snapped = true;
@@ -162,7 +183,10 @@ pub fn move_player(
         // Intention: x = right(+)/left(-), y = forward(+)/back(-) (Key_Force).
         let axis = |pos: KeyCode, neg: KeyCode| keys.pressed(pos) as i32 as f32 - keys.pressed(neg) as i32 as f32;
         let ix = axis(KeyCode::ArrowRight, KeyCode::ArrowLeft);
-        let iy = axis(KeyCode::ArrowUp, KeyCode::ArrowDown);
+        let mut iy = axis(KeyCode::ArrowUp, KeyCode::ArrowDown);
+        if std::env::var_os("SAMMY_AUTOWALK").is_some() {
+            iy = 1.0; // debug: hold forward
+        }
         let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
         let ctrl_hit = keys.just_pressed(KeyCode::ControlLeft) || keys.just_pressed(KeyCode::ControlRight);
 
@@ -182,7 +206,7 @@ pub fn move_player(
             iy * p.speed * 0.75 * t
         };
         let (s, c) = p.pan.to_radians().sin_cos();
-        p.pos = slide_move(wmb, p.pos, [c * v, s * v, 0.0]);
+        p.pos = slide_move(&world, p.pos, [c * v, s * v, 0.0]);
 
         // 3. Jump (PlayerJump): only from the ground in a normal state. Moving jumps take
         //    off at once; standing jumps play the "sautA" wind-up first.
@@ -215,10 +239,13 @@ pub fn move_player(
         }
 
         // 4. Vertical motion: snap to the floor when grounded, else ballistic.
-        let floor = floor_below(wmb, p.pos);
+        let floor = floor_below(&world, p.pos);
         if p.grounded {
             match floor {
-                Some(f) if p.pos[2] - BLOB_HAUT - f <= 1.0 => p.pos[2] = f + BLOB_HAUT,
+                Some((f, e)) if p.pos[2] - BLOB_HAUT - f <= 1.0 => {
+                    p.pos[2] = f + BLOB_HAUT;
+                    p.ground_entity = e;
+                }
                 _ => {
                     // Walked off a ledge (`Gravite`, `AccGravite`).
                     p.grounded = false;
@@ -228,27 +255,35 @@ pub fn move_player(
             }
         }
         let mut landed = false;
-        if !p.grounded {
+        if !p.grounded && p.vz != 0.0 {
             p.vz -= p.fric * t;
             let target = [p.pos[0], p.pos[1], p.pos[2] + p.vz * t];
-            let tr = wmb.trace(0, HULL, p.pos, target);
-            if tr.hit() && p.vz > 0.0 {
-                p.vz = 0.0; // ceiling cancels the ascent
+            let tr = world.trace(HULL, p.pos, target, None).trace;
+            if tr.start_solid {
+                // Stuck inside geometry (e.g. a closing door): never sink through it.
+                p.vz = 0.0;
+                p.grounded = true;
+            } else {
+                if tr.hit() && p.vz > 0.0 {
+                    p.vz = 0.0; // ceiling cancels the ascent
+                }
+                p.pos = tr.end;
             }
-            p.pos = tr.end;
-            let floor = floor_below(wmb, p.pos);
+            let floor = floor_below(&world, p.pos);
+            let floor_z = floor.map(|(f, _)| f);
             // A real fall (more than 64 below the normal height) shows the jump animation.
-            if p.state != State::Air && floor.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
+            if p.state != State::Air && floor_z.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
                 p.state = State::Air;
                 if let Some(a) = anim.as_deref_mut() {
                     a.play("sautB", false, 50.0);
                 }
             }
-            if let Some(f) = floor
+            if let Some((f, e)) = floor
                 && p.vz <= 0.0
                 && p.pos[2] <= f + BLOB_HAUT
             {
                 p.pos[2] = f + BLOB_HAUT;
+                p.ground_entity = e;
                 p.grounded = true;
                 p.vz = 0.0;
                 landed = true;
