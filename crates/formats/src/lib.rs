@@ -5,8 +5,10 @@
 
 pub mod image;
 pub mod lzss;
+pub mod mdl;
 pub mod pcx;
 pub mod reader;
+pub mod wmb;
 pub mod wrs;
 
 #[derive(Debug, thiserror::Error)]

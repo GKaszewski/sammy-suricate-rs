@@ -1,4 +1,5 @@
 mod extract;
+mod glb;
 mod images;
 mod level;
 mod model;
