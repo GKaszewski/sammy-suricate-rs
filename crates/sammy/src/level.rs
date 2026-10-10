@@ -26,7 +26,7 @@ pub const NEAR_LAYER: RenderLayers = RenderLayers::layer(2);
 
 /// Marker for every entity spawned from a WMB object record.
 #[derive(Component)]
-pub struct LevelObject(pub Object);
+pub struct LevelObject(#[allow(dead_code)] pub Object);
 
 #[derive(Default)]
 struct Cache {
@@ -49,7 +49,7 @@ impl Spawner<'_, '_, '_> {
     pub fn spawn_level(&mut self, name: &str) -> anyhow::Result<Option<(Vec3, f32)>> {
         let wmb = Arc::new(formats::wmb::parse(&self.files.read(name)?)?);
         self.commands.insert_resource(actions::player::LevelCollision(wmb.clone()));
-        let root = self.commands.spawn((Name::new(name.to_owned()), Transform::default(), Visibility::default())).id();
+        let root = self.commands.spawn((Name::new(name.to_owned()), Transform::default(), Visibility::default(), crate::flow::LevelRoot)).id();
         let level = wmb.build_mesh();
         let lightmap = level
             .lightmap

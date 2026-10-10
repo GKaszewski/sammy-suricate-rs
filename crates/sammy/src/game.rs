@@ -23,6 +23,8 @@ pub struct GameState {
     pub goal_reached: bool,
     /// `partieGagnee`.
     pub won: bool,
+    /// Out of lives (`BallesJoueur1 == 0` after a death).
+    pub lost: bool,
     /// Ticks left of the score-panel blink (`WarnScoreGoal`).
     pub warn_score: f32,
 }

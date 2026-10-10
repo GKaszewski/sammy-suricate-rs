@@ -71,7 +71,9 @@ fn update(
     mut score: Query<(&mut Text, &mut TextColor), (With<ScoreText>, Without<KeyText>, Without<Banner>)>,
     mut key: Query<(&mut Text, &mut TextColor), (With<KeyText>, Without<ScoreText>, Without<Banner>)>,
     mut banner: Query<&mut Text, (With<Banner>, Without<ScoreText>, Without<KeyText>)>,
+    current: Res<crate::flow::CurrentLevel>,
 ) {
+    use crate::flow::Phase;
     game.warn_score = (game.warn_score - time.delta_secs() * TICKS).max(0.0);
     if let Ok((mut t, mut c)) = score.single_mut() {
         t.0 = format!("{} / {}", game.score, game.goal);
@@ -90,6 +92,14 @@ fn update(
         c.0 = color;
     }
     if let Ok(mut t) = banner.single_mut() {
-        t.0 = if game.won { "Level complete!".into() } else { String::new() };
+        t.0 = match current.phase {
+            Phase::Intro => match current.slot {
+                Some(n) => format!("Level {n}\n<Enter>"),
+                None => current.file.clone(),
+            },
+            Phase::Won(_) => "Level complete!".into(),
+            Phase::Lost(_) => "Game over".into(),
+            Phase::Playing => String::new(),
+        };
     }
 }

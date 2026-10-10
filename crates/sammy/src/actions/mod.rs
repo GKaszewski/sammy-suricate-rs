@@ -20,14 +20,20 @@ impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<player::JumpParams>()
             .init_resource::<GameState>()
-            .add_systems(PostStartup, |mut g: ResMut<GameState>| g.apply_debug_env())
             .init_resource::<pickups::GemSprites>()
             .add_systems(
                 Update,
                 (
-                    door::run_doors,
+                    // Sammy's scans (doors, pickups, exit) only run while playing.
+                    door::run_doors.run_if(is_playing),
                     player::move_player,
-                    (pickups::snap_pickups, pickups::collect, pickups::bounce_keys, pickups::shrink, door::run_exits),
+                    (
+                        pickups::snap_pickups,
+                        pickups::collect.run_if(is_playing),
+                        pickups::bounce_keys,
+                        pickups::shrink,
+                        door::run_exits.run_if(is_playing),
+                    ),
                     title::update_titles,
                 )
                     .chain(),
@@ -45,6 +51,10 @@ pub struct ActionInit {
     pub hidden: bool,
     /// Help sign: own fading material, drawn on top, screen-aligned.
     pub title: bool,
+}
+
+fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
+    crate::flow::playing(&current)
 }
 
 /// Map entities the player walks through (pickups, triggers).
@@ -75,7 +85,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initgame2" => {
             let o = obj.clone();
-            entity.commands().queue(move |w: &mut World| w.resource_mut::<GameState>().apply_init_game2(&o));
+            entity.commands().queue(move |w: &mut World| {
+                w.resource_mut::<GameState>().apply_init_game2(&o);
+                w.resource_mut::<CameraParams>().apply_init_game2(&o);
+            });
         }
         "initcamera1" => {
             let o = obj.clone();

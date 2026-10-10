@@ -79,6 +79,8 @@ pub enum State {
     Air,
     /// Landing ("sautC", played once).
     Land,
+    /// Level won: "Iwin" while spinning (`AnimGagnee`).
+    Win,
 }
 
 #[derive(Component)]
@@ -165,9 +167,13 @@ pub fn move_player(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     jump: Res<JumpParams>,
+    current: Res<crate::flow::CurrentLevel>,
     world: CollisionWorld,
     mut q: Query<(&mut Player, &mut Transform, Option<&mut ModelAnimator>)>,
 ) {
+    use crate::flow::Phase;
+    // Input only counts while the level is being played (`PartieEncours == 1`).
+    let input = crate::flow::playing(&current);
     if !world.ready() {
         return;
     }
@@ -182,13 +188,30 @@ pub fn move_player(
 
         // Intention: x = right(+)/left(-), y = forward(+)/back(-) (Key_Force).
         let axis = |pos: KeyCode, neg: KeyCode| keys.pressed(pos) as i32 as f32 - keys.pressed(neg) as i32 as f32;
-        let ix = axis(KeyCode::ArrowRight, KeyCode::ArrowLeft);
+        let mut ix = axis(KeyCode::ArrowRight, KeyCode::ArrowLeft);
         let mut iy = axis(KeyCode::ArrowUp, KeyCode::ArrowDown);
         if std::env::var_os("SAMMY_AUTOWALK").is_some() {
             iy = 1.0; // debug: hold forward
         }
-        let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
-        let ctrl_hit = keys.just_pressed(KeyCode::ControlLeft) || keys.just_pressed(KeyCode::ControlRight);
+        let mut ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+        let mut ctrl_hit = keys.just_pressed(KeyCode::ControlLeft) || keys.just_pressed(KeyCode::ControlRight);
+        if !input {
+            (ix, iy, ctrl, ctrl_hit) = (0.0, 0.0, false, false);
+        }
+        if matches!(current.phase, Phase::Won(_)) && p.grounded {
+            // AnimGagnee: "Iwin" while spinning 12°/tick.
+            if p.state != State::Win {
+                p.state = State::Win;
+                if let Some(a) = anim.as_deref_mut() {
+                    a.play("Iwin", true, 0.0);
+                    a.set_speed_pct(3.0, TICKS);
+                }
+            }
+            p.pan += 12.0 * t;
+            tf.translation = coords::pos(p.pos);
+            tf.rotation = coords::rotation([p.pan, 0.0, 0.0]);
+            continue;
+        }
 
         // 1. Turning: 10°/tick standing, 7 moving, half in the air.
         let mut rate = if iy != 0.0 { 7.0 } else { 10.0 };

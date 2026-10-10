@@ -7,6 +7,7 @@ use formats::wmb::Object;
 
 use crate::actions::player::{LevelCollision, Player, TICKS};
 use crate::coords;
+use crate::flow::{CurrentLevel, Phase};
 
 pub struct CameraPlugin;
 
@@ -53,6 +54,8 @@ pub struct CameraParams {
     /// Type-3 horizontal / vertical frictions.
     pub fric_h: f32,
     pub fric_v: f32,
+    /// Level-start camera origin and pan/tilt (`CameraPosOrigine`, `InitGame2` Skill2-6).
+    pub origin: Option<([f32; 3], f32, f32)>,
     /// `camera.arc`: horizontal field of view in degrees (`CameraArcVoulu`, default 60).
     pub arc: f32,
     /// Emergency-camera zoom limits (`InitCamera4` Skill1; distance floor 50).
@@ -73,6 +76,7 @@ impl Default for CameraParams {
             zoom_min_height: 105.0,
             zoom_min_dist: 50.0,
             arc: 60.0,
+            origin: None,
         }
     }
 }
@@ -86,6 +90,15 @@ impl CameraParams {
         self.back = or(s[6], self.back);
         // Skill8 is "always applied, even 0" (docs/gameplay.md §6.1).
         self.plus_tilt = s[7];
+    }
+
+    pub fn apply_init_game2(&mut self, obj: &Object) {
+        let s = &obj.skills;
+        let mut tilt = s[5];
+        if tilt == 90.0 {
+            tilt = -90.0; // "erreur de Wed !" (mm1.wdl:1838)
+        }
+        self.origin = Some(([s[1], s[2], s[3]], s[4], tilt));
     }
 
     pub fn apply_init_camera2(&mut self, obj: &Object) {
@@ -109,6 +122,8 @@ pub struct FollowState {
     /// `AngCamPerso`: smoothed copy of Sammy's pan.
     ang: f32,
     pos: Option<[f32; 3]>,
+    /// Within 4 quants of the ideal position (ends the level-start sweep).
+    pub converged: bool,
     /// Current (possibly zoomed-in) distance and height.
     dist: f32,
     height: f32,
@@ -142,6 +157,7 @@ fn angle_diff(a: f32) -> f32 {
 fn follow(
     time: Res<Time>,
     params: Res<CameraParams>,
+    current: Res<CurrentLevel>,
     level: Option<Res<LevelCollision>>,
     player: Query<&Player>,
     mut cam: Query<(&mut Transform, &mut FollowState), With<MainCamera>>,
@@ -149,9 +165,14 @@ fn follow(
     let (Ok(p), Ok((mut tf, mut st))) = (player.single(), cam.single_mut()) else { return };
     let t = time.delta_secs() * TICKS;
 
+    let intro = current.phase == Phase::Intro;
     // 1. Yaw follows Sammy's pan (4/AverageFps per frame = 4 per second).
     if st.pos.is_none() {
         st.ang = p.pan;
+        // The level-start sweep flies in from `CameraPosOrigine`.
+        if intro && let Some((o, ..)) = params.origin {
+            st.pos = Some(o);
+        }
     }
     st.ang += angle_diff(p.pan - st.ang) * (4.0 * time.delta_secs()).min(1.0);
 
@@ -186,16 +207,22 @@ fn follow(
         ideal = [0, 1, 2].map(|i| tr.end[i] + (eye[i] - ideal[i]) * 32.0 / len);
     }
 
-    // 3. Camera proxy eases toward the ideal (factor `fric × AdjustFpsCam3(0.5) × time`).
+    // 3. Camera proxy eases toward the ideal (factor `fric × AdjustFpsCam3 × time`;
+    //    during the start sweep: `Camera3FrictionStart` 0.5 and AdjustFpsCam3 0.1).
     let pos = st.pos.get_or_insert(ideal);
-    let kh = (params.fric_h * 0.5 * t).min(1.0);
-    let kv = (params.fric_v * 0.5 * t).min(1.0);
+    let (fh, adjust) = if intro { (0.5, 0.1) } else { (params.fric_h, 0.5) };
+    let kh = (fh * adjust * t).min(1.0);
+    let kv = (params.fric_v * adjust * t).min(1.0);
     pos[0] += (ideal[0] - pos[0]) * kh;
     pos[1] += (ideal[1] - pos[1]) * kh;
     pos[2] += (ideal[2] - pos[2]) * kv;
 
+    let gap = (0..3).map(|i| (ideal[i] - pos[i]).powi(2)).sum::<f32>().sqrt();
+    let pos = *pos;
+    st.converged = gap <= 4.0;
+
     // 5. Look at Sammy + PlusTilt.
-    tf.translation = coords::pos(*pos);
+    tf.translation = coords::pos(pos);
     tf.look_at(coords::pos(eye), Vec3::Y);
 }
 

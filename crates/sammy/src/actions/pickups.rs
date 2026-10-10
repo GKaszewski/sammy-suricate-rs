@@ -173,6 +173,7 @@ fn eject_key(commands: &mut Commands, game: &mut GameState, sprites: &GemSprites
     let back = (p.pan + 180.0).to_radians();
     commands.spawn((
         Name::new("ejected key"),
+        crate::flow::LevelScoped,
         Transform::from_translation(coords::pos(pos)),
         Mesh3d(mesh),
         MeshMaterial3d(mat),

@@ -4,6 +4,7 @@ mod camera;
 mod collision;
 mod coords;
 mod debug;
+mod flow;
 mod game;
 mod hud;
 mod image;
@@ -29,7 +30,7 @@ const DEFAULT_GAME_DIR: &str = "/mnt/drive/Games/sammy-suricate/drive_c/Program 
 struct Args {
     /// `--model <file> [anim]` shows a single model.
     model: Option<(String, Option<String>)>,
-    /// Level file name (default 10001.wmb).
+    /// Level file name or slot number (default: slot 1).
     level: String,
 }
 
@@ -43,14 +44,14 @@ fn main() -> anyhow::Result<()> {
             level: String::new(),
         },
         Some(level) => Args { model: None, level: level.to_owned() },
-        None => Args { model: None, level: "10001.wmb".into() },
+        None => Args { model: None, level: "1".into() },
     };
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
             ..default()
         }))
-        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, debug::DebugPlugin))
+        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, debug::DebugPlugin))
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, (audio::load_sounds, setup))
@@ -66,7 +67,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut level_materials: ResMut<Assets<material::LevelMaterial>>,
+    mut pending: ResMut<flow::PendingLoad>,
 ) {
     commands.spawn((DirectionalLight { illuminance: 8000.0, ..default() }, Transform::from_xyz(1.0, 2.0, 1.5).looking_at(Vec3::ZERO, Vec3::Y)));
     commands.insert_resource(GlobalAmbientLight { brightness: 400.0, ..default() });
@@ -87,20 +88,13 @@ fn setup(
         return;
     }
 
-    let mut spawner = level::Spawner {
-        commands: &mut commands,
-        files: &files,
-        meshes: &mut meshes,
-        images: &mut images,
-        materials: &mut materials,
-        level_materials: &mut level_materials,
+    // A slot number (1-49) or a WMB file name.
+    let file = match args.level.parse::<u32>() {
+        Ok(slot) => flow::file_for(slot).map(str::to_owned).unwrap_or_else(|| panic!("no level in slot {slot}")),
+        Err(_) => args.level.clone(),
     };
-    let start = spawner.spawn_level(&args.level).unwrap_or_else(|e| panic!("loading {}: {e}", args.level));
-    // Start the camera behind and above the player start, looking the way Sammy faces.
-    let (pos, pan) = start.unwrap_or((Vec3::ZERO, 0.0));
-    let yaw = pan.to_radians();
-    let back = Quat::from_rotation_y(yaw) * Vec3::Z;
-    let cam_tf = Transform::from_translation(pos + back * 6.0 + Vec3::Y * 10.0);
+    pending.0 = Some(file);
+    let cam_tf = Transform::default();
     // Sky domes render first on their own layer; the world camera draws on top
     // with a fresh depth buffer, like Acknex's sky pass.
     commands.spawn((
@@ -116,7 +110,7 @@ fn setup(
         Camera { order: 1, clear_color: ClearColorConfig::None, ..default() },
         Tonemapping::Linear,
         cam_tf,
-        FlyCamera { yaw, pitch: -0.9 },
+        FlyCamera::default(),
         FollowState::default(),
         MainCamera,
     ));
