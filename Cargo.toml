@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["crates/formats", "crates/sammy-convert", "crates/sammy"]
+
+[workspace.package]
+edition = "2024"
+
+[workspace.dependencies]
+formats = { path = "crates/formats" }
+anyhow = "1"
+
+[profile.dev.package."*"]
+opt-level = 3

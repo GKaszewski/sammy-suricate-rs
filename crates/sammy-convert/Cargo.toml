@@ -1,0 +1,10 @@
+[package]
+name = "sammy-convert"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+formats.workspace = true
+anyhow.workspace = true
+png = "0.18"
+clap = { version = "4", features = ["derive"] }
