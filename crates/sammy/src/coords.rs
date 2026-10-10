@@ -1,0 +1,24 @@
+//! Acknex space (X forward, Y left, Z up, right-handed, units = quants) to Bevy
+//! space (X right, Y up, -Z forward). Proper rotation, so winding is preserved.
+
+use bevy::prelude::*;
+
+/// World scale: quants per Bevy unit. Sammy is ~50 quants tall.
+pub const QUANTS_PER_UNIT: f32 = 32.0;
+
+pub fn pos([x, y, z]: [f32; 3]) -> Vec3 {
+    Vec3::new(-y, z, -x) / QUANTS_PER_UNIT
+}
+
+pub fn dir([x, y, z]: [f32; 3]) -> Vec3 {
+    Vec3::new(-y, z, -x)
+}
+
+/// Acknex euler angles in degrees: pan (around Z, CCW from above), tilt (pitch up),
+/// roll. Applied pan, then tilt, then roll.
+pub fn rotation([pan, tilt, roll]: [f32; 3]) -> Quat {
+    // In Bevy space: Acknex Z (up) = +Y, Acknex Y (left) = -X, Acknex X (fwd) = -Z.
+    Quat::from_rotation_y(pan.to_radians())
+        * Quat::from_rotation_x(tilt.to_radians())
+        * Quat::from_rotation_z(-roll.to_radians())
+}
