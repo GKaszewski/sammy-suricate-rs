@@ -5,21 +5,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bevy::asset::RenderAssetUsages;
-use bevy::pbr::Lightmap;
-use bevy::math::Rect;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
-use formats::wmb::{entity_flags, Entity as WmbEntity, Object, Wmb};
+use formats::wmb::{entity_flags, Entity as WmbEntity, LevelMesh, Object, Wmb};
 
 use crate::actions;
 use crate::coords;
+use crate::material::LevelMaterial;
 use crate::model::{LoadedModel, ModelAnimator};
 use crate::vfs::GameFiles;
 
-/// Scales baked RGB565 lightmaps into Bevy's lighting units. Acknex lightmaps
-/// appear to be 2x overbright (mid-grey = full brightness).
-const LIGHTMAP_EXPOSURE: f32 = 2000.0;
 
 /// Render layer for sky domes, drawn by a background camera before the world.
 pub const SKY_LAYER: RenderLayers = RenderLayers::layer(1);
@@ -41,6 +37,7 @@ pub struct Spawner<'a, 'w, 's> {
     pub meshes: &'a mut Assets<Mesh>,
     pub images: &'a mut Assets<Image>,
     pub materials: &'a mut Assets<StandardMaterial>,
+    pub level_materials: &'a mut Assets<LevelMaterial>,
 }
 
 impl Spawner<'_, '_, '_> {
@@ -48,11 +45,19 @@ impl Spawner<'_, '_, '_> {
     pub fn spawn_level(&mut self, name: &str) -> anyhow::Result<Option<(Vec3, f32)>> {
         let wmb = formats::wmb::parse(&self.files.read(name)?)?;
         let root = self.commands.spawn((Name::new(name.to_owned()), Transform::default(), Visibility::default())).id();
-        for (mesh, material, lightmap) in self.world_meshes(&wmb, true) {
-            let mut e = self.commands.spawn((Mesh3d(mesh), MeshMaterial3d(material), ChildOf(root)));
-            if let Some(image) = lightmap.filter(|_| std::env::var_os("SAMMY_NOLM").is_none()) {
-                e.insert(Lightmap { image, uv_rect: Rect::new(0.0, 0.0, 1.0, 1.0), bicubic_sampling: false });
-            }
+        let level = wmb.build_mesh();
+        let lightmap = level
+            .lightmap
+            .as_ref()
+            .filter(|_| std::env::var_os("SAMMY_NOLM").is_none())
+            .map(|lm| self.images.add(crate::image::to_bevy(lm, false, false)));
+        let mut mats = HashMap::new();
+        for (mesh, texture, lit) in self.batch_meshes(&wmb, &level, lightmap.is_some()) {
+            let material = mats
+                .entry((texture.clone(), lit))
+                .or_insert_with(|| self.level_materials.add(LevelMaterial::new(texture, lit.then(|| lightmap.clone()).flatten())))
+                .clone();
+            self.commands.spawn((Mesh3d(mesh), MeshMaterial3d(material), ChildOf(root)));
         }
 
         let player = wmb.entities.iter().find_map(|e| match e {
@@ -69,25 +74,17 @@ impl Spawner<'_, '_, '_> {
         Ok(start)
     }
 
-    /// Builds one mesh per texture batch. Lit batches get a Bevy `Lightmap`.
-    fn world_meshes(&mut self, wmb: &Wmb, use_lightmaps: bool) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>, Option<Handle<Image>>)> {
-        let level = wmb.build_mesh();
-        let lightmap = level
-            .lightmap
-            .as_ref()
-            .filter(|_| use_lightmaps)
-            .map(|lm| self.images.add(crate::image::to_bevy(lm, false, false)));
+    /// Builds one Bevy mesh per texture batch: (mesh, texture, has lightmap UVs).
+    fn batch_meshes(&mut self, wmb: &Wmb, level: &LevelMesh, use_lightmap: bool) -> Vec<(Handle<Mesh>, Option<Handle<Image>>, bool)> {
         let textures: Vec<Handle<Image>> =
             wmb.textures.iter().map(|t| self.images.add(crate::image::to_bevy(&t.image, true, true))).collect();
-        let mut lit_mats = HashMap::new();
-        let mut flat_mats = HashMap::new();
         let mut out = Vec::new();
         for batch in level.models.iter().flat_map(|m| &m.batches) {
             let tex_name = batch.texture.map_or("", |t| wmb.textures[t].name.as_str());
             if std::env::var_os("SAMMY_NODUMMY").is_some() && tex_name.to_lowercase().contains("dummy") {
                 continue;
             }
-            let lit = batch.lit && lightmap.is_some() && std::env::var_os("SAMMY_NOLM").is_none();
+            let lit = batch.lit && use_lightmap;
             let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
                 .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, batch.positions.iter().map(|&p| coords::pos(p)).collect::<Vec<_>>())
                 .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, batch.normals.iter().map(|&n| coords::dir(n)).collect::<Vec<_>>())
@@ -96,24 +93,33 @@ impl Spawner<'_, '_, '_> {
             if lit {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, batch.lightmap_uvs.clone());
             }
-            let tex = batch.texture.map(|t| textures[t].clone());
-            let mats = if lit { &mut lit_mats } else { &mut flat_mats };
-            let material = mats
-                .entry(batch.texture)
-                .or_insert_with(|| {
-                    self.materials.add(StandardMaterial {
-                        base_color_texture: tex,
-                        perceptual_roughness: 1.0,
-                        reflectance: 0.0,
-                        lightmap_exposure: LIGHTMAP_EXPOSURE,
-                        unlit: std::env::var_os("SAMMY_UNLIT").is_some(),
-                        ..default()
-                    })
-                })
-                .clone();
-            out.push((self.meshes.add(mesh), material, if lit { lightmap.clone() } else { None }));
+            out.push((self.meshes.add(mesh), batch.texture.map(|t| textures[t].clone()), lit));
         }
         out
+    }
+
+    /// Prefab WMBs (doors, platforms...) have no lightmaps; Acknex lights them
+    /// dynamically like models, so they use a lit StandardMaterial.
+    fn prefab_meshes(&mut self, wmb: &Wmb) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
+        let level = wmb.build_mesh();
+        let mut mats: HashMap<Option<AssetId<Image>>, Handle<StandardMaterial>> = HashMap::new();
+        self.batch_meshes(wmb, &level, false)
+            .into_iter()
+            .map(|(mesh, tex, _)| {
+                let material = mats
+                    .entry(tex.as_ref().map(|t| t.id()))
+                    .or_insert_with(|| {
+                        self.materials.add(StandardMaterial {
+                            base_color_texture: tex,
+                            perceptual_roughness: 1.0,
+                            reflectance: 0.0,
+                            ..default()
+                        })
+                    })
+                    .clone();
+                (mesh, material)
+            })
+            .collect()
     }
 
     fn spawn_object(&mut self, mut obj: Object, pov_z: f32, parent: bevy::ecs::entity::Entity, cache: &mut Cache) {
@@ -169,7 +175,7 @@ impl Spawner<'_, '_, '_> {
                 .entry(file.clone())
                 .or_insert_with(|| {
                     let wmb = formats::wmb::parse(&self.files.read(&file).ok()?).ok()?;
-                    Some(self.world_meshes(&wmb, false).into_iter().map(|(m, mat, _)| (m, mat)).collect())
+                    Some(self.prefab_meshes(&wmb))
                 })
                 .clone();
             let Some(parts) = parts else {

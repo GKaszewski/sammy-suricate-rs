@@ -25,4 +25,4 @@ cargo run -p formats --example wmbinfo -- extracted/levels/10001.wmb
 
 Debug env vars for `sammy`: `SAMMY_SCREENSHOT=out.png` (capture frames 150/250 and exit),
 `SAMMY_SKIP=action1,action2` (hide objects by action), `SAMMY_NOLM=1` (no lightmaps),
-`SAMMY_NODUMMY=1` (hide `*dummy*`-textured brushes), `SAMMY_UNLIT=1`.
+`SAMMY_NODUMMY=1` (hide `*dummy*`-textured brushes).
