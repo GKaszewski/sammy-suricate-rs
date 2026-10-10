@@ -76,7 +76,7 @@ fn setup(
             Mesh3d(mesh),
             MeshMaterial3d(model.material.clone()),
             Transform::default(),
-            ModelAnimator { model: model.clone(), frames, fps: 16.0, time: 0.0 },
+            ModelAnimator::new(model.clone(), frames, 16.0),
         ));
         commands.spawn((Camera3d::default(), Transform::from_xyz(0.0, 0.5, 4.0), FlyCamera::default()));
         commands.insert_resource(camera::CameraMode::Fly);
@@ -115,5 +115,14 @@ fn setup(
         FlyCamera { yaw, pitch: -0.9 },
         FollowState::default(),
         MainCamera,
+    ));
+    // `Near` entities (help signs) are drawn last over a fresh depth buffer.
+    commands.spawn((
+        Camera3d::default(),
+        Camera { order: 2, clear_color: ClearColorConfig::None, ..default() },
+        Tonemapping::Linear,
+        level::NEAR_LAYER,
+        cam_tf,
+        SkyCamera,
     ));
 }

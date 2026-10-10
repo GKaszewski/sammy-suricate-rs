@@ -78,6 +78,36 @@ pub struct ModelAnimator {
     /// Frames per second (Acknex default: one frame per 1/16 s tick).
     pub fps: f32,
     pub time: f32,
+    /// WDL "cycle" mode loops; "frame" mode plays once and holds the last frame.
+    pub looping: bool,
+}
+
+impl ModelAnimator {
+    pub fn new(model: Arc<LoadedModel>, frames: Vec<usize>, fps: f32) -> Self {
+        Self { model, frames, fps, time: 0.0, looping: true }
+    }
+
+    /// Starts a scene at `step` percent (WDL `PlayerAnimStep`).
+    pub fn play(&mut self, scene: &str, looping: bool, step: f32) {
+        self.frames = self.model.animation(scene);
+        self.looping = looping;
+        self.time = step / 100.0 * self.span();
+    }
+
+    /// Sets the speed in percent of the scene per tick (WDL `PlayerAnimSpeed`).
+    pub fn set_speed_pct(&mut self, pct: f32, ticks_per_sec: f32) {
+        self.fps = pct / 100.0 * self.span() * ticks_per_sec;
+    }
+
+    /// Frames covered by 0..100%: all frames when cycling, up to the last when playing once.
+    fn span(&self) -> f32 {
+        let n = self.frames.len() as f32;
+        if self.looping { n } else { (n - 1.0).max(1.0) }
+    }
+
+    pub fn finished(&self) -> bool {
+        !self.looping && self.time >= self.span()
+    }
 }
 
 fn animate_models(time: Res<Time>, mut meshes: ResMut<Assets<Mesh>>, mut q: Query<(&mut ModelAnimator, &Mesh3d)>) {
@@ -86,10 +116,16 @@ fn animate_models(time: Res<Time>, mut meshes: ResMut<Assets<Mesh>>, mut q: Quer
             continue;
         }
         anim.time += time.delta_secs() * anim.fps;
-        let n = anim.frames.len() as f32;
-        let t = anim.time.rem_euclid(n);
-        let (a, b) = (anim.frames[t as usize], anim.frames[(t as usize + 1) % anim.frames.len()]);
-        let f = t.fract();
+        let n = anim.frames.len();
+        let (i, j, f) = if anim.looping {
+            let t = anim.time.rem_euclid(n as f32);
+            (t as usize % n, (t as usize + 1) % n, t.fract())
+        } else {
+            anim.time = anim.time.clamp(0.0, (n - 1) as f32);
+            let t = anim.time;
+            (t as usize, (t as usize + 1).min(n - 1), t.fract())
+        };
+        let (a, b) = (anim.frames[i], anim.frames[j]);
         let Some(mut mesh) = meshes.get_mut(&mesh.0) else { continue };
         let (pa, na) = &anim.model.frames[a];
         let (pb, nb) = &anim.model.frames[b];

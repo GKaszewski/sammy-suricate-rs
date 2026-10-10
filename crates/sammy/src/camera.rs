@@ -14,7 +14,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraMode>()
             .init_resource::<CameraParams>()
-            .add_systems(Update, (toggle_mode, fly.run_if(resource_equals(CameraMode::Fly))))
+            .add_systems(Update, (toggle_mode, fly.run_if(resource_equals(CameraMode::Fly)), apply_arc))
             .add_systems(
                 PostUpdate,
                 (follow.run_if(resource_equals(CameraMode::Follow)), copy_to_sky)
@@ -28,7 +28,7 @@ impl Plugin for CameraPlugin {
 #[derive(Component)]
 pub struct MainCamera;
 
-/// Renders sky domes; mirrors the main camera's transform.
+/// Secondary cameras (sky pass, near pass) that mirror the main camera's transform.
 #[derive(Component)]
 pub struct SkyCamera;
 
@@ -53,12 +53,27 @@ pub struct CameraParams {
     /// Type-3 horizontal / vertical frictions.
     pub fric_h: f32,
     pub fric_v: f32,
+    /// `camera.arc`: horizontal field of view in degrees (`CameraArcVoulu`, default 60).
+    pub arc: f32,
+    /// Emergency-camera zoom limits (`InitCamera4` Skill1; distance floor 50).
+    pub zoom_min_height: f32,
+    pub zoom_min_dist: f32,
 }
 
 impl Default for CameraParams {
     fn default() -> Self {
         // InitLvl.wdl defaults.
-        Self { height: 800.0, dist: 400.0, back: 180.0, plus_tilt: 200.0, fric_h: 4.0, fric_v: 0.01 }
+        Self {
+            height: 800.0,
+            dist: 400.0,
+            back: 180.0,
+            plus_tilt: 200.0,
+            fric_h: 4.0,
+            fric_v: 0.01,
+            zoom_min_height: 105.0,
+            zoom_min_dist: 50.0,
+            arc: 60.0,
+        }
     }
 }
 
@@ -81,6 +96,10 @@ impl CameraParams {
         if s[5] != 0.0 {
             self.fric_v = s[5];
         }
+        // Original bug: tests Skill7 but assigns Skill6 (mm1.wdl:2818-2821).
+        if s[6] != 0.0 {
+            self.arc = s[5];
+        }
     }
 }
 
@@ -90,6 +109,9 @@ pub struct FollowState {
     /// `AngCamPerso`: smoothed copy of Sammy's pan.
     ang: f32,
     pos: Option<[f32; 3]>,
+    /// Current (possibly zoomed-in) distance and height.
+    dist: f32,
+    height: f32,
 }
 
 #[derive(Component, Default)]
@@ -134,17 +156,34 @@ fn follow(
     st.ang += angle_diff(p.pan - st.ang) * (4.0 * time.delta_secs()).min(1.0);
 
     // 2. Ideal position: `dist` behind at `height` above.
+    if st.pos.is_none() {
+        st.dist = params.dist;
+        st.height = params.height;
+    }
     let a = (st.ang + params.back).to_radians();
-    let mut ideal = [p.pos[0] + a.cos() * params.dist, p.pos[1] + a.sin() * params.dist, p.pos[2] + params.height];
     let eye = [p.pos[0], p.pos[1], p.pos[2] + params.plus_tilt];
+    let ideal_at = |d: f32, h: f32| [p.pos[0] + a.cos() * d, p.pos[1] + a.sin() * d, p.pos[2] + h];
+    let blocked = |to: [f32; 3]| level.as_ref().map(|l| l.0.trace(0, 1, eye, to)).filter(|tr| tr.hit() && !tr.start_solid);
 
-    // 4. (simplified emergency camera) If a wall hides Sammy, stop in front of it.
-    if let Some(level) = &level {
-        let tr = level.0.trace(0, 1, eye, ideal);
-        if tr.hit() && !tr.start_solid {
-            let back = 32.0 / params.dist.max(1.0);
-            ideal = [0, 1, 2].map(|i| tr.end[i] + (eye[i] - ideal[i]) * back);
+    // 4. Emergency camera (camera.wdl `Camera2_Syn`): while a wall hides Sammy, zoom in
+    //    (distance ×(1-0.75·time) down to 50, height -50/tick down to 105); when the
+    //    view clears, ease back out as long as the wider view stays clear.
+    if blocked(ideal_at(st.dist, st.height)).is_some() {
+        st.dist = (st.dist * (1.0 - 0.75 * t).max(0.0)).max(params.zoom_min_dist);
+        st.height = (st.height - 50.0 * t).max(params.zoom_min_height);
+    } else {
+        let k = (0.1 * t).min(1.0);
+        let (d, h) = (st.dist + (params.dist - st.dist) * k, st.height + (params.height - st.height) * k);
+        if blocked(ideal_at(d, h)).is_none() {
+            st.dist = d;
+            st.height = h;
         }
+    }
+    let mut ideal = ideal_at(st.dist, st.height);
+    // Never end up behind a wall: stop 32 quants in front of it.
+    if let Some(tr) = blocked(ideal) {
+        let len = ((ideal[0] - eye[0]).powi(2) + (ideal[1] - eye[1]).powi(2) + (ideal[2] - eye[2]).powi(2)).sqrt().max(1.0);
+        ideal = [0, 1, 2].map(|i| tr.end[i] + (eye[i] - ideal[i]) * 32.0 / len);
     }
 
     // 3. Camera proxy eases toward the ideal (factor `fric × AdjustFpsCam3(0.5) × time`).
@@ -195,5 +234,19 @@ fn fly(
         }
         let speed = if keys.pressed(KeyCode::ShiftLeft) { 40.0 } else { 10.0 };
         tf.translation += v.normalize_or_zero() * speed * time.delta_secs();
+    }
+}
+
+/// Acknex `arc` is horizontal; Bevy wants a vertical FOV for the current aspect.
+fn apply_arc(params: Res<CameraParams>, windows: Query<&Window>, mut q: Query<&mut Projection>) {
+    let Ok(w) = windows.single() else { return };
+    let aspect = w.width() / w.height().max(1.0);
+    let fov = 2.0 * ((params.arc.to_radians() / 2.0).tan() / aspect).atan();
+    for mut proj in &mut q {
+        if let Projection::Perspective(p) = &mut *proj
+            && (p.fov - fov).abs() > 1e-4
+        {
+            p.fov = fov;
+        }
     }
 }

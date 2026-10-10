@@ -3,6 +3,7 @@
 
 mod decor;
 pub mod player;
+pub mod title;
 
 use bevy::prelude::*;
 use formats::wmb::Object;
@@ -14,7 +15,8 @@ pub struct ActionsPlugin;
 
 impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, player::move_player)
+        app.init_resource::<player::JumpParams>()
+            .add_systems(Update, (player::move_player, title::update_titles))
             .add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
     }
 }
@@ -26,6 +28,8 @@ pub struct ActionInit {
     pub sky: bool,
     /// Script sets `my.invisible` immediately (config/marker entities).
     pub hidden: bool,
+    /// Help sign: own fading material, drawn on top, screen-aligned.
+    pub title: bool,
 }
 
 /// Config and marker entities: their actions only read skills into globals
@@ -48,6 +52,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             let o = obj.clone();
             entity.commands().queue(move |w: &mut World| w.resource_mut::<CameraParams>().apply_init_camera1(&o));
         }
+        "initgame3" => {
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<player::JumpParams>().apply_init_game3(&o));
+        }
         "initcamera2" => {
             let o = obj.clone();
             entity.commands().queue(move |w: &mut World| w.resource_mut::<CameraParams>().apply_init_camera2(&o));
@@ -62,6 +70,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initmarche" => {
             player::init_player(obj, entity);
             ActionInit::default()
+        }
+        "inittitle" => {
+            title::init_title(obj, entity);
+            ActionInit { title: true, ..default() }
         }
         "initdecor" => {
             decor::init_decor(obj);

@@ -1,7 +1,8 @@
-//! Sammy: `InitMarche` (player.wdl:1-260) and the per-tick movement of
-//! `HandleSpeedPlayer` (player.wdl:1115-1488). Simplified first pass: tank
-//! controls, walking, gravity, jumping and BSP collision. Slopes, platforms,
-//! knockback, boost, firing and the U-turn are not ported yet.
+//! Sammy: `InitMarche` (player.wdl:1-260), the per-tick movement of
+//! `HandleSpeedPlayer` (player.wdl:1115-1488) and `PlayerJump`/`FinJump`
+//! (player.wdl:385-520). First pass: tank controls, walking, gravity, jumping
+//! and BSP collision. Slopes, platforms, knockback, boost, firing and the
+//! U-turn are not ported yet.
 
 use std::sync::Arc;
 
@@ -22,16 +23,61 @@ const HULL1_HALF: f32 = 16.0;
 /// Sammy collides with the "fat" hull (`my.fat=1`).
 const HULL: usize = 2;
 
+// Animation speeds in % of the scene per tick (mm1.wdl:39-85, anims.wdl).
+const ANIM_STAND: f32 = 2.0;
+const ANIM_WALK: f32 = 0.5; // × forward speed
+const ANIM_TURN: f32 = 14.0;
+const ANIM_DEBUT_JUMP: f32 = 30.0;
+const ANIM_JUMP: f32 = 14.0;
+const ANIM_FIN_JUMP: f32 = 14.0;
+const ANIM_FIN_JUMP_FAST: f32 = 18.0;
+
 /// Collision geometry of the current level.
 #[derive(Resource, Clone)]
 pub struct LevelCollision(pub Arc<Wmb>);
 
+/// Vertical physics globals (InitLvl.wdl:60-61 defaults, `InitGame3` overrides, mm1.wdl:1846).
+#[derive(Resource, Clone, Copy)]
+pub struct JumpParams {
+    /// `BlobBallVerticalSpeed`: jump impulse.
+    pub jump_speed: f32,
+    /// `BlobBallVerticalFriction`: deceleration during a jump.
+    pub jump_fric: f32,
+    /// `Gravite`: initial vertical speed when walking off a ledge.
+    pub gravity: f32,
+    /// `AccGravite`: deceleration when falling off a ledge.
+    pub acc_gravity: f32,
+}
+
+impl Default for JumpParams {
+    fn default() -> Self {
+        Self { jump_speed: 30.0, jump_fric: 3.0, gravity: -2.0, acc_gravity: 1.5 }
+    }
+}
+
+impl JumpParams {
+    pub fn apply_init_game3(&mut self, obj: &Object) {
+        let s = &obj.skills;
+        for (v, i) in [(&mut self.jump_speed, 0), (&mut self.jump_fric, 1), (&mut self.gravity, 4), (&mut self.acc_gravity, 5)] {
+            if s[i] != 0.0 {
+                *v = s[i];
+            }
+        }
+    }
+}
+
+/// `PlayerEtat` / `PlayerAnimEtat`, reduced to what is ported.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AnimState {
+pub enum State {
     Stand,
     Walk,
     Turn,
-    Jump,
+    /// Standing wind-up ("sautA") before leaving the ground.
+    JumpStart,
+    /// In the air ("sautB", played once).
+    Air,
+    /// Landing ("sautC", played once).
+    Land,
 }
 
 #[derive(Component)]
@@ -42,11 +88,11 @@ pub struct Player {
     pub pan: f32,
     /// Walk speed in quants/tick (WED Skill2 → `SpeedBalle`, default 25).
     pub speed: f32,
-    /// Vertical speed (quants/tick) and its per-tick deceleration.
+    /// `BlobVspeed` (quants/tick) and `BlobFricVspeed`.
     pub vz: f32,
     pub fric: f32,
     pub grounded: bool,
-    pub anim: AnimState,
+    pub state: State,
     snapped: bool,
 }
 
@@ -60,7 +106,7 @@ pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
         vz: 0.0,
         fric: 0.0,
         grounded: true,
-        anim: AnimState::Stand,
+        state: State::Stand,
         snapped: false,
     });
 }
@@ -88,8 +134,7 @@ fn slide_move(wmb: &Wmb, mut pos: [f32; 3], mut delta: [f32; 3]) -> [f32; 3] {
             break;
         }
         // Remove the part of the remaining motion that goes into the wall.
-        let left = 1.0 - tr.fraction;
-        let rest = delta.map(|d| d * left);
+        let rest = delta.map(|d| d * (1.0 - tr.fraction));
         let into = rest[0] * tr.normal[0] + rest[1] * tr.normal[1] + rest[2] * tr.normal[2];
         delta = [0, 1, 2].map(|i| rest[i] - tr.normal[i] * into);
     }
@@ -99,13 +144,14 @@ fn slide_move(wmb: &Wmb, mut pos: [f32; 3], mut delta: [f32; 3]) -> [f32; 3] {
 pub fn move_player(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
+    jump: Res<JumpParams>,
     level: Option<Res<LevelCollision>>,
     mut q: Query<(&mut Player, &mut Transform, Option<&mut ModelAnimator>)>,
 ) {
     let Some(level) = level else { return };
     let wmb = &level.0;
     let t = (time.delta_secs() * TICKS).min(4.0); // `time` in ticks, clamped like A4's time_smooth
-    for (mut p, mut tf, anim) in &mut q {
+    for (mut p, mut tf, mut anim) in &mut q {
         if !p.snapped {
             if let Some(f) = floor_below(wmb, p.pos) {
                 p.pos[2] = f + BLOB_HAUT;
@@ -117,6 +163,8 @@ pub fn move_player(
         let axis = |pos: KeyCode, neg: KeyCode| keys.pressed(pos) as i32 as f32 - keys.pressed(neg) as i32 as f32;
         let ix = axis(KeyCode::ArrowRight, KeyCode::ArrowLeft);
         let iy = axis(KeyCode::ArrowUp, KeyCode::ArrowDown);
+        let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+        let ctrl_hit = keys.just_pressed(KeyCode::ControlLeft) || keys.just_pressed(KeyCode::ControlRight);
 
         // 1. Turning: 10°/tick standing, 7 moving, half in the air.
         let mut rate = if iy != 0.0 { 7.0 } else { 10.0 };
@@ -125,31 +173,61 @@ pub fn move_player(
         }
         p.pan -= ix * rate * t;
 
-        // 2. Forward speed; air control is 75%.
-        let v = if p.grounded { iy * p.speed } else { iy * p.speed * 0.75 } * t;
+        // 2. Forward speed; air control is 75%. No walking during the wind-up.
+        let v = if p.state == State::JumpStart {
+            0.0
+        } else if p.grounded {
+            iy * p.speed * t
+        } else {
+            iy * p.speed * 0.75 * t
+        };
         let (s, c) = p.pan.to_radians().sin_cos();
         p.pos = slide_move(wmb, p.pos, [c * v, s * v, 0.0]);
 
-        // 3. Jump (Ctrl): vz=30, deceleration 3/tick² (InitLvl.wdl:60-61).
-        if p.grounded && (keys.just_pressed(KeyCode::ControlLeft) || keys.just_pressed(KeyCode::ControlRight)) {
+        // 3. Jump (PlayerJump): only from the ground in a normal state. Moving jumps take
+        //    off at once; standing jumps play the "sautA" wind-up first.
+        let mut take_off = false;
+        if ctrl_hit && p.grounded && matches!(p.state, State::Stand | State::Walk | State::Turn) {
+            if iy != 0.0 {
+                take_off = true;
+                if let Some(a) = anim.as_deref_mut() {
+                    a.play("sautB", false, 10.0);
+                }
+            } else {
+                p.state = State::JumpStart;
+                if let Some(a) = anim.as_deref_mut() {
+                    a.play("sautA", false, 0.0);
+                    a.set_speed_pct(ANIM_DEBUT_JUMP, TICKS);
+                }
+            }
+        }
+        if p.state == State::JumpStart && anim.as_deref().is_none_or(|a| a.finished()) {
+            take_off = true;
+            if let Some(a) = anim.as_deref_mut() {
+                a.play("sautB", false, 0.0);
+            }
+        }
+        if take_off {
+            p.state = State::Air;
             p.grounded = false;
-            p.vz = 30.0;
-            p.fric = 3.0;
+            p.vz = jump.jump_speed;
+            p.fric = jump.jump_fric;
         }
 
-        // 4. Vertical motion: snap to floor when grounded, else ballistic.
+        // 4. Vertical motion: snap to the floor when grounded, else ballistic.
         let floor = floor_below(wmb, p.pos);
         if p.grounded {
             match floor {
                 Some(f) if p.pos[2] - BLOB_HAUT - f <= 1.0 => p.pos[2] = f + BLOB_HAUT,
                 _ => {
-                    // Walked off a ledge: gravity starts at -2, accel 1.5/tick².
+                    // Walked off a ledge (`Gravite`, `AccGravite`).
                     p.grounded = false;
-                    p.vz = -2.0;
-                    p.fric = 1.5;
+                    p.vz = jump.gravity;
+                    p.fric = jump.acc_gravity;
                 }
             }
         }
+        let mut landed = false;
         if !p.grounded {
             p.vz -= p.fric * t;
             let target = [p.pos[0], p.pos[1], p.pos[2] + p.vz * t];
@@ -158,41 +236,73 @@ pub fn move_player(
                 p.vz = 0.0; // ceiling cancels the ascent
             }
             p.pos = tr.end;
-            if let Some(f) = floor_below(wmb, p.pos)
+            let floor = floor_below(wmb, p.pos);
+            // A real fall (more than 64 below the normal height) shows the jump animation.
+            if p.state != State::Air && floor.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
+                p.state = State::Air;
+                if let Some(a) = anim.as_deref_mut() {
+                    a.play("sautB", false, 50.0);
+                }
+            }
+            if let Some(f) = floor
                 && p.vz <= 0.0
                 && p.pos[2] <= f + BLOB_HAUT
             {
                 p.pos[2] = f + BLOB_HAUT;
                 p.grounded = true;
                 p.vz = 0.0;
+                landed = true;
             }
         }
 
-        // 5. Animation state (anims.wdl:352-497).
-        let state = if !p.grounded {
-            AnimState::Jump
-        } else if iy != 0.0 {
-            AnimState::Walk
-        } else if ix != 0.0 {
-            AnimState::Turn
-        } else {
-            AnimState::Stand
-        };
-        if let Some(mut a) = anim {
-            // Scene speeds are in % of the scene per tick.
-            let (scene, pct) = match state {
-                AnimState::Stand => ("stand", 2.0),
-                AnimState::Walk => ("walkB", 0.5 * p.speed * iy.abs()),
-                AnimState::Turn => ("turn", 14.0),
-                AnimState::Jump => ("sautB", 14.0),
-            };
-            if state != p.anim || a.frames.is_empty() {
-                a.frames = a.model.animation(scene);
-                a.time = 0.0;
+        // 5. Landing (FinJump): "sautC" once, faster when the player is already steering.
+        if landed && p.state == State::Air {
+            p.state = State::Land;
+            if let Some(a) = anim.as_deref_mut() {
+                a.play("sautC", false, 10.0);
             }
-            a.fps = pct / 100.0 * a.frames.len() as f32 * TICKS * if iy < 0.0 { -1.0 } else { 1.0 };
         }
-        p.anim = state;
+        if p.state == State::Land && anim.as_deref().is_none_or(|a| a.finished()) {
+            p.state = State::Stand;
+        }
+
+        // 6. Ground animation states (anims.wdl:352-497).
+        if matches!(p.state, State::Stand | State::Walk | State::Turn) {
+            let next = if iy != 0.0 {
+                State::Walk
+            } else if ix != 0.0 {
+                State::Turn
+            } else {
+                State::Stand
+            };
+            if let Some(a) = anim.as_deref_mut() {
+                let scene = match next {
+                    State::Walk => "walkB",
+                    State::Turn => "turn",
+                    _ => "stand",
+                };
+                if next != p.state || a.frames.is_empty() || !a.looping {
+                    a.play(scene, true, 0.0);
+                }
+                let pct = match next {
+                    State::Walk => ANIM_WALK * p.speed * iy, // negative plays backwards
+                    State::Turn => ANIM_TURN,
+                    _ => ANIM_STAND,
+                };
+                a.set_speed_pct(pct, TICKS);
+            }
+            p.state = next;
+        }
+        if let Some(a) = anim.as_deref_mut() {
+            match p.state {
+                State::Air => a.set_speed_pct(ANIM_JUMP, TICKS),
+                State::Land => {
+                    let pct = if iy != 0.0 || ctrl { ANIM_FIN_JUMP_FAST * 2.0 } else if ix != 0.0 { ANIM_FIN_JUMP_FAST } else { ANIM_FIN_JUMP };
+                    a.set_speed_pct(pct, TICKS);
+                }
+                _ => {}
+            }
+        }
 
         tf.translation = coords::pos(p.pos);
         tf.rotation = coords::rotation([p.pan, 0.0, 0.0]);

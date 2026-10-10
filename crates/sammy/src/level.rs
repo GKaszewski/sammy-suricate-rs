@@ -20,6 +20,9 @@ use crate::vfs::GameFiles;
 /// Render layer for sky domes, drawn by a background camera before the world.
 pub const SKY_LAYER: RenderLayers = RenderLayers::layer(1);
 
+/// Render layer for `Near` entities (help signs), drawn last over a cleared depth buffer.
+pub const NEAR_LAYER: RenderLayers = RenderLayers::layer(2);
+
 /// Marker for every entity spawned from a WMB object record.
 #[derive(Component)]
 pub struct LevelObject(pub Object);
@@ -168,7 +171,7 @@ impl Spawner<'_, '_, '_> {
                 base,
                 Mesh3d(mesh),
                 MeshMaterial3d(material),
-                ModelAnimator { model: model.clone(), frames, fps: 8.0, time: 0.0 },
+                ModelAnimator::new(model.clone(), frames, 8.0),
             ));
         } else if file.ends_with(".wmb") {
             let parts = cache
@@ -194,8 +197,12 @@ impl Spawner<'_, '_, '_> {
                 self.commands.entity(id).despawn();
                 return warn!("missing sprite {file}");
             };
-            // Animated strips get their own material so each sprite can sit on a different frame.
-            let (mat, anim) = if frames > 1 {
+            // Animated strips and fading signs get their own material.
+            let (mat, anim) = if init.title {
+                let mut m = self.materials.get(&mat).cloned().unwrap_or_default();
+                m.alpha_mode = AlphaMode::Blend;
+                (self.materials.add(m), None)
+            } else if frames > 1 {
                 let m = self.materials.get(&mat).cloned().unwrap_or_default();
                 // Deterministic stand-in for WDL `random(frames)` start frame.
                 let start = (id.index_u32().wrapping_mul(2654435761) >> 7) % frames;
@@ -205,7 +212,13 @@ impl Spawner<'_, '_, '_> {
                 (mat, None)
             };
             let mut e = self.commands.entity(id);
-            e.insert((base, Mesh3d(mesh), MeshMaterial3d(mat), Billboard));
+            if init.title {
+                // `Visibility::Hidden` from init_title must survive `base`'s default visibility.
+                e.insert((base, Mesh3d(mesh), MeshMaterial3d(mat), ScreenAligned, NEAR_LAYER));
+                e.insert(Visibility::Hidden);
+            } else {
+                e.insert((base, Mesh3d(mesh), MeshMaterial3d(mat), Billboard));
+            }
             if let Some(anim) = anim {
                 e.insert(anim);
             }
@@ -297,10 +310,20 @@ pub fn animate_sprites(
 #[derive(Component)]
 pub struct Billboard;
 
-pub fn face_camera(cam: Query<&GlobalTransform, With<crate::camera::MainCamera>>, mut q: Query<&mut Transform, With<Billboard>>) {
+/// Sprite parallel to the screen (WDL `Facing` + pan/tilt copied from the camera).
+#[derive(Component)]
+pub struct ScreenAligned;
+
+pub fn face_camera(
+    cam: Query<&Transform, (With<crate::camera::MainCamera>, Without<Billboard>, Without<ScreenAligned>)>,
+    mut q: ParamSet<(Query<&mut Transform, With<Billboard>>, Query<&mut Transform, With<ScreenAligned>>)>,
+) {
     let Ok(cam) = cam.single() else { return };
-    for mut tf in &mut q {
-        let d = cam.translation() - tf.translation;
+    for mut tf in &mut q.p0() {
+        let d = cam.translation - tf.translation;
         tf.rotation = Quat::from_rotation_y(d.x.atan2(d.z));
+    }
+    for mut tf in &mut q.p1() {
+        tf.rotation = cam.rotation;
     }
 }
