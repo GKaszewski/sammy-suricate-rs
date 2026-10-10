@@ -20,12 +20,30 @@ struct ScreenshotJob {
     frame: u32,
 }
 
-fn screenshot(mut commands: Commands, mut job: ResMut<ScreenshotJob>, mut exit: MessageWriter<AppExit>) {
+fn screenshot(
+    mut commands: Commands,
+    mut job: ResMut<ScreenshotJob>,
+    mut exit: MessageWriter<AppExit>,
+    cam: Query<&GlobalTransform, With<crate::camera::MainCamera>>,
+    objs: Query<(&GlobalTransform, &crate::level::LevelObject)>,
+) {
     job.frame += 1;
-    if job.frame == 60 {
-        commands.spawn(Screenshot::primary_window()).observe(save_to_disk(job.path.clone()));
+    if [150, 250].contains(&job.frame) {
+        let p = job.path.replace(".png", &format!("_{}.png", job.frame));
+        commands.spawn(Screenshot::primary_window()).observe(save_to_disk(p));
     }
-    if job.frame == 90 {
+    if job.frame == 250 {
+        if let Ok(c) = cam.single() {
+            info!("camera at {} fwd {}", c.translation(), c.forward());
+            for (tf, o) in &objs {
+                let d = tf.translation().distance(c.translation());
+                if d < 4.0 {
+                    info!("near camera ({d:.2}): {} {} {} scale {:?}", o.0.name, o.0.file, o.0.action, tf.scale());
+                }
+            }
+        }
+    }
+    if job.frame == 280 {
         exit.write(AppExit::Success);
     }
 }

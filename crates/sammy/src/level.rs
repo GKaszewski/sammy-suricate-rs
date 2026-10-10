@@ -1,0 +1,254 @@
+//! Spawns a WMB level: lightmapped world geometry plus its entities
+//! (MDL models, WMB prefabs, PCX sprites) loaded straight from the game files.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use bevy::asset::RenderAssetUsages;
+use bevy::pbr::Lightmap;
+use bevy::math::Rect;
+use bevy::mesh::{Indices, PrimitiveTopology};
+use bevy::camera::visibility::RenderLayers;
+use bevy::prelude::*;
+use formats::wmb::{entity_flags, Entity as WmbEntity, Object, Wmb};
+
+use crate::actions;
+use crate::coords;
+use crate::model::{LoadedModel, ModelAnimator};
+use crate::vfs::GameFiles;
+
+/// Scales baked RGB565 lightmaps into Bevy's lighting units. Acknex lightmaps
+/// appear to be 2x overbright (mid-grey = full brightness).
+const LIGHTMAP_EXPOSURE: f32 = 2000.0;
+
+/// Render layer for sky domes, drawn by a background camera before the world.
+pub const SKY_LAYER: RenderLayers = RenderLayers::layer(1);
+
+/// Marker for every entity spawned from a WMB object record.
+#[derive(Component)]
+pub struct LevelObject(pub Object);
+
+#[derive(Default)]
+struct Cache {
+    models: HashMap<String, Option<Arc<LoadedModel>>>,
+    prefabs: HashMap<String, Option<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>>>,
+    sprites: HashMap<String, Option<(Handle<Mesh>, Handle<StandardMaterial>)>>,
+}
+
+pub struct Spawner<'a, 'w, 's> {
+    pub commands: &'a mut Commands<'w, 's>,
+    pub files: &'a GameFiles,
+    pub meshes: &'a mut Assets<Mesh>,
+    pub images: &'a mut Assets<Image>,
+    pub materials: &'a mut Assets<StandardMaterial>,
+}
+
+impl Spawner<'_, '_, '_> {
+    /// Spawns the level and returns the player start (Acknex position + pan), if found.
+    pub fn spawn_level(&mut self, name: &str) -> anyhow::Result<Option<(Vec3, f32)>> {
+        let wmb = formats::wmb::parse(&self.files.read(name)?)?;
+        let root = self.commands.spawn((Name::new(name.to_owned()), Transform::default(), Visibility::default())).id();
+        for (mesh, material, lightmap) in self.world_meshes(&wmb, true) {
+            let mut e = self.commands.spawn((Mesh3d(mesh), MeshMaterial3d(material), ChildOf(root)));
+            if let Some(image) = lightmap.filter(|_| std::env::var_os("SAMMY_NOLM").is_none()) {
+                e.insert(Lightmap { image, uv_rect: Rect::new(0.0, 0.0, 1.0, 1.0), bicubic_sampling: false });
+            }
+        }
+
+        let player = wmb.entities.iter().find_map(|e| match e {
+            WmbEntity::Object(o) if o.action.eq_ignore_ascii_case("initmarche") => Some(o),
+            _ => None,
+        });
+        let start = player.map(|o| (coords::pos(o.origin), o.angles[0]));
+        let pov_z = player.map_or(0.0, |o| o.origin[2]);
+        let mut cache = Cache::default();
+        for ent in &wmb.entities {
+            let WmbEntity::Object(obj) = ent else { continue };
+            self.spawn_object(obj.clone(), pov_z, root, &mut cache);
+        }
+        Ok(start)
+    }
+
+    /// Builds one mesh per texture batch. Lit batches get a Bevy `Lightmap`.
+    fn world_meshes(&mut self, wmb: &Wmb, use_lightmaps: bool) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>, Option<Handle<Image>>)> {
+        let level = wmb.build_mesh();
+        let lightmap = level
+            .lightmap
+            .as_ref()
+            .filter(|_| use_lightmaps)
+            .map(|lm| self.images.add(crate::image::to_bevy(lm, false, false)));
+        let textures: Vec<Handle<Image>> =
+            wmb.textures.iter().map(|t| self.images.add(crate::image::to_bevy(&t.image, true, true))).collect();
+        let mut lit_mats = HashMap::new();
+        let mut flat_mats = HashMap::new();
+        let mut out = Vec::new();
+        for batch in level.models.iter().flat_map(|m| &m.batches) {
+            let tex_name = batch.texture.map_or("", |t| wmb.textures[t].name.as_str());
+            if std::env::var_os("SAMMY_NODUMMY").is_some() && tex_name.to_lowercase().contains("dummy") {
+                continue;
+            }
+            let lit = batch.lit && lightmap.is_some() && std::env::var_os("SAMMY_NOLM").is_none();
+            let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+                .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, batch.positions.iter().map(|&p| coords::pos(p)).collect::<Vec<_>>())
+                .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, batch.normals.iter().map(|&n| coords::dir(n)).collect::<Vec<_>>())
+                .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, batch.uvs.clone())
+                .with_inserted_indices(Indices::U32(batch.indices.clone()));
+            if lit {
+                mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, batch.lightmap_uvs.clone());
+            }
+            let tex = batch.texture.map(|t| textures[t].clone());
+            let mats = if lit { &mut lit_mats } else { &mut flat_mats };
+            let material = mats
+                .entry(batch.texture)
+                .or_insert_with(|| {
+                    self.materials.add(StandardMaterial {
+                        base_color_texture: tex,
+                        perceptual_roughness: 1.0,
+                        reflectance: 0.0,
+                        lightmap_exposure: LIGHTMAP_EXPOSURE,
+                        unlit: std::env::var_os("SAMMY_UNLIT").is_some(),
+                        ..default()
+                    })
+                })
+                .clone();
+            out.push((self.meshes.add(mesh), material, if lit { lightmap.clone() } else { None }));
+        }
+        out
+    }
+
+    fn spawn_object(&mut self, mut obj: Object, pov_z: f32, parent: bevy::ecs::entity::Entity, cache: &mut Cache) {
+        if obj.flags & entity_flags::INVISIBLE != 0 || obj.file.is_empty() {
+            return;
+        }
+        // Debug aid: SAMMY_SKIP=action1,action2 hides objects with those actions.
+        if std::env::var("SAMMY_SKIP").is_ok_and(|v| v.split(',').any(|a| a.eq_ignore_ascii_case(&obj.action))) {
+            return;
+        }
+        let mut entity = self.commands.spawn_empty();
+        let init = actions::init(&mut obj, pov_z, &mut entity);
+        let id = entity.id();
+        if init.hidden {
+            self.commands.entity(id).despawn();
+            return;
+        }
+        let tf = Transform {
+            translation: coords::pos(obj.origin),
+            rotation: coords::rotation(obj.angles),
+            scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs(),
+        };
+        let file = obj.file.to_lowercase();
+        let base = (Name::new(obj.name.clone()), tf, Visibility::default(), LevelObject(obj.clone()), ChildOf(parent));
+        if init.sky {
+            self.commands.entity(id).insert(SKY_LAYER);
+        }
+        if file.ends_with(".mdl") {
+            let model = cache
+                .models
+                .entry(file.clone())
+                .or_insert_with(|| {
+                    let data = self.files.read(&file).ok()?;
+                    LoadedModel::load(&data, self.images, self.materials).map(Arc::new).ok()
+                })
+                .clone();
+            let Some(model) = model else {
+                self.commands.entity(id).despawn();
+                return warn!("missing model {file}");
+            };
+            let frames = model.animation("stand");
+            let mesh = self.meshes.add(model.build_mesh(frames.first().copied().unwrap_or(0)));
+            let material = if init.sky { self.unlit(&model.material) } else { model.material.clone() };
+            self.commands.entity(id).insert((
+                base,
+                Mesh3d(mesh),
+                MeshMaterial3d(material),
+                ModelAnimator { model: model.clone(), frames, fps: 8.0, time: 0.0 },
+            ));
+        } else if file.ends_with(".wmb") {
+            let parts = cache
+                .prefabs
+                .entry(file.clone())
+                .or_insert_with(|| {
+                    let wmb = formats::wmb::parse(&self.files.read(&file).ok()?).ok()?;
+                    Some(self.world_meshes(&wmb, false).into_iter().map(|(m, mat, _)| (m, mat)).collect())
+                })
+                .clone();
+            let Some(parts) = parts else {
+                self.commands.entity(id).despawn();
+                return warn!("missing prefab {file}");
+            };
+            self.commands.entity(id).insert(base).with_children(|c| {
+                for (mesh, mat) in parts {
+                    c.spawn((Mesh3d(mesh), MeshMaterial3d(mat)));
+                }
+            });
+        } else if file.ends_with(".pcx") {
+            let sprite = cache.sprites.entry(file.clone()).or_insert_with(|| self.load_sprite(&file)).clone();
+            let Some((mesh, mat)) = sprite else {
+                self.commands.entity(id).despawn();
+                return warn!("missing sprite {file}");
+            };
+            self.commands.entity(id).insert((base, Mesh3d(mesh), MeshMaterial3d(mat), Billboard));
+        } else {
+            self.commands.entity(id).despawn();
+        }
+    }
+
+    fn unlit(&mut self, base: &Handle<StandardMaterial>) -> Handle<StandardMaterial> {
+        let mut m = self.materials.get(base).cloned().unwrap_or_default();
+        m.unlit = true;
+        m.cull_mode = None;
+        self.materials.add(m)
+    }
+
+    /// Sprites are upright quads sized in quants = pixels. `name+N.pcx` is an
+    /// N-frame horizontal strip; only the first frame is shown for now.
+    fn load_sprite(&mut self, file: &str) -> Option<(Handle<Mesh>, Handle<StandardMaterial>)> {
+        let pcx = formats::pcx::parse(&self.files.read(file).ok()?).ok()?;
+        let frames: u32 = file
+            .rsplit_once('+')
+            .and_then(|(_, n)| n.trim_end_matches(".pcx").parse().ok())
+            .unwrap_or(1)
+            .max(1);
+        let mut img = pcx.image.clone();
+        // Palette index 0 is transparent in Acknex sprites.
+        if let Some(idx) = &pcx.indices {
+            for (px, &i) in img.data.chunks_exact_mut(4).zip(idx) {
+                if i == 0 {
+                    px[3] = 0;
+                }
+            }
+        }
+        let w = img.width as f32 / frames as f32 / coords::QUANTS_PER_UNIT;
+        let h = img.height as f32 / coords::QUANTS_PER_UNIT;
+        let u1 = 1.0 / frames as f32;
+        let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+            .with_inserted_attribute(
+                Mesh::ATTRIBUTE_POSITION,
+                vec![[-w / 2.0, -h / 2.0, 0.0], [w / 2.0, -h / 2.0, 0.0], [w / 2.0, h / 2.0, 0.0], [-w / 2.0, h / 2.0, 0.0]],
+            )
+            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 0.0, 1.0]; 4])
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 1.0], [u1, 1.0], [u1, 0.0], [0.0, 0.0]])
+            .with_inserted_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
+        let material = self.materials.add(StandardMaterial {
+            base_color_texture: Some(self.images.add(crate::image::to_bevy(&img, true, false))),
+            alpha_mode: AlphaMode::Mask(0.5),
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        });
+        Some((self.meshes.add(mesh), material))
+    }
+}
+
+/// Camera-facing sprite (rotates around the vertical axis only, like Acknex sprites).
+#[derive(Component)]
+pub struct Billboard;
+
+pub fn face_camera(cam: Query<&GlobalTransform, With<crate::camera::MainCamera>>, mut q: Query<&mut Transform, With<Billboard>>) {
+    let Ok(cam) = cam.single() else { return };
+    for mut tf in &mut q {
+        let d = cam.translation() - tf.translation;
+        tf.rotation = Quat::from_rotation_y(d.x.atan2(d.z));
+    }
+}

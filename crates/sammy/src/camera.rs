@@ -11,6 +11,10 @@ impl Plugin for FlyCameraPlugin {
     }
 }
 
+/// The world-rendering camera (other cameras, e.g. the sky pass, copy it).
+#[derive(Component)]
+pub struct MainCamera;
+
 #[derive(Component, Default)]
 pub struct FlyCamera {
     pub yaw: f32,

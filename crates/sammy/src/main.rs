@@ -1,7 +1,9 @@
+mod actions;
 mod camera;
 mod coords;
 mod debug;
 mod image;
+mod level;
 mod model;
 mod vfs;
 
@@ -19,8 +21,10 @@ const DEFAULT_GAME_DIR: &str = "/mnt/drive/Games/sammy-suricate/drive_c/Program 
 
 #[derive(Resource)]
 struct Args {
-    /// `--model <file> [anim]` shows a single model; otherwise a level file name.
+    /// `--model <file> [anim]` shows a single model.
     model: Option<(String, Option<String>)>,
+    /// Level file name (default 10001.wmb).
+    level: String,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -28,18 +32,23 @@ fn main() -> anyhow::Result<()> {
     let files = GameFiles::open(&dir)?;
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let args = match argv.first().map(String::as_str) {
-        Some("--model") => Args { model: Some((argv.get(1).cloned().unwrap_or("suricat1.mdl".into()), argv.get(2).cloned())) },
-        _ => Args { model: Some(("suricat1.mdl".into(), Some("walkA".into()))) },
+        Some("--model") => Args {
+            model: Some((argv.get(1).cloned().unwrap_or("suricat1.mdl".into()), argv.get(2).cloned())),
+            level: String::new(),
+        },
+        Some(level) => Args { model: None, level: level.to_owned() },
+        None => Args { model: None, level: "10001.wmb".into() },
     };
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
             ..default()
         }))
-        .add_plugins((FlyCameraPlugin, ModelPlugin, debug::DebugPlugin))
+        .add_plugins((FlyCameraPlugin, ModelPlugin, actions::ActionsPlugin, debug::DebugPlugin))
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, setup)
+        .add_systems(Update, level::face_camera)
         .run();
     Ok(())
 }
@@ -67,5 +76,30 @@ fn setup(
             ModelAnimator { model: model.clone(), frames, fps: 16.0, time: 0.0 },
         ));
         commands.spawn((Camera3d::default(), Transform::from_xyz(0.0, 0.5, 4.0), FlyCamera::default()));
+        return;
     }
+
+    let mut spawner = level::Spawner {
+        commands: &mut commands,
+        files: &files,
+        meshes: &mut meshes,
+        images: &mut images,
+        materials: &mut materials,
+    };
+    let start = spawner.spawn_level(&args.level).unwrap_or_else(|e| panic!("loading {}: {e}", args.level));
+    // Start the camera behind and above the player start, looking the way Sammy faces.
+    let (pos, pan) = start.unwrap_or((Vec3::ZERO, 0.0));
+    let yaw = pan.to_radians();
+    let back = Quat::from_rotation_y(yaw) * Vec3::Z;
+    let cam_tf = Transform::from_translation(pos + back * 6.0 + Vec3::Y * 3.0);
+    // Sky domes render first on their own layer; the world camera draws on top
+    // with a fresh depth buffer, like Acknex's sky pass.
+    commands.spawn((Camera3d::default(), Camera { order: 0, ..default() }, level::SKY_LAYER, cam_tf, FlyCamera { yaw, pitch: -0.35 }));
+    commands.spawn((
+        Camera3d::default(),
+        Camera { order: 1, clear_color: ClearColorConfig::None, ..default() },
+        cam_tf,
+        FlyCamera { yaw, pitch: -0.35 },
+        camera::MainCamera,
+    ));
 }
