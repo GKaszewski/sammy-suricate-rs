@@ -14,7 +14,7 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use bevy::render::view::Tonemapping;
 
-use camera::{FlyCamera, FlyCameraPlugin};
+use camera::{CameraPlugin, FlyCamera, FollowState, MainCamera, SkyCamera};
 use model::{LoadedModel, ModelAnimator, ModelPlugin};
 use vfs::GameFiles;
 
@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
             primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
             ..default()
         }))
-        .add_plugins((FlyCameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, debug::DebugPlugin))
+        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, debug::DebugPlugin))
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, setup)
@@ -79,6 +79,7 @@ fn setup(
             ModelAnimator { model: model.clone(), frames, fps: 16.0, time: 0.0 },
         ));
         commands.spawn((Camera3d::default(), Transform::from_xyz(0.0, 0.5, 4.0), FlyCamera::default()));
+        commands.insert_resource(camera::CameraMode::Fly);
         return;
     }
 
@@ -104,7 +105,7 @@ fn setup(
         Tonemapping::Linear,
         level::SKY_LAYER,
         cam_tf,
-        FlyCamera { yaw, pitch: -0.9 },
+        SkyCamera,
     ));
     commands.spawn((
         Camera3d::default(),
@@ -112,6 +113,7 @@ fn setup(
         Tonemapping::Linear,
         cam_tf,
         FlyCamera { yaw, pitch: -0.9 },
-        camera::MainCamera,
+        FollowState::default(),
+        MainCamera,
     ));
 }

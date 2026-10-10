@@ -9,7 +9,6 @@ use bevy::prelude::*;
 
 #[derive(Resource)]
 pub struct GameFiles {
-    dir: PathBuf,
     loose: HashMap<String, PathBuf>,
     archived: HashMap<String, Vec<u8>>,
 }
@@ -30,11 +29,7 @@ impl GameFiles {
                 loose.insert(name, path);
             }
         }
-        Ok(Self { dir: dir.to_owned(), loose, archived })
-    }
-
-    pub fn dir(&self) -> &Path {
-        &self.dir
+        Ok(Self { loose, archived })
     }
 
     pub fn read(&self, name: &str) -> anyhow::Result<Vec<u8>> {
@@ -48,7 +43,4 @@ impl GameFiles {
             .ok_or_else(|| anyhow::anyhow!("game file not found: {name}"))
     }
 
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.loose.keys().chain(self.archived.keys()).map(String::as_str)
-    }
 }

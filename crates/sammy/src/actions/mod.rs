@@ -2,17 +2,20 @@
 //! action name is dispatched here when the level is spawned.
 
 mod decor;
+pub mod player;
 
 use bevy::prelude::*;
 use formats::wmb::Object;
 
-pub use decor::SkyFollow;
+use crate::camera::CameraParams;
+
 
 pub struct ActionsPlugin;
 
 impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
+        app.add_systems(Update, player::move_player)
+            .add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
     }
 }
 
@@ -39,11 +42,27 @@ fn is_marker(action: &str) -> bool {
 /// `wait`). `pov_z` is the Acknex Z of the initial camera/player position.
 pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> ActionInit {
     let action = obj.action.to_ascii_lowercase();
+    // Camera config entities feed the follow camera before being hidden.
+    match action.as_str() {
+        "initcamera1" => {
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<CameraParams>().apply_init_camera1(&o));
+        }
+        "initcamera2" => {
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<CameraParams>().apply_init_camera2(&o));
+        }
+        _ => {}
+    }
     if is_marker(&action) {
         return ActionInit { hidden: true, ..default() };
     }
     match action.as_str() {
         "initskymenu" => decor::init_sky_menu(obj, pov_z, entity),
+        "initmarche" => {
+            player::init_player(obj, entity);
+            ActionInit::default()
+        }
         "initdecor" => {
             decor::init_decor(obj);
             ActionInit::default()

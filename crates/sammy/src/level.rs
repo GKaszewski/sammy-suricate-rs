@@ -43,7 +43,8 @@ pub struct Spawner<'a, 'w, 's> {
 impl Spawner<'_, '_, '_> {
     /// Spawns the level and returns the player start (Acknex position + pan), if found.
     pub fn spawn_level(&mut self, name: &str) -> anyhow::Result<Option<(Vec3, f32)>> {
-        let wmb = formats::wmb::parse(&self.files.read(name)?)?;
+        let wmb = Arc::new(formats::wmb::parse(&self.files.read(name)?)?);
+        self.commands.insert_resource(actions::player::LevelCollision(wmb.clone()));
         let root = self.commands.spawn((Name::new(name.to_owned()), Transform::default(), Visibility::default())).id();
         let level = wmb.build_mesh();
         let lightmap = level

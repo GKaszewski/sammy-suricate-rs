@@ -38,6 +38,9 @@ fn main() {
     for ((name, flags), n) in seen {
         println!("faces tex={name:20} flags={flags:#x} count={n}");
     }
+    for m in &wmb.models {
+        println!("model hulls heads={:?} mins={:?} maxs={:?}", m.head_nodes, m.hull_mins, m.hull_maxs);
+    }
     for t in &wmb.textures {
         println!("tex {} {}x{} {}bit", t.name, t.width, t.height, t.bits);
     }
