@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, setup)
-        .add_systems(Update, level::face_camera)
+        .add_systems(Update, (level::face_camera, level::animate_sprites))
         .run();
     Ok(())
 }
@@ -95,7 +95,7 @@ fn setup(
     let (pos, pan) = start.unwrap_or((Vec3::ZERO, 0.0));
     let yaw = pan.to_radians();
     let back = Quat::from_rotation_y(yaw) * Vec3::Z;
-    let cam_tf = Transform::from_translation(pos + back * 6.0 + Vec3::Y * 3.0);
+    let cam_tf = Transform::from_translation(pos + back * 6.0 + Vec3::Y * 10.0);
     // Sky domes render first on their own layer; the world camera draws on top
     // with a fresh depth buffer, like Acknex's sky pass.
     commands.spawn((
@@ -104,14 +104,14 @@ fn setup(
         Tonemapping::Linear,
         level::SKY_LAYER,
         cam_tf,
-        FlyCamera { yaw, pitch: -0.35 },
+        FlyCamera { yaw, pitch: -0.9 },
     ));
     commands.spawn((
         Camera3d::default(),
         Camera { order: 1, clear_color: ClearColorConfig::None, ..default() },
         Tonemapping::Linear,
         cam_tf,
-        FlyCamera { yaw, pitch: -0.35 },
+        FlyCamera { yaw, pitch: -0.9 },
         camera::MainCamera,
     ));
 }

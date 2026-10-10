@@ -28,7 +28,7 @@ pub struct LevelObject(pub Object);
 struct Cache {
     models: HashMap<String, Option<Arc<LoadedModel>>>,
     prefabs: HashMap<String, Option<Vec<(Handle<Mesh>, Handle<StandardMaterial>)>>>,
-    sprites: HashMap<String, Option<(Handle<Mesh>, Handle<StandardMaterial>)>>,
+    sprites: HashMap<String, Option<(Handle<Mesh>, Handle<StandardMaterial>, u32)>>,
 }
 
 pub struct Spawner<'a, 'w, 's> {
@@ -189,11 +189,25 @@ impl Spawner<'_, '_, '_> {
             });
         } else if file.ends_with(".pcx") {
             let sprite = cache.sprites.entry(file.clone()).or_insert_with(|| self.load_sprite(&file)).clone();
-            let Some((mesh, mat)) = sprite else {
+            let Some((mesh, mat, frames)) = sprite else {
                 self.commands.entity(id).despawn();
                 return warn!("missing sprite {file}");
             };
-            self.commands.entity(id).insert((base, Mesh3d(mesh), MeshMaterial3d(mat), Billboard));
+            // Animated strips get their own material so each sprite can sit on a different frame.
+            let (mat, anim) = if frames > 1 {
+                let m = self.materials.get(&mat).cloned().unwrap_or_default();
+                // Deterministic stand-in for WDL `random(frames)` start frame.
+                let start = (id.index_u32().wrapping_mul(2654435761) >> 7) % frames;
+                let fps = if obj.action.eq_ignore_ascii_case("initbonus3") { 48.0 } else { 0.0 };
+                (self.materials.add(m), Some(SpriteAnim { frames, frame: start as f32, fps }))
+            } else {
+                (mat, None)
+            };
+            let mut e = self.commands.entity(id);
+            e.insert((base, Mesh3d(mesh), MeshMaterial3d(mat), Billboard));
+            if let Some(anim) = anim {
+                e.insert(anim);
+            }
         } else {
             self.commands.entity(id).despawn();
         }
@@ -208,7 +222,7 @@ impl Spawner<'_, '_, '_> {
 
     /// Sprites are upright quads sized in quants = pixels. `name+N.pcx` is an
     /// N-frame horizontal strip; only the first frame is shown for now.
-    fn load_sprite(&mut self, file: &str) -> Option<(Handle<Mesh>, Handle<StandardMaterial>)> {
+    fn load_sprite(&mut self, file: &str) -> Option<(Handle<Mesh>, Handle<StandardMaterial>, u32)> {
         let pcx = formats::pcx::parse(&self.files.read(file).ok()?).ok()?;
         let frames: u32 = file
             .rsplit_once('+')
@@ -216,10 +230,16 @@ impl Spawner<'_, '_, '_> {
             .unwrap_or(1)
             .max(1);
         let mut img = pcx.image.clone();
-        // Palette index 0 is transparent in Acknex sprites.
+        // Acknex sprites are colour-keyed: palette index 0 (8-bit) or pure black (24-bit).
         if let Some(idx) = &pcx.indices {
             for (px, &i) in img.data.chunks_exact_mut(4).zip(idx) {
                 if i == 0 {
+                    px[3] = 0;
+                }
+            }
+        } else {
+            for px in img.data.chunks_exact_mut(4) {
+                if px[..3] == [0, 0, 0] {
                     px[3] = 0;
                 }
             }
@@ -243,7 +263,32 @@ impl Spawner<'_, '_, '_> {
             cull_mode: None,
             ..default()
         });
-        Some((self.meshes.add(mesh), material))
+        Some((self.meshes.add(mesh), material, frames))
+    }
+}
+
+/// Plays a horizontal sprite strip (`name+N.pcx`) by shifting the material's UVs.
+#[derive(Component)]
+pub struct SpriteAnim {
+    pub frames: u32,
+    pub frame: f32,
+    /// Frames per second (WDL: frames per tick x 16).
+    pub fps: f32,
+}
+
+pub fn animate_sprites(
+    time: Res<Time>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut q: Query<(&mut SpriteAnim, &MeshMaterial3d<StandardMaterial>)>,
+) {
+    for (mut anim, mat) in &mut q {
+        anim.frame = (anim.frame + anim.fps * time.delta_secs()).rem_euclid(anim.frames as f32);
+        if let Some(mut m) = materials.get_mut(&mat.0) {
+            let offset = anim.frame.floor() / anim.frames as f32;
+            if m.uv_transform.translation.x != offset {
+                m.uv_transform = bevy::math::Affine2::from_translation(Vec2::new(offset, 0.0));
+            }
+        }
     }
 }
 
