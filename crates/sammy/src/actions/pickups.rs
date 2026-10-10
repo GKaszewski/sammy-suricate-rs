@@ -11,7 +11,7 @@ use super::player::{Player, TICKS};
 use crate::audio::Sfx;
 use crate::collision::CollisionWorld;
 use crate::coords;
-use crate::game::{GameState, MASTER_KEY};
+use crate::game::{GameState, ResetScan, MASTER_KEY};
 use crate::level::{Billboard, SpriteAnim};
 
 /// `HeightGem` (skills.wdl:697): gems float this far above the ground.
@@ -37,8 +37,24 @@ pub struct PickupPos(pub [f32; 3]);
 pub struct SnapToGround;
 
 /// Picked up: shrink ×0.8 per tick, then despawn (`Bonus3_Hit`, `ScaleDownGem`).
+/// Entities that can come back (level keys, checkpoints) are hidden instead.
 #[derive(Component)]
 pub struct Shrinking;
+
+/// Collected and waiting for the reset scan (`GemWaitForNewStart`).
+#[derive(Component)]
+pub struct Collected;
+
+/// A key placed in the level (WDL Flag3): restored at its home on each respawn.
+#[derive(Component)]
+pub struct LevelKey {
+    home: Option<[f32; 3]>,
+    scale: Vec3,
+}
+
+/// Restored by the reset scan instead of being despawned after shrinking.
+#[derive(Component)]
+pub struct Respawnable;
 
 /// An ejected key in flight (`LaunchYouKey`): collectable after it settles.
 #[derive(Component)]
@@ -73,7 +89,12 @@ pub fn init_bonus3(obj: &Object, entity: &mut EntityCommands) {
 
 pub fn init_key(obj: &Object, entity: &mut EntityCommands) {
     // Skill5 "surprise" gems pick a random colour; not ported yet (uses Skill6).
-    entity.insert((KeyGem { color: obj.skills[5] as u32 }, PickupPos(obj.origin)));
+    entity.insert((
+        KeyGem { color: obj.skills[5] as u32 },
+        PickupPos(obj.origin),
+        LevelKey { home: None, scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs() },
+        Respawnable,
+    ));
     if obj.flags & (1 << 5) == 0 {
         entity.insert(SnapToGround);
     }
@@ -101,10 +122,16 @@ pub fn collect(
     mut sfx: Sfx,
     player: Query<&Player>,
     diamonds: Query<(Entity, &PickupPos, &Diamond), (Without<Shrinking>, Without<SnapToGround>)>,
-    keys: Query<(Entity, &PickupPos, &KeyGem), (Without<Shrinking>, Without<Bouncing>, Without<SnapToGround>)>,
+    mut keys: Query<
+        (Entity, &PickupPos, &KeyGem, Option<&mut LevelKey>),
+        (Without<Shrinking>, Without<Bouncing>, Without<SnapToGround>, Without<Collected>),
+    >,
     sprites: Res<GemSprites>,
 ) {
     let Ok(p) = player.single() else { return };
+    if p.state == super::player::State::Dead {
+        return;
+    }
     let near = |q: &[f32; 3]| (0..3).map(|i| (q[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt() <= p.scan_radius;
 
     for (e, pos, d) in &diamonds {
@@ -129,17 +156,20 @@ pub fn collect(
         return;
     }
     // Key_Hit: take the gem; mix primaries, otherwise throw the old key back out.
-    for (e, pos, gem) in &keys {
+    for (e, pos, gem, level_key) in &mut keys {
         if !near(&pos.0) {
             continue;
         }
         commands.entity(e).insert(Shrinking);
+        if let Some(mut lk) = level_key {
+            lk.home.get_or_insert(pos.0);
+        }
         sfx.play("ColoredGem_son");
         let (key, outcome) = take_key(game.key, gem.color);
         game.key = key;
         match outcome {
             KeyOutcome::Mixed => sfx.play("GemMixing_son"),
-            KeyOutcome::Ejected(old) => eject_key(&mut commands, &mut game, &sprites, old, p),
+            KeyOutcome::Ejected(old) => eject_key(&mut commands, &mut game, &sprites, old, p, 30.0),
             KeyOutcome::Taken => {}
         }
         break; // one gem per scan
@@ -166,7 +196,8 @@ pub fn take_key(held: u32, gem: u32) -> (u32, KeyOutcome) {
 }
 
 /// `EjectOldKey` + `LaunchYouKey`: the old key pops out behind Sammy and bounces.
-fn eject_key(commands: &mut Commands, game: &mut GameState, sprites: &GemSprites, color: u32, p: &Player) {
+/// `EjectNewKey` (on death) launches it with vz 40.
+pub fn eject_key(commands: &mut Commands, game: &mut GameState, sprites: &GemSprites, color: u32, p: &Player, vz: f32) {
     let Some((mesh, mat, frames)) = sprites.0.get(&color).cloned() else { return };
     game.key_in_flight = true;
     let pos = [p.pos[0], p.pos[1], p.pos[2] + 50.0];
@@ -181,7 +212,7 @@ fn eject_key(commands: &mut Commands, game: &mut GameState, sprites: &GemSprites
         SpriteAnim { frames, frame: 0.0, fps: 48.0 },
         KeyGem { color },
         PickupPos(pos),
-        Bouncing { vel: [back.cos() * 12.0, back.sin() * 12.0, 30.0], bounces: 0 },
+        Bouncing { vel: [back.cos() * 12.0, back.sin() * 12.0, vz], bounces: 0 },
     ));
 }
 
@@ -217,12 +248,49 @@ pub fn bounce_keys(
     }
 }
 
-pub fn shrink(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mut Transform), With<Shrinking>>) {
+pub fn shrink(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut q: Query<(Entity, &mut Transform, Has<Respawnable>), With<Shrinking>>,
+) {
     let k = 0.8f32.powf(time.delta_secs() * TICKS);
-    for (e, mut tf) in &mut q {
+    for (e, mut tf, respawnable) in &mut q {
         tf.scale *= k;
         if tf.scale.x < 0.05 {
-            commands.entity(e).despawn();
+            if respawnable {
+                commands.entity(e).remove::<Shrinking>().insert((Collected, Visibility::Hidden));
+            } else {
+                commands.entity(e).despawn();
+            }
+        }
+    }
+}
+
+/// Reset scan (id 1000) for keys: level keys come back home (or vanish for good
+/// once Sammy holds the master key); runtime keys are removed.
+pub fn reset_keys(
+    mut reset: MessageReader<ResetScan>,
+    mut commands: Commands,
+    mut game: ResMut<GameState>,
+    mut keys: Query<(Entity, &mut PickupPos, &mut Transform, Option<&LevelKey>), With<KeyGem>>,
+) {
+    if reset.read().count() == 0 {
+        return;
+    }
+    game.key_in_flight = false;
+    for (e, mut pos, mut tf, level_key) in &mut keys {
+        match level_key {
+            Some(lk) if game.key != MASTER_KEY => {
+                if let Some(home) = lk.home {
+                    pos.0 = home;
+                }
+                tf.translation = coords::pos(pos.0);
+                tf.scale = lk.scale;
+                commands.entity(e).remove::<(Collected, Shrinking)>().insert(Visibility::Inherited);
+            }
+            _ => {
+                commands.entity(e).despawn();
+            }
         }
     }
 }

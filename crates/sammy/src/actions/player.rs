@@ -81,6 +81,8 @@ pub enum State {
     Land,
     /// Level won: "Iwin" while spinning (`AnimGagnee`).
     Win,
+    /// Dying / respawning (`PlayerEtat == 3`): no input, animation owned by health.rs.
+    Dead,
 }
 
 #[derive(Component)]
@@ -101,6 +103,17 @@ pub struct Player {
     pub scan_radius: f32,
     pub state: State,
     snapped: bool,
+}
+
+impl Player {
+    /// Moves Sammy to a respawn point; he is re-snapped to the floor next frame.
+    pub fn teleport(&mut self, pos: [f32; 3], pan: f32) {
+        self.pos = pos;
+        self.pan = pan;
+        self.vz = 0.0;
+        self.grounded = true;
+        self.snapped = false;
+    }
 }
 
 pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
@@ -195,7 +208,7 @@ pub fn move_player(
         }
         let mut ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
         let mut ctrl_hit = keys.just_pressed(KeyCode::ControlLeft) || keys.just_pressed(KeyCode::ControlRight);
-        if !input {
+        if !input || p.state == State::Dead {
             (ix, iy, ctrl, ctrl_hit) = (0.0, 0.0, false, false);
         }
         if matches!(current.phase, Phase::Won(_)) && p.grounded {
@@ -295,7 +308,7 @@ pub fn move_player(
             let floor = floor_below(&world, p.pos);
             let floor_z = floor.map(|(f, _)| f);
             // A real fall (more than 64 below the normal height) shows the jump animation.
-            if p.state != State::Air && floor_z.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
+            if !matches!(p.state, State::Air | State::Dead) && floor_z.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
                 p.state = State::Air;
                 if let Some(a) = anim.as_deref_mut() {
                     a.play("sautB", false, 50.0);

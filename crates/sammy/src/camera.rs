@@ -124,9 +124,22 @@ pub struct FollowState {
     pos: Option<[f32; 3]>,
     /// Within 4 quants of the ideal position (ends the level-start sweep).
     pub converged: bool,
+    /// Multiplier on `Camera_PlusTilt` (drops to 0 while Sammy dies, `Player_Kaputt`).
+    pub tilt_scale: Option<f32>,
+    /// Game over: orbit Sammy at 3°/tick instead of following his pan.
+    pub orbit: bool,
     /// Current (possibly zoomed-in) distance and height.
     dist: f32,
     height: f32,
+}
+
+impl FollowState {
+    /// Places the camera proxy directly (respawn: `Camera_Syn` at Sammy + (32,32,150)).
+    pub fn snap_to(&mut self, pos: [f32; 3]) {
+        self.pos = Some(pos);
+        self.tilt_scale = None;
+        self.orbit = false;
+    }
 }
 
 #[derive(Component, Default)]
@@ -174,7 +187,11 @@ fn follow(
             st.pos = Some(o);
         }
     }
-    st.ang += angle_diff(p.pan - st.ang) * (4.0 * time.delta_secs()).min(1.0);
+    if st.orbit {
+        st.ang += 3.0 * t;
+    } else {
+        st.ang += angle_diff(p.pan - st.ang) * (4.0 * time.delta_secs()).min(1.0);
+    }
 
     // 2. Ideal position: `dist` behind at `height` above.
     if st.pos.is_none() {
@@ -182,7 +199,7 @@ fn follow(
         st.height = params.height;
     }
     let a = (st.ang + params.back).to_radians();
-    let eye = [p.pos[0], p.pos[1], p.pos[2] + params.plus_tilt];
+    let eye = [p.pos[0], p.pos[1], p.pos[2] + params.plus_tilt * st.tilt_scale.unwrap_or(1.0)];
     let ideal_at = |d: f32, h: f32| [p.pos[0] + a.cos() * d, p.pos[1] + a.sin() * d, p.pos[2] + h];
     let blocked = |to: [f32; 3]| level.as_ref().map(|l| l.0.trace(0, 1, eye, to)).filter(|tr| tr.hit() && !tr.start_solid);
 

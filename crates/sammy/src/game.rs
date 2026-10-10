@@ -7,8 +7,17 @@ use crate::audio::Sfx;
 
 /// Colour key value granted on reaching the score goal (opens every door).
 pub const MASTER_KEY: u32 = 255;
+/// `WindowHeartsOrg`: full health.
+pub const MAX_HEARTS: f32 = 48.0;
+/// `MaxBalles`: most lives Sammy can hold.
+pub const MAX_LIVES: i32 = 19;
 
-#[derive(Resource, Default, Debug)]
+/// The reset scan (id 1000) sent by `RestartSammy`: level-placed keys and
+/// checkpoints come back, runtime keys disappear.
+#[derive(Message, Clone, Copy)]
+pub struct ResetScan;
+
+#[derive(Resource, Debug)]
 pub struct GameState {
     /// `ScoreJoueur1`.
     pub score: i32,
@@ -27,6 +36,28 @@ pub struct GameState {
     pub lost: bool,
     /// Ticks left of the score-panel blink (`WarnScoreGoal`).
     pub warn_score: f32,
+    /// `WindowHearts`: health 0..48.
+    pub hearts: f32,
+    /// `Player1Start` / `Player1AngleStart`: respawn point (spawn or checkpoint).
+    pub start: Option<([f32; 3], f32)>,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self {
+            score: 0,
+            goal: 0,
+            key: 0,
+            key_in_flight: false,
+            lives: 1,
+            goal_reached: false,
+            won: false,
+            lost: false,
+            warn_score: 0.0,
+            hearts: MAX_HEARTS,
+            start: None,
+        }
+    }
 }
 
 impl GameState {

@@ -163,6 +163,17 @@ fn load_pending(
     if slot == Some(10) {
         commands.queue(|w: &mut World| w.resource_mut::<GameState>().lives = 4);
     }
+    // Debug overrides applied after the level's own config entities.
+    commands.queue(|w: &mut World| {
+        let env = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f32>().ok());
+        let mut g = w.resource_mut::<GameState>();
+        if let Some(l) = env("SAMMY_LIVES") {
+            g.lives = l as i32;
+        }
+        if let Some(h) = env("SAMMY_HEARTS") {
+            g.hearts = h;
+        }
+    });
     info!("loaded level {file} (slot {slot:?})");
 }
 

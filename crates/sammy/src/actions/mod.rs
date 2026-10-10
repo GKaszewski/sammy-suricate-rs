@@ -3,6 +3,7 @@
 
 mod decor;
 pub mod door;
+pub mod health;
 pub mod pickups;
 pub mod player;
 pub mod title;
@@ -21,6 +22,7 @@ impl Plugin for ActionsPlugin {
         app.init_resource::<player::JumpParams>()
             .init_resource::<GameState>()
             .init_resource::<pickups::GemSprites>()
+            .add_message::<crate::game::ResetScan>()
             .add_systems(
                 Update,
                 (
@@ -33,7 +35,10 @@ impl Plugin for ActionsPlugin {
                         pickups::bounce_keys,
                         pickups::shrink,
                         door::run_exits.run_if(is_playing),
+                        health::collect_health.run_if(is_playing),
+                        health::detect_deaths.run_if(is_playing),
                     ),
+                    (health::run_death, pickups::reset_keys, health::reset_checkpoints, health::animate_hearts, health::spin_pickups),
                     title::update_titles,
                 )
                     .chain(),
@@ -111,6 +116,27 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initskymenu" => decor::init_sky_menu(obj, pov_z, entity),
         "initmarche" => {
             player::init_player(obj, entity);
+            health::init_start(obj.origin, obj.angles[0], entity);
+            ActionInit::default()
+        }
+        "inittiledeath" => {
+            health::init_tile_death(entity);
+            ActionInit::default()
+        }
+        "initlava" => {
+            health::init_lava(entity);
+            ActionInit::default()
+        }
+        "initsmallheart" => {
+            health::init_small_heart(obj, entity);
+            ActionInit::default()
+        }
+        "initbonusvie" | "initbonuslife" => {
+            health::init_bonus_vie(obj, entity);
+            ActionInit::default()
+        }
+        "initrestart" => {
+            health::init_restart(obj, entity);
             ActionInit::default()
         }
         "initbonus3" => {
