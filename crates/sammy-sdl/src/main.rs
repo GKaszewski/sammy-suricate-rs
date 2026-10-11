@@ -1,7 +1,7 @@
 //! Sammy Suricate on SDL2 + OpenGL ES 2: the game ([`sammy_core::sim::Sim`]) with a
 //! light renderer, for handhelds (PS Vita) and any desktop.
 //!
-//! `sammy-sdl [--data <game folder>] [slot | file.wmb | menu]`. Debug: the `SAMMY_*`
+//! `sammy-sdl [--data <game folder>] [slot | file.wmb | menu]` (or `SAMMY_LEVEL`). Debug: the `SAMMY_*`
 //! overrides of [`sammy_platform::debug`], and `SAMMY_SCREENSHOT=out.png` with
 //! `SAMMY_SHOT_SECS=2.5,4` to save frames and quit.
 
@@ -81,7 +81,9 @@ fn run() -> anyhow::Result<()> {
     sammy_platform::debug::load_env_file(&storage);
     let files = sammy_platform::game_files(data, &storage)?;
     let mut sim = sammy_platform::debug::new_sim(sammy_platform::save::load(&storage, &files));
-    let level = match argv.first().map(String::as_str) {
+    // The level: the command line, else `SAMMY_LEVEL` (e.g. from the Vita's env.txt).
+    let level_arg = argv.first().cloned().or_else(|| std::env::var("SAMMY_LEVEL").ok());
+    let level = match level_arg.as_deref() {
         None | Some("menu") => sammy_core::levels::MENU_FILE.to_owned(),
         Some(l) => l.parse::<u32>().ok().and_then(sammy_core::levels::file_for).map_or_else(|| l.to_owned(), str::to_owned),
     };
