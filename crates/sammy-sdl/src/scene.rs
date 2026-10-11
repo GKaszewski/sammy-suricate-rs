@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use glam::{Mat3, Mat4, Quat, Vec3};
+use glam::{Mat3, Mat4, Quat, Vec3, Vec4};
 use glow::HasContext;
 use sammy_core::camera::CameraPose;
 use sammy_core::id::Id;
@@ -13,6 +13,9 @@ use sammy_core::sim::{Body, Look, Sim, SpriteFacing, Visual};
 use sammy_platform::GameFiles;
 
 use crate::gfx::{Gfx, Layout, Lights, MAX_LIGHTS, Mesh, Shade, Texture};
+
+/// A bounding sphere: centre and radius (quants).
+type Sphere = (Vec3, f32);
 
 /// Opacity of an opaque body (percent).
 const OPAQUE: f32 = 100.0;
@@ -82,8 +85,8 @@ enum View {
 }
 
 struct Level {
-    /// Mesh, texture, lightmapped.
-    batches: Vec<(Mesh, Texture, bool)>,
+    /// Mesh, texture, lightmapped, bounds.
+    batches: Vec<(Mesh, Texture, bool, Sphere)>,
     /// The menu's wide-screen grid walls (unlit).
     walls: Vec<(Mesh, Texture)>,
     lightmap: Option<Texture>,
@@ -98,8 +101,22 @@ pub struct Scene {
     prefabs: HashMap<String, Option<Parts>>,
     sprites: HashMap<String, Option<Rc<SpriteAsset>>>,
     views: HashMap<Id, (u32, View)>,
+    /// What the last frame cost (for the profile log).
+    pub stats: std::cell::Cell<Stats>,
     /// The intro logo being shown: its id, mesh and texture.
     logo: Option<(u8, Mesh, Texture)>,
+}
+
+/// Per-frame counts for the profile log.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Stats {
+    /// Entities drawn, and left out as off screen.
+    pub drawn: u32,
+    pub culled: u32,
+    /// Animated meshes re-uploaded.
+    pub animated: u32,
+    /// Dynamic lights in the scene.
+    pub lights: u32,
 }
 
 /// The camera of a frame.
@@ -108,6 +125,8 @@ pub struct Camera {
     pub pos: Vec3,
     /// World axes of the view: forward, left, up.
     pub axes: Mat3,
+    /// Frustum planes (normal inward, `n·p + d >= 0` inside).
+    planes: [Vec4; 6],
 }
 
 impl Camera {
@@ -127,7 +146,50 @@ impl Camera {
         let fov = 2.0 * ((arc.to_radians() / 2.0).tan() / aspect.min(ASPECT_43)).atan();
         let view = Mat4::look_at_rh(pos, target, Vec3::Z);
         let proj = Mat4::perspective_rh_gl(fov, aspect, NEAR, FAR);
-        Self { view_proj: proj * view, pos, axes: Mat3::from_cols(forward, left, up) }
+        let view_proj = proj * view;
+        // Gribb-Hartmann: each plane is the w row plus or minus another row.
+        let rows = [0, 1, 2, 3].map(|i| view_proj.row(i));
+        let planes = [rows[3] + rows[0], rows[3] - rows[0], rows[3] + rows[1], rows[3] - rows[1], rows[3] + rows[2], rows[3] - rows[2]].map(|p| p / p.truncate().length());
+        Self { view_proj, pos, axes: Mat3::from_cols(forward, left, up), planes }
+    }
+
+    /// Whether a sphere is at least partly in view.
+    pub fn sees(&self, (c, r): Sphere) -> bool {
+        self.planes.iter().all(|p| p.truncate().dot(c) + p.w >= -r)
+    }
+}
+
+/// A frame's lights and counts, carried through the draw passes.
+struct FrameLights {
+    lights: SceneLights,
+    stats: Stats,
+}
+
+/// The scene's dynamic lights (position, range, colour 0..1), nearest the camera first.
+struct SceneLights(Vec<(Vec3, f32, [f32; 3])>);
+
+impl SceneLights {
+    fn new(sim: &Sim, cam: Vec3) -> Self {
+        let w = &sim.world;
+        let mut list: Vec<(Vec3, f32, [f32; 3])> = w
+            .lights
+            .iter()
+            .filter(|(_, l)| l.range > 0.0)
+            .filter_map(|(id, l)| w.bodies.get(id).map(|b| (Vec3::from(b.pos), l.range, l.color.map(|c| c / 255.0))))
+            .collect();
+        list.sort_by(|a, b| (a.0 - cam).length_squared().total_cmp(&(b.0 - cam).length_squared()));
+        Self(list)
+    }
+
+    /// The lights reaching a sphere (at most [`MAX_LIGHTS`]); the shaders skip the rest.
+    fn reaching(&self, (c, r): Sphere) -> Lights {
+        let mut out = Lights::default();
+        for (p, range, color) in self.0.iter().filter(|(p, range, _)| p.distance(c) < range + r).take(MAX_LIGHTS) {
+            out.data[out.count * 2] = [p.x, p.y, p.z, *range];
+            out.data[out.count * 2 + 1] = [color[0], color[1], color[2], 0.0];
+            out.count += 1;
+        }
+        out
     }
 }
 
@@ -184,8 +246,9 @@ impl Scene {
         self.sprites.entry(key.clone()).or_insert_with(|| load_sprite(gfx, files, &key)).clone()
     }
 
-    /// Rebuilds the level geometry after a load, and the entity views.
-    pub fn sync(&mut self, gfx: &Gfx, files: &GameFiles, sim: &Sim) {
+    /// Rebuilds the level geometry after a load, and the entity views. Animated models
+    /// in view of `cam` (all without one) get this frame's pose.
+    pub fn sync(&mut self, gfx: &Gfx, files: &GameFiles, sim: &Sim, cam: Option<&Camera>) {
         if self.loaded != sim.loads {
             self.loaded = sim.loads;
             self.build_level(gfx, sim);
@@ -207,16 +270,21 @@ impl Scene {
                 mesh.delete(&gfx.gl);
             }
         }
-        // Animated models: blend this frame's vertex frames.
+        // Animated models on screen: blend this frame's vertex frames.
+        let mut animated = 0;
         for (id, (_, v)) in self.views.iter_mut() {
+            let visible = w.bodies.get(id).is_some_and(|b| !b.hidden && cam.is_none_or(|c| c.sees(sphere(b, v))));
             if let View::Model { asset, mesh, shown, .. } = v
                 && let Some(blend) = w.animators.get(id).and_then(|a| a.anim.sample())
                 && *shown != Some(blend)
+                && visible
             {
                 *shown = Some(blend);
                 mesh.update(&gfx.gl, &asset.vertices(blend));
+                animated += 1;
             }
         }
+        self.stats.set(Stats { animated, ..Default::default() });
     }
 
     /// Where an entity is on screen: its bounds projected to window pixels
@@ -288,7 +356,9 @@ impl Scene {
             // Batches without lightmap UVs draw with flat light.
             let lit = b.lit && lightmap.is_some();
             let v: Vec<f32> = (0..b.positions.len()).flat_map(|i| b.positions[i].into_iter().chain(b.uvs[i]).chain(if lit { b.lightmap_uvs[i] } else { [0.0, 0.0] })).collect();
-            batches.push((Mesh::new(&gfx.gl, Layout::World, &v, &b.indices, false), b.texture.map_or(gfx.white, |t| textures[t]), lit));
+            let (lo, hi) = b.positions.iter().fold((Vec3::MAX, Vec3::MIN), |(lo, hi), p| (lo.min(Vec3::from(*p)), hi.max(Vec3::from(*p))));
+            let bounds = ((lo + hi) / 2.0, (hi - lo).length() / 2.0);
+            batches.push((Mesh::new(&gfx.gl, Layout::World, &v, &b.indices, false), b.texture.map_or(gfx.white, |t| textures[t]), lit, bounds));
         }
         let walls = if menu {
             sammy_present::menu::grid_walls(&wmb, sim.world.menu_markers.values())
@@ -308,7 +378,10 @@ impl Scene {
     pub fn draw(&self, gfx: &Gfx, sim: &Sim, cam: &Camera, parts: &str) {
         let gl = &gfx.gl;
         let w = &sim.world;
-        let lights = nearest_lights(sim, cam.pos);
+        let lights = SceneLights::new(sim, cam.pos);
+        let mut stats = self.stats.get();
+        stats.lights = lights.0.len() as u32;
+        let mut f = FrameLights { lights, stats };
         unsafe {
             gl.enable(glow::DEPTH_TEST);
             gl.depth_mask(true);
@@ -321,7 +394,7 @@ impl Scene {
         if !sky.is_empty() {
             unsafe { gl.disable(glow::CULL_FACE) };
             for id in &sky {
-                self.draw_entity(gfx, sim, cam, *id, &lights, Pass::Sky);
+                self.draw_entity(gfx, sim, cam, *id, Pass::Sky, &mut f);
             }
             unsafe {
                 gl.clear(glow::DEPTH_BUFFER_BIT);
@@ -329,14 +402,16 @@ impl Scene {
             }
         }
         if let Some(level) = self.level.as_ref().filter(|_| parts.contains("level")) {
-            for (mesh, tex, lit) in &level.batches {
-                gfx.draw_world(mesh, &cam.view_proj, *tex, level.lightmap.filter(|_| *lit), &lights);
+            for (mesh, tex, lit, bounds) in &level.batches {
+                if cam.sees(*bounds) {
+                    gfx.draw_world(mesh, &cam.view_proj, *tex, level.lightmap.filter(|_| *lit), &f.lights.reaching(*bounds));
+                }
             }
             let l = sammy_present::menu::WALL_LIGHT;
             let wall = Shade { color: [l, l, l, 1.0], unlit: true, ..Default::default() };
             unsafe { gl.disable(glow::CULL_FACE) };
             for (mesh, tex) in &level.walls {
-                gfx.draw_model(mesh, &cam.view_proj, &Mat4::IDENTITY, *tex, &wall, &lights);
+                gfx.draw_model(mesh, &cam.view_proj, &Mat4::IDENTITY, *tex, &wall, &Lights::default());
             }
             unsafe { gl.enable(glow::CULL_FACE) };
         }
@@ -352,7 +427,7 @@ impl Scene {
                 let d = w.bodies.get(id).map_or(0.0, |b| (Vec3::from(b.pos) - cam.pos).length_squared());
                 translucent.push((d, *id));
             } else {
-                self.draw_entity(gfx, sim, cam, *id, &lights, Pass::Opaque);
+                self.draw_entity(gfx, sim, cam, *id, Pass::Opaque, &mut f);
             }
         }
         translucent.sort_by(|a, b| b.0.total_cmp(&a.0));
@@ -361,7 +436,7 @@ impl Scene {
             gl.depth_mask(false);
         }
         for (_, id) in translucent {
-            self.draw_entity(gfx, sim, cam, id, &lights, Pass::Translucent);
+            self.draw_entity(gfx, sim, cam, id, Pass::Translucent, &mut f);
         }
         // `Near` entities (help signs) over a fresh depth buffer.
         unsafe {
@@ -369,20 +444,29 @@ impl Scene {
             gl.clear(glow::DEPTH_BUFFER_BIT);
         }
         for (id, _) in w.looks.iter().filter(|(_, l)| l.near) {
-            self.draw_entity(gfx, sim, cam, *id, &lights, Pass::Translucent);
+            self.draw_entity(gfx, sim, cam, *id, Pass::Translucent, &mut f);
         }
         unsafe {
             gl.disable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         }
+        self.stats.set(f.stats);
     }
 
-    fn draw_entity(&self, gfx: &Gfx, sim: &Sim, cam: &Camera, id: Id, lights: &Lights, pass: Pass) {
+    fn draw_entity(&self, gfx: &Gfx, sim: &Sim, cam: &Camera, id: Id, pass: Pass, f: &mut FrameLights) {
+        let (lights, stats) = (&f.lights, &mut f.stats);
         let w = &sim.world;
         let (Some(b), Some(look), Some((_, view))) = (w.bodies.get(&id), w.looks.get(&id), self.views.get(&id)) else { return };
         if b.hidden {
             return;
         }
+        let bounds = sphere(b, view);
+        if pass != Pass::Sky && !cam.sees(bounds) {
+            stats.culled += 1;
+            return;
+        }
+        stats.drawn += 1;
+        let lights = &if look.sky || matches!(view, View::Sprite { .. }) { Lights::default() } else { lights.reaching(bounds) };
         let gl = &gfx.gl;
         let alpha = (b.alpha / OPAQUE).clamp(0.0, 1.0);
         let tint = if w.menu_items.get(&id).is_some_and(|i| i.dark) { DARK_TINT } else { 1.0 };
@@ -460,7 +544,7 @@ impl Scene {
         // Both kinds face the camera (the quad faces -X, the axes turn X to forward).
         let m = Mat4::from_scale_rotation_translation(Vec3::splat(l.scale), Quat::from_mat3(&cam.axes), Vec3::from(l.pos));
         let shade = Shade { color: [1.0, 1.0, 1.0, l.alpha], unlit: true, cutoff: 0.01, ..Default::default() };
-        gfx.draw_model(mesh, &cam.view_proj, &m, *tex, &shade, &[[0.0; 4]; MAX_LIGHTS * 2]);
+        gfx.draw_model(mesh, &cam.view_proj, &m, *tex, &shade, &Lights::default());
         unsafe { gl.disable(glow::BLEND) };
     }
 }
@@ -498,18 +582,17 @@ enum Pass {
     Translucent,
 }
 
-/// The lights nearest the camera (position + range, colour 0..1).
-fn nearest_lights(sim: &Sim, cam: Vec3) -> Lights {
-    let w = &sim.world;
-    let mut list: Vec<(f32, [f32; 3], &sammy_core::sim::Light)> =
-        w.lights.iter().filter(|(_, l)| l.range > 0.0).filter_map(|(id, l)| w.bodies.get(id).map(|b| ((Vec3::from(b.pos) - cam).length_squared(), b.pos, l))).collect();
-    list.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut out = [[0.0; 4]; MAX_LIGHTS * 2];
-    for (i, (_, p, l)) in list.into_iter().take(MAX_LIGHTS).enumerate() {
-        out[i * 2] = [p[0], p[1], p[2], l.range];
-        out[i * 2 + 1] = [l.color[0] / 255.0, l.color[1] / 255.0, l.color[2] / 255.0, 0.0];
-    }
-    out
+/// A conservative bounding sphere of an entity: its local bounds about its origin,
+/// scaled (any rotation fits).
+fn sphere(b: &Body, view: &View) -> Sphere {
+    let (lo, hi) = match view {
+        View::Model { asset, .. } => asset.mdl.frames.first().map_or((Vec3::ZERO, Vec3::ZERO), |f| (Vec3::from(f.bbox_min), Vec3::from(f.bbox_max))),
+        View::Prefab(p) => p.bounds,
+        View::Sprite { asset, .. } => asset.bounds,
+        View::Missing => (Vec3::ZERO, Vec3::ZERO),
+    };
+    let scale = b.scale.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+    (Vec3::from(b.pos), lo.length().max(hi.length()) * scale)
 }
 
 /// A skin with A4 `overlay`: palette index 0 (or black) is transparent.

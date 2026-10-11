@@ -33,6 +33,8 @@ pub struct Pointer {
 
 #[derive(Default)]
 pub struct Input {
+    /// Kept for the whole run: SDL shuts the subsystem down when its last handle drops.
+    controllers: Option<sdl2::GameControllerSubsystem>,
     keys: HashSet<Keycode>,
     pressed: HashSet<Keycode>,
     pads: Vec<GameController>,
@@ -56,12 +58,11 @@ pub struct Input {
 impl Input {
     /// Gamepads are opened as SDL announces them (also those present at start).
     pub fn new(sdl: &sdl2::Sdl) -> Self {
-        let _ = sdl.game_controller();
-        Self::default()
+        Self { controllers: sdl.game_controller().ok(), ..Self::default() }
     }
 
     /// Takes one SDL event.
-    pub fn event(&mut self, e: &Event, sdl: &sdl2::Sdl) {
+    pub fn event(&mut self, e: &Event) {
         match e {
             Event::Quit { .. } => self.quit = true,
             Event::KeyDown { keycode: Some(k), repeat: false, .. } => {
@@ -97,7 +98,7 @@ impl Input {
             }
             Event::ControllerDeviceRemoved { which, .. } => self.pads.retain(|p| p.instance_id() != *which),
             Event::ControllerDeviceAdded { which, .. } => {
-                if let Ok(c) = sdl.game_controller().and_then(|g| g.open(*which).map_err(|e| e.to_string()))
+                if let Some(Ok(c)) = self.controllers.as_ref().map(|g| g.open(*which))
                     && !self.pads.iter().any(|p| p.instance_id() == c.instance_id())
                 {
                     log::info!("gamepad {}", c.name());

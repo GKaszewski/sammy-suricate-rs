@@ -8,7 +8,7 @@
 use glam::{Mat4, Vec3};
 use glow::HasContext;
 
-/// Most dynamic lights a draw takes (the nearest to the camera).
+/// Most dynamic lights a draw takes (those reaching it, nearest first).
 pub const MAX_LIGHTS: usize = 8;
 /// Acknex lightmaps are 2× overbright: mid-grey means full texture brightness.
 const LIGHTMAP_SCALE: f32 = 2.0;
@@ -26,14 +26,15 @@ const WORLD_FS: &str = r#"
 precision mediump float;
 uniform sampler2D u_tex; uniform sampler2D u_lightmap;
 uniform float u_lit;
-uniform vec4 u_lights[16];
+uniform vec4 u_lights[16]; uniform int u_light_count;
 varying vec2 v_uv; varying vec2 v_uv2; varying vec3 v_world;
 void main() {
     vec4 c = texture2D(u_tex, v_uv);
     vec3 light = u_lit > 0.5 ? texture2D(u_lightmap, v_uv2).rgb * LIGHTMAP_SCALE : vec3(1.0);
     for (int i = 0; i < 8; i++) {
+        if (i >= u_light_count) break;
         vec4 p = u_lights[i * 2];
-        if (p.w > 0.0) light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
+        light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
     }
     gl_FragColor = vec4(c.rgb * pow(light, vec3(1.0 / 2.2)), 1.0);
 }
@@ -57,7 +58,7 @@ uniform sampler2D u_tex;
 uniform vec4 u_color; uniform vec2 u_uv_offset;
 uniform float u_cutoff; uniform float u_unlit;
 uniform vec3 u_sun; uniform vec3 u_ambient;
-uniform vec4 u_lights[16];
+uniform vec4 u_lights[16]; uniform int u_light_count;
 varying vec2 v_uv; varying vec3 v_normal; varying vec3 v_world;
 void main() {
     vec4 c = texture2D(u_tex, v_uv + u_uv_offset) * u_color;
@@ -67,8 +68,9 @@ void main() {
         vec3 n = normalize(v_normal);
         light = u_ambient + vec3(max(dot(n, u_sun), 0.0));
         for (int i = 0; i < 8; i++) {
+            if (i >= u_light_count) break;
             vec4 p = u_lights[i * 2];
-            if (p.w > 0.0) light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
+            light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
         }
     }
     gl_FragColor = vec4(c.rgb * pow(light, vec3(1.0 / 2.2)), c.a);
@@ -234,8 +236,12 @@ impl Default for Shade {
     }
 }
 
-/// Dynamic lights for a frame: position + range, colour (0..1).
-pub type Lights = [[f32; 4]; MAX_LIGHTS * 2];
+/// The dynamic lights of a draw: `count` pairs of position + range, colour (0..1).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Lights {
+    pub data: [[f32; 4]; MAX_LIGHTS * 2],
+    pub count: usize,
+}
 
 pub struct Gfx {
     pub gl: glow::Context,
@@ -255,13 +261,13 @@ const AMBIENT: f32 = 0.45;
 
 impl Gfx {
     pub fn new(gl: glow::Context) -> anyhow::Result<Self> {
-        let world = Program::new(&gl, WORLD_VS, WORLD_FS, &["a_pos", "a_uv", "a_uv2"], &["u_mvp", "u_tex", "u_lightmap", "u_lit", "u_lights"])?;
+        let world = Program::new(&gl, WORLD_VS, WORLD_FS, &["a_pos", "a_uv", "a_uv2"], &["u_mvp", "u_tex", "u_lightmap", "u_lit", "u_lights", "u_light_count"])?;
         let model = Program::new(
             &gl,
             MODEL_VS,
             MODEL_FS,
             &["a_pos", "a_normal", "a_uv"],
-            &["u_mvp", "u_model", "u_tex", "u_color", "u_uv_offset", "u_cutoff", "u_unlit", "u_sun", "u_ambient", "u_lights"],
+            &["u_mvp", "u_model", "u_tex", "u_color", "u_uv_offset", "u_cutoff", "u_unlit", "u_sun", "u_ambient", "u_lights", "u_light_count"],
         )?;
         let ui = Program::new(&gl, UI_VS, UI_FS, &["a_pos", "a_uv"], &["u_mvp", "u_tex", "u_color"])?;
         let white = upload(&gl, &formats::image::RgbaImage { width: 1, height: 1, data: vec![255; 4] }, false, true);
@@ -293,7 +299,8 @@ impl Gfx {
             gl.uniform_1_i32(p.loc("u_tex"), 0);
             gl.uniform_1_i32(p.loc("u_lightmap"), 1);
             gl.uniform_1_f32(p.loc("u_lit"), if lightmap.is_some() { 1.0 } else { 0.0 });
-            gl.uniform_4_f32_slice(p.loc("u_lights"), lights.as_flattened());
+            gl.uniform_4_f32_slice(p.loc("u_lights"), lights.data.as_flattened());
+            gl.uniform_1_i32(p.loc("u_light_count"), lights.count as i32);
         }
         self.bind(0, tex);
         self.bind(1, lightmap.unwrap_or(self.white));
@@ -314,7 +321,8 @@ impl Gfx {
             gl.uniform_1_f32(p.loc("u_unlit"), if shade.unlit { 1.0 } else { 0.0 });
             gl.uniform_3_f32_slice(p.loc("u_sun"), &self.sun.to_array());
             gl.uniform_3_f32_slice(p.loc("u_ambient"), &self.ambient.to_array());
-            gl.uniform_4_f32_slice(p.loc("u_lights"), lights.as_flattened());
+            gl.uniform_4_f32_slice(p.loc("u_lights"), lights.data.as_flattened());
+            gl.uniform_1_i32(p.loc("u_light_count"), lights.count as i32);
         }
         self.bind(0, tex);
         mesh.draw(gl);

@@ -131,12 +131,15 @@ fn run() -> anyhow::Result<()> {
     let mut last = start;
     let mut first = true;
     let mut frames = 0u64;
+    let mut prof = Profile::default();
     // Debug: SAMMY_DRAW lists what to draw (scene,level,sky,entities,hud).
     let draw = std::env::var("SAMMY_DRAW").unwrap_or_else(|_| "scene,level,sky,entities,hud".into());
     while !input.quit {
+        let t0 = secs();
         for e in events.poll_iter() {
-            input.event(&e, &sdl);
+            input.event(&e);
         }
+
         let now = secs();
         // The first frame has no elapsed time (as on the Bevy frontend's first update).
         let dt = if first { 0.0 } else { ((now - last) as f32).min(MAX_FRAME) };
@@ -147,13 +150,16 @@ fn run() -> anyhow::Result<()> {
         let (w, h) = window.drawable_size();
         let window_px = [w as f32, h as f32];
         painter.resize(w as f32, h as f32, sammy_present::hud::ui_scale(w as f32, h as f32, sim.save.display.ui_size as u32));
+        prof.input += secs() - t0;
         let mut effects = options.open_on_key(&sim, &controls);
         menu.modal = options.model.open();
         menu.pick(&mut sim, &menu::Screen { scene: &scene, cam: last_cam.as_ref(), size: window_px }, &controls, &pointer, &mut audio);
         if frames < 6 {
             log::info!("frame {frames}: tick dt {dt:.3}");
         }
+        let t0 = secs();
         sim.tick(if paused { 0.0 } else { dt }, &controls, &files as &dyn Files);
+        prof.tick += secs() - t0;
         audio.set_volume(sim.save.sound);
         menu.act(&mut sim);
         let drained: Vec<Event> = sim.drain_events().collect();
@@ -188,16 +194,20 @@ fn run() -> anyhow::Result<()> {
         hud.tick(&sim.game, if paused { 0.0 } else { dt * sammy_core::time::TICKS_PER_SEC });
         frames += 1;
         if frames.is_multiple_of(LOG_FRAMES) {
-            log::info!("frame {frames} at {:.1} s", secs() - start);
+            prof.log(frames, secs() - start, scene.stats.get());
         }
         let trace = |what: &str| {
             if frames < 6 {
                 log::info!("frame {frames}: {what} {:.2}", secs() - start);
             }
         };
+        last_cam = sim.camera.pose.map(|pose| scene::Camera::from_pose(&pose, sim.camera.params.arc, w as f32 / h.max(1) as f32));
         trace("sync");
-        scene.sync(&gfx, &files, &sim);
+        let t0 = secs();
+        scene.sync(&gfx, &files, &sim, last_cam.as_ref());
+        prof.sync += secs() - t0;
         trace("synced");
+        let t0 = secs();
 
         unsafe {
             gfx.gl.viewport(0, 0, w as i32, h as i32);
@@ -205,7 +215,6 @@ fn run() -> anyhow::Result<()> {
             gfx.gl.depth_mask(true);
             gfx.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
-        last_cam = sim.camera.pose.map(|pose| scene::Camera::from_pose(&pose, sim.camera.params.arc, w as f32 / h.max(1) as f32));
         if let Some(cam) = last_cam.as_ref().filter(|_| draw.contains("scene")) {
             scene.draw(&gfx, &sim, cam, &draw);
             trace("scene drawn");
@@ -234,11 +243,49 @@ fn run() -> anyhow::Result<()> {
                 break;
             }
         }
+        prof.draw += secs() - t0;
         trace("swap");
+        let t0 = secs();
         window.gl_swap_window();
+        prof.swap += secs() - t0;
         trace("swapped");
     }
     Ok(())
+}
+
+/// Where the frame time goes, logged every [`LOG_FRAMES`] frames: SDL events and input,
+/// the game tick, scene
+/// sync (animated meshes), draw submission, and the buffer swap (waiting on the GPU
+/// and vsync), with the scene's counts.
+#[derive(Default)]
+struct Profile {
+    tick: f64,
+    sync: f64,
+    draw: f64,
+    swap: f64,
+    input: f64,
+    since: f64,
+}
+
+impl Profile {
+    fn log(&mut self, frames: u64, now: f64, s: scene::Stats) {
+        let n = LOG_FRAMES as f64;
+        let ms = |v: f64| v / n * 1000.0;
+        let fps = n / (now - self.since).max(1e-6);
+        log::info!(
+            "frame {frames} at {now:.1} s: {fps:.0} fps | ms tick {:.1} sync {:.1} draw {:.1} swap {:.1} input {:.1} | drawn {} culled {} animated {} lights {}",
+            ms(self.tick),
+            ms(self.sync),
+            ms(self.draw),
+            ms(self.swap),
+            ms(self.input),
+            s.drawn,
+            s.culled,
+            s.animated,
+            s.lights
+        );
+        *self = Self { since: now, ..Self::default() };
+    }
 }
 
 /// Window modes on desktops (windowed / borderless / fullscreen at a resolution) from
