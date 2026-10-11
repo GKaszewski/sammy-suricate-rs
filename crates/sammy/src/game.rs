@@ -76,13 +76,13 @@ fn debug_options() -> DebugOptions {
     }
 }
 
-fn tick(time: Res<Time>, controls: Res<Controls>, files: Res<GameFiles>, mut game: ResMut<Game>, mut sfx: Sfx, mut events: MessageWriter<GameEvent>) {
+fn tick(time: Res<Time>, controls: Res<Controls>, files: Res<GameFiles>, storage: Res<crate::platform::storage::Storage>, mut game: ResMut<Game>, mut sfx: Sfx, mut events: MessageWriter<GameEvent>) {
     game.tick(time.delta_secs(), &controls.0, &*files);
     let drained: Vec<Event> = game.drain_events().collect();
     for e in drained {
         match e {
             Event::Sound(name) => sfx.play(name),
-            Event::Saved => crate::platform::save::write(&game.save),
+            Event::Saved => crate::platform::save::write(&storage, &game.save),
             Event::LoadFailed { ref file } => error!("could not load level {file}"),
             Event::Loaded { ref file } => info!("loaded level {file} (slot {:?})", game.flow.slot),
             _ => {}

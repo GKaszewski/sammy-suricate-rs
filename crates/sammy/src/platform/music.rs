@@ -4,6 +4,7 @@
 //! `$SAMMY_SOUNDFONT`, else the first `.sf2` in the save directory or
 //! `/usr/share/soundfonts`.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -13,6 +14,7 @@ use rustysynth::{MidiFile, MidiFileSequencer, SoundFont, Synthesizer, Synthesize
 
 use crate::game::Game;
 use sammy_core::levels::EXTRO_SLOT;
+use crate::platform::storage::Storage;
 use crate::platform::vfs::GameFiles;
 
 pub struct MusicPlugin;
@@ -174,34 +176,84 @@ impl Music {
     }
 }
 
-fn soundfont_path() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("SAMMY_SOUNDFONT") {
-        return Some(p.into());
-    }
-    let dirs = [crate::platform::save::save_path().parent().map(PathBuf::from), Some(PathBuf::from("/usr/share/soundfonts"))];
-    dirs.into_iter().flatten().find_map(|d| {
-        let mut v: Vec<_> = std::fs::read_dir(d).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("sf2"))).collect();
-        v.sort();
-        v.into_iter().next()
-    })
+/// Where a SoundFont is.
+enum FontSource {
+    #[cfg(not(target_arch = "wasm32"))]
+    Path(PathBuf),
+    /// A `.sf2` among the game files (e.g. dropped into the game folder).
+    Game(String),
 }
 
-/// Parses the SoundFont on a thread (tens of MB); songs wait for it.
-fn load_soundfont(music: Res<Music>) {
+/// `SAMMY_SOUNDFONT`, else the first `.sf2` next to the executable (releases bundle
+/// one), in the player's storage, among the game files, or in `/usr/share/soundfonts`.
+fn find_soundfont(storage: &Storage, files: &GameFiles) -> Option<FontSource> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if let Ok(p) = std::env::var("SAMMY_SOUNDFONT") {
+            return Some(FontSource::Path(p.into()));
+        }
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        #[cfg(not(target_os = "vita"))]
+        dirs.extend(crate::platform::locate::beside_executable());
+        dirs.extend(storage.dir().map(PathBuf::from));
+        let found = dirs.into_iter().find_map(|d| {
+            let mut v: Vec<_> = std::fs::read_dir(d).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("sf2"))).collect();
+            v.sort();
+            v.into_iter().next()
+        });
+        if let Some(p) = found {
+            return Some(FontSource::Path(p));
+        }
+    }
+    if let Some(name) = files.find_extension("sf2") {
+        return Some(FontSource::Game(name));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let d = PathBuf::from("/usr/share/soundfonts");
+        let mut v: Vec<_> = std::fs::read_dir(d).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("sf2"))).collect();
+        v.sort();
+        return v.into_iter().next().map(FontSource::Path);
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = storage;
+        None
+    }
+}
+
+/// Parses the SoundFont (tens of MB; on a thread where there are threads); songs wait
+/// for it.
+fn load_soundfont(music: Res<Music>, storage: Res<Storage>, files: Res<GameFiles>) {
     if std::env::var("SAMMY_SCREENSHOT").is_ok() {
         return;
     }
-    let Some(path) = soundfont_path() else {
-        return warn!("no SoundFont found: music disabled (set SAMMY_SOUNDFONT)");
+    let Some(source) = find_soundfont(&storage, &files) else {
+        return warn!("no SoundFont found: music disabled (put a .sf2 next to the game or set SAMMY_SOUNDFONT)");
+    };
+    let (name, bytes) = match source {
+        #[cfg(not(target_arch = "wasm32"))]
+        FontSource::Path(p) => (p.display().to_string(), None),
+        FontSource::Game(n) => (n.clone(), files.read(&n).ok()),
     };
     let slot = music.font.clone();
-    std::thread::spawn(move || match std::fs::File::open(&path).map_err(|e| e.to_string()).and_then(|f| SoundFont::new(&mut std::io::BufReader::new(f)).map_err(|e| format!("{e:?}"))) {
-        Ok(sf) => {
-            info!("SoundFont {}", path.display());
-            *slot.lock().unwrap() = Some(Arc::new(sf));
+    let parse = move || {
+        let data = match bytes {
+            Some(b) => Ok(b),
+            None => std::fs::read(&name).map_err(|e| e.to_string()),
+        };
+        match data.and_then(|d| SoundFont::new(&mut d.as_slice()).map_err(|e| format!("{e:?}"))) {
+            Ok(sf) => {
+                info!("SoundFont {name}");
+                *slot.lock().unwrap() = Some(Arc::new(sf));
+            }
+            Err(e) => warn!("SoundFont {name}: {e}"),
         }
-        Err(e) => warn!("SoundFont {}: {e}", path.display()),
-    });
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    std::thread::spawn(parse);
+    #[cfg(target_arch = "wasm32")]
+    parse();
 }
 
 /// Song changes at level loads: `PlayCurrentMusique` at game start (mm1.wdl:840), the
@@ -279,7 +331,7 @@ mod tests {
     #[test]
     fn renders_sammy01() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extracted/sammy01.mid");
-        let (Some(sf), Ok(mid)) = (soundfont_path(), std::fs::read(&root)) else { return eprintln!("skip {}", root.display()) };
+        let (Some(sf), Ok(mid)) = (std::env::var_os("SAMMY_SOUNDFONT").map(PathBuf::from), std::fs::read(&root)) else { return eprintln!("skip {}", root.display()) };
         let font = Arc::new(SoundFont::new(&mut std::io::BufReader::new(std::fs::File::open(sf).unwrap())).unwrap());
         let song = MidiSong { font, midi: Arc::new(MidiFile::new(&mut mid.as_slice()).unwrap()), looping: false };
         let samples: Vec<f32> = song.decoder().take(RATE as usize * 2 * 5).collect();

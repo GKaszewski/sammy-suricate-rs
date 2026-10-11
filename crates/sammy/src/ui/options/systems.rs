@@ -332,7 +332,7 @@ pub(crate) fn buttons(
     mut sfx: crate::platform::audio::Sfx,
     mut time: ResMut<Time<Virtual>>,
     roots: Query<Entity, With<OptionsRoot>>,
-    (mut game, mut exit): (ResMut<Game>, MessageWriter<AppExit>),
+    (mut game, storage, mut exit): (ResMut<Game>, Res<crate::platform::storage::Storage>, MessageWriter<AppExit>),
 ) {
     // Hover shows the "2" image (the selected tab / device stays lit).
     let mut fired = None;
@@ -380,8 +380,8 @@ pub(crate) fn buttons(
             state.dialog = Some(Question::Quit);
         }
         Action::Restart => state.dialog = Some(Question::Restart),
-        Action::Yes => answer(true, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit),
-        Action::No => answer(false, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit),
+        Action::Yes => answer(true, &mut commands, &mut state, &mut time, &roots, &mut game, &storage, &mut exit),
+        Action::No => answer(false, &mut commands, &mut state, &mut time, &roots, &mut game, &storage, &mut exit),
     }
 }
 
@@ -393,6 +393,7 @@ pub(crate) fn answer(
     time: &mut Time<Virtual>,
     roots: &Query<Entity, With<OptionsRoot>>,
     game: &mut Game,
+    storage: &crate::platform::storage::Storage,
     exit: &mut MessageWriter<AppExit>,
 ) {
     let q = state.dialog.take();
@@ -402,7 +403,7 @@ pub(crate) fn answer(
     match q {
         Some(Question::Quit) => {
             // `QuitSammy`: save, then exit.
-            crate::platform::save::write(&game.save);
+            crate::platform::save::write(storage, &game.save);
             exit.write(AppExit::Success);
         }
         Some(Question::Restart) => {
@@ -419,6 +420,7 @@ pub(crate) fn answer(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sliders(
     mut game: ResMut<Game>,
+    storage: Res<crate::platform::storage::Storage>,
     mouse: Res<ButtonInput<MouseButton>>,
     (focus, controls): (Res<Focus>, Res<crate::platform::input::Controls>),
     tracks: Query<(Entity, &Slider, &RelativeCursorPosition)>,
@@ -460,7 +462,7 @@ pub(crate) fn sliders(
         }
     }
     if mouse.just_released(MouseButton::Left) || changed {
-        crate::platform::save::write(&game.save);
+        crate::platform::save::write(&storage, &game.save);
     }
     for (thumb, mut node) in &mut thumbs {
         let f = match thumb.0 {
@@ -475,6 +477,7 @@ pub(crate) fn sliders(
 /// focused row left/right do the same.
 pub(crate) fn choices(
     mut game: ResMut<Game>,
+    storage: Res<crate::platform::storage::Storage>,
     mouse: Res<ButtonInput<MouseButton>>,
     (focus, controls): (Res<Focus>, Res<crate::platform::input::Controls>),
     monitors: Query<&bevy::window::Monitor, With<bevy::window::PrimaryMonitor>>,
@@ -517,7 +520,7 @@ pub(crate) fn choices(
             Choice::UiSize => d.ui_size = (UI_SIZE_MAX as usize - cycle(UI_SIZE_MAX as usize - d.ui_size.min(UI_SIZE_MAX) as usize, UI_SIZE_MAX as usize + 1)) as u8,
         }
         sfx.play_vol("Toc2", UI_SFX_VOL);
-        crate::platform::save::write(&game.save);
+        crate::platform::save::write(&storage, &game.save);
         return;
     }
 }
@@ -643,14 +646,15 @@ pub(crate) fn dialog_keys(
     mut time: ResMut<Time<Virtual>>,
     roots: Query<Entity, With<OptionsRoot>>,
     mut game: ResMut<Game>,
+    storage: Res<crate::platform::storage::Storage>,
     mut exit: MessageWriter<AppExit>,
 ) {
     if state.dialog.is_none() {
         return;
     }
     if keys.any_just_pressed([KeyCode::KeyJ, KeyCode::KeyT, KeyCode::KeyY]) {
-        answer(true, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit);
+        answer(true, &mut commands, &mut state, &mut time, &roots, &mut game, &storage, &mut exit);
     } else if keys.just_pressed(KeyCode::KeyN) {
-        answer(false, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit);
+        answer(false, &mut commands, &mut state, &mut time, &roots, &mut game, &storage, &mut exit);
     }
 }

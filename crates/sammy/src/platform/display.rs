@@ -54,7 +54,7 @@ pub fn current_size(d: &DisplaySettings, monitor: Option<&Monitor>) -> Option<[u
 }
 
 /// Alt+Enter and F11 toggle between the window and the last fullscreen mode.
-fn hotkeys(keys: Res<ButtonInput<KeyCode>>, mut game: ResMut<Game>, mut last_full: Local<Option<DisplayMode>>) {
+fn hotkeys(keys: Res<ButtonInput<KeyCode>>, storage: Res<crate::platform::storage::Storage>, mut game: ResMut<Game>, mut last_full: Local<Option<DisplayMode>>) {
     let alt = keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight);
     if !(keys.just_pressed(KeyCode::F11) || (alt && keys.just_pressed(KeyCode::Enter))) {
         return;
@@ -66,7 +66,7 @@ fn hotkeys(keys: Res<ButtonInput<KeyCode>>, mut game: ResMut<Game>, mut last_ful
             DisplayMode::Windowed
         }
     };
-    crate::platform::save::write(&game.save);
+    crate::platform::save::write(&storage, &game.save);
 }
 
 /// Applies `game.save.display` to the window whenever it changes (and at start).

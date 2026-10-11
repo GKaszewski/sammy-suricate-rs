@@ -12,7 +12,6 @@ pub mod render;
 pub mod scene;
 pub mod ui;
 
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use bevy::prelude::*;
@@ -22,9 +21,6 @@ use camera::{CameraPlugin, FlyCamera, MainCamera, SkyCamera};
 use render::model::{LoadedModel, ModelAnimator, ModelPlugin};
 use platform::vfs::GameFiles;
 
-/// Default install location; override with the SAMMY_DIR environment variable.
-pub const DEFAULT_GAME_DIR: &str = "/mnt/drive/Games/sammy-suricate/drive_c/Program Files (x86)/Sammy Suricate";
-
 #[derive(Resource, Clone, Default)]
 pub struct Args {
     /// `--model <file> [anim]` shows a single model.
@@ -33,15 +29,15 @@ pub struct Args {
     pub level: String,
 }
 
-/// The game directory: `SAMMY_DIR` or the default install.
-pub fn game_dir() -> PathBuf {
-    std::env::var_os("SAMMY_DIR").map(PathBuf::from).unwrap_or_else(|| DEFAULT_GAME_DIR.into())
-}
-
-/// Runs the game with a window (`sammy [slot | file.wmb | --model file [anim]]`).
+/// Runs the game with a window:
+/// `sammy [--data <game folder>] [slot | file.wmb | menu | --model file [anim]]`.
 pub fn run() -> anyhow::Result<()> {
-    let dir = game_dir();
-    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let mut argv: Vec<String> = std::env::args().skip(1).collect();
+    let data = argv.iter().position(|a| a == "--data").map(|i| {
+        let dir = argv.get(i + 1).cloned().unwrap_or_default();
+        argv.drain(i..(i + 2).min(argv.len()));
+        std::path::PathBuf::from(dir)
+    });
     let args = match argv.first().map(String::as_str) {
         Some("--model") => Args {
             model: Some((argv.get(1).cloned().unwrap_or("suricat1.mdl".into()), argv.get(2).cloned())),
@@ -50,12 +46,14 @@ pub fn run() -> anyhow::Result<()> {
         Some(level) => Args { model: None, level: level.to_owned() },
         None => Args { model: None, level: "menu".into() },
     };
+    let storage = platform::storage::Storage::user();
+    let files = platform::game_files(data, &storage)?;
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
         ..default()
     }));
-    add_game(&mut app, &dir, args)?;
+    add_game(&mut app, files, storage, args);
     app.run();
     Ok(())
 }
@@ -95,14 +93,16 @@ impl PluginGroup for SammyPlugins {
 
 /// Adds the game (all feature plugins, data and start-up) to an app that already has
 /// Bevy's default plugins (windowed or headless).
-pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
-    let files = GameFiles::open(dir)?;
+pub fn add_game(app: &mut App, files: GameFiles, storage: platform::storage::Storage, args: Args) {
     // A test may supply its own game (and never touches the player's save).
     if !app.world().contains_resource::<game::Game>() {
-        app.insert_resource(game::new_game(platform::save::load(dir)));
+        app.insert_resource(game::new_game(platform::save::load(&storage, &files)));
     }
-    app.add_plugins(SammyPlugins).insert_resource(files).insert_resource(args).add_systems(Startup, (platform::audio::load_sounds, setup));
-    Ok(())
+    app.add_plugins(SammyPlugins)
+        .insert_resource(files)
+        .insert_resource(storage)
+        .insert_resource(args)
+        .add_systems(Startup, (platform::audio::load_sounds, setup));
 }
 
 /// Fallback scene light: sun illuminance, its direction, and the ambient brightness.

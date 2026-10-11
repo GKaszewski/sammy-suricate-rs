@@ -53,6 +53,21 @@ A frontend:
 The Bevy frontend does exactly that (`game.rs`, `scene/mirror.rs`); a vitasdk frontend
 would do the same with its own renderer.
 
+### Platforms
+
+The frontend reaches the machine through three small pieces in `sammy::platform`, so a
+new target only fills these in:
+
+| piece | desktop (Linux, Windows, macOS) | PS Vita | web |
+|---|---|---|---|
+| game files (`vfs::GameFiles`, implements `sim::Files`) | a folder (`GameFiles::open`) | `ux0:data/sammy-suricate/data` | files from the browser (`GameFiles::from_files`) |
+| finding them (`platform::game_files`) | `--data`, `SAMMY_DIR`, beside the executable, remembered, folder dialog (`locate`) | fixed folder | picked once, kept in IndexedDB (to do) |
+| records (`storage::Storage`: save, settings) | per-user data folder (`dirs`), `SAMMY_HOME` | `ux0:data/sammy-suricate` | browser storage (to do) |
+
+Nothing else touches the file system: the save import reads the original `.SAV` files
+through `GameFiles`, the SoundFont is found beside the executable, in storage or among
+the game files and parsed on a thread only where there are threads.
+
 ### Cargo features (`sammy`)
 
 | feature       | default | what                                           |

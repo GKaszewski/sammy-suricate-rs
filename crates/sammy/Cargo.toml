@@ -12,6 +12,11 @@ serde = { version = "1", features = ["derive"] }
 rustysynth = { version = "1.3", optional = true }
 anyhow.workspace = true
 
+# Desktop: per-user folders and the native folder dialog.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "vita")))'.dependencies]
+dirs = "6"
+rfd = "0.15"
+
 [features]
 default = ["music", "intro", "debug-tools"]
 # MIDI music through a SoundFont (rustysynth).
@@ -20,7 +25,3 @@ music = ["dep:rustysynth"]
 intro = []
 # Screenshot runs and the debug log.
 debug-tools = []
-
-[dev-dependencies]
-# System names in schedule dumps (tests only).
-bevy = { version = "0.20", features = ["wav", "debug"] }

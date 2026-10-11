@@ -2,8 +2,8 @@
 //! a fixed 60 Hz frame, a seeded RNG and scripted input, and compares a per-half-second
 //! digest against `tests/golden/*.txt`.
 //!
-//! Needs the original game files (`SAMMY_DIR` or the default install); skipped
-//! without them. `UPDATE_GOLDEN=1 cargo test --release --test sim_replay` rewrites the
+//! Needs the original game files (`SAMMY_DIR`, or the folder the game remembered);
+//! skipped without them. `UPDATE_GOLDEN=1 cargo test --release --test sim_replay` rewrites the
 //! golden files (only after a change that is *meant* to alter behaviour).
 
 use std::collections::HashMap;
@@ -18,7 +18,6 @@ use sammy_core::sim::{Files, Sim};
 const FPS: f32 = 60.0;
 /// Frames between digests (0.5 s).
 const SAMPLE: u64 = 30;
-const DEFAULT_GAME_DIR: &str = "/mnt/drive/Games/sammy-suricate/drive_c/Program Files (x86)/Sammy Suricate";
 
 /// Loose files over `*.wrs` archive entries, names case-insensitive.
 struct GameFiles {
@@ -59,10 +58,20 @@ fn files() -> Option<&'static GameFiles> {
     static FILES: std::sync::OnceLock<Option<GameFiles>> = std::sync::OnceLock::new();
     FILES
         .get_or_init(|| {
-            let dir = std::env::var_os("SAMMY_DIR").map(PathBuf::from).unwrap_or_else(|| DEFAULT_GAME_DIR.into());
-            GameFiles::open(&dir)
+            GameFiles::open(&game_dir()?)
         })
         .as_ref()
+}
+
+/// `SAMMY_DIR`, else the game folder the game remembered on this machine
+/// (`settings.json` in its storage, `SAMMY_HOME` or the user data folder).
+fn game_dir() -> Option<PathBuf> {
+    if let Some(d) = std::env::var_os("SAMMY_DIR") {
+        return Some(d.into());
+    }
+    let home = std::env::var_os("SAMMY_HOME").map(PathBuf::from).or_else(|| dirs::data_dir().map(|d| d.join("sammy-suricate")))?;
+    let settings: serde_json::Value = serde_json::from_slice(&std::fs::read(home.join("settings.json")).ok()?).ok()?;
+    settings.get("game_dir")?.as_str().map(PathBuf::from)
 }
 
 /// FNV-1a (stable across Rust versions, unlike `DefaultHasher`).
