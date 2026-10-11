@@ -12,7 +12,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim) {
         return;
     }
     let p = p.clone();
-    let near = |q: [f32; 3]| in_scan(p.pos, p.scan_radius, q);
+    let near = |q: [f32; 3]| in_scan(p.pos.get(), p.scan_radius, q);
     let w = &sim.world;
     let ready = |id: &Id| !w.shrinking.contains(id) && !w.snap_to_ground.contains(id);
 

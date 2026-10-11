@@ -50,7 +50,7 @@ pub(in crate::sim) fn corpses(sim: &mut Sim, dt: Dt) {
 
 pub(in crate::sim) fn fly(sim: &mut Sim, dt: Dt) {
     let Sim { world: w, level, rng, events, wasp_hits, weak_door_hits, .. } = sim;
-    let sammy = w.player().map(|(_, p)| p.pos);
+    let sammy = w.player().map(|(_, p)| p.pos.get());
     let space = Space { level: level.as_deref(), brushes: &w.brushes, boxes: &w.boxes };
     let (mut gone, mut corpses) = (Vec::new(), Vec::new());
     for (id, wasp) in w.wasps.iter_mut() {

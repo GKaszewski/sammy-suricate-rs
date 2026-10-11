@@ -85,7 +85,7 @@ fn ride(sim: &mut Sim) {
     }
     let Some(ground) = p.ground_entity else { return };
     let Some(plat) = w.platforms.get(&ground) else { return };
-    for (pos, d) in p.pos.iter_mut().zip(plat.platform.delta) {
+    for (pos, d) in p.pos.0.iter_mut().zip(plat.platform.delta) {
         *pos += d;
     }
     let Some(eng) = plat.engine.and_then(|e| w.engines.get_mut(&e)) else { return };

@@ -58,7 +58,7 @@ pub(super) fn follow(sim: &mut Sim, dt: Dt) {
         return;
     }
     let subject = Subject { pos: sim.pov.pos, pan: sim.pov.pan };
-    let sammy = sim.world.player().map(|(_, p)| Subject { pos: p.pos, pan: Degrees(p.pan.get()) });
+    let sammy = sim.world.player().map(|(_, p)| Subject { pos: p.pos.get(), pan: Degrees(p.pan.get()) });
     let sweep = sim.flow.phase == Phase::Intro;
     let c = &mut sim.camera;
     if let Some(pose) = crate::camera::follow(&mut c.follow, &c.params, &mut c.runtime, sim.level.as_deref(), subject, sammy, sweep, dt.t, dt.secs) {

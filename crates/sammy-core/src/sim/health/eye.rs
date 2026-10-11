@@ -56,7 +56,7 @@ pub(in crate::sim) fn run_eye(sim: &mut Sim, dt: Dt) {
         if eye.item.spin(t) {
             b.angles = Angles::from_array(eye.item.angles.to_array());
         }
-        let reach = playing && !dead && in_scan(sammy, radius, b.pos.to_array());
+        let reach = playing && !dead && in_scan(sammy.get(), radius, b.pos.to_array());
         match eye.item.step(game, reach, t) {
             EyeStage::Idle => {}
             EyeStage::Taken => {

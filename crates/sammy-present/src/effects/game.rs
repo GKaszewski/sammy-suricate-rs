@@ -161,7 +161,7 @@ pub fn emit_sammy(ps: &mut Particles, game: &Sim, prev: &mut Option<(State, bool
         if p.boosting {
             let n = (F / 2.0) as usize + (ps.random(1.0) < (F / 2.0).fract()) as usize;
             for _ in 0..n {
-                speedy(ps, p.pos);
+                speedy(ps, p.pos.get());
             }
         }
         if teleporting {

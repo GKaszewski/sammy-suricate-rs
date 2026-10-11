@@ -2,6 +2,7 @@
 
 use super::{BLOB_HAUT, Frame, HULL, Player};
 use crate::collision::{Space, floor_below, slide_move};
+use crate::space::Pos;
 
 /// A slide only starts within this much above the normal standing height.
 const SLOPE_REACH: f32 = 32.0;
@@ -24,7 +25,7 @@ impl Player {
     pub(super) fn slide<S: Space>(&mut self, f: &Frame<S>, t: f32) {
         let tuning = f.tuning;
         let me = Some(f.me);
-        if let Some((fl, _, n)) = floor_below(f.space, self.pos)
+        if let Some((fl, _, n)) = floor_below(f.space, self.pos.get())
             && n[2] > 0.0
             && n[2] <= tuning.slope_angle_min
             && self.pos[2] - fl <= BLOB_HAUT + SLOPE_REACH
@@ -41,7 +42,7 @@ impl Player {
                 self.lean(n, t);
             }
             let d = self.pente.map(|x| x * t);
-            self.pos = slide_move(f.space, HULL, self.pos, d, me).0;
+            self.pos = Pos(slide_move(f.space, HULL, self.pos.get(), d, me).0);
         } else {
             self.tilt -= LEAN_RELAX * self.tilt * t.min(1.0);
             self.roll -= LEAN_RELAX * self.roll * t.min(1.0);
@@ -49,7 +50,7 @@ impl Player {
             self.pente = self.pente.map(|x| if x.abs() < SLIDE_EPSILON { 0.0 } else { x * k });
             if self.pente != [0.0; 3] {
                 let d = self.pente.map(|x| x * t);
-                self.pos = slide_move(f.space, HULL, self.pos, [d[0], d[1], 0.0], me).0;
+                self.pos = Pos(slide_move(f.space, HULL, self.pos.get(), [d[0], d[1], 0.0], me).0);
             }
         }
     }
@@ -74,7 +75,7 @@ impl Player {
             return;
         }
         let k = self.knock.map(|v| v * t);
-        self.pos = slide_move(f.space, HULL, self.pos, [k[0], k[1], 0.0], Some(f.me)).0;
+        self.pos = Pos(slide_move(f.space, HULL, self.pos.get(), [k[0], k[1], 0.0], Some(f.me)).0);
         let dec = f.tuning.amorti_bounce * KNOCK_DECAY_SCALE * t;
         self.knock = self.knock.map(|v| if v.abs() <= dec { 0.0 } else { v - dec * v.signum() });
     }

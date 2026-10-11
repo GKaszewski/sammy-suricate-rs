@@ -5,6 +5,7 @@ use super::walk::{SlopeFeel, wrap};
 use super::{BLOB_HAUT, Frame, HULL, Player, State, Touch};
 use crate::anim::Anim;
 use crate::collision::{Space, floor_below};
+use crate::space::Pos;
 use crate::time::TICKS_PER_SEC;
 
 /// Jumping off a big slope is only allowed within this angle of downhill.
@@ -54,7 +55,7 @@ impl Player {
     /// Sammy landed.
     pub(super) fn fall<S: Space>(&mut self, f: &Frame<S>, anim: Option<&mut Anim>, sounds: &mut Vec<&'static str>, t: f32) -> bool {
         let jump = f.jump;
-        let floor = floor_below(f.space, self.pos);
+        let floor = floor_below(f.space, self.pos.get());
         if let Some((fl, ..)) = floor {
             self.floor = fl;
         }
@@ -77,7 +78,7 @@ impl Player {
         }
         self.vz -= self.fric * t;
         let target = [self.pos[0], self.pos[1], self.pos[2] + self.vz * t];
-        let hit = f.space.trace(HULL, self.pos, target, Some(f.me));
+        let hit = f.space.trace(HULL, self.pos.get(), target, Some(f.me));
         let tr = hit.trace;
         // Stomp (Player_Bong :584-618): landing on a lion's head re-jumps.
         if self.vz < 0.0 && tr.hit() && jump.bounce_on_enemy != 0.0 && hit.entity.is_some_and(|e| (f.touch)(e) == Touch::Enemy) {
@@ -94,9 +95,9 @@ impl Player {
             if tr.hit() && self.vz > 0.0 {
                 self.vz = 0.0; // ceiling cancels the ascent
             }
-            self.pos = tr.end;
+            self.pos = Pos(tr.end);
         }
-        let floor = floor_below(f.space, self.pos);
+        let floor = floor_below(f.space, self.pos.get());
         let floor_z = floor.map(|(fl, ..)| fl);
         if !matches!(self.state, State::Air | State::Dead | State::Scripted) && floor_z.is_none_or(|fl| self.pos[2] - fl > BLOB_HAUT + FALL_SHOWS_JUMP) {
             self.state = State::Air;

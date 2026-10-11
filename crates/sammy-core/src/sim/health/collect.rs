@@ -27,7 +27,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim, dt: Dt) {
         return;
     }
     let (sammy, radius) = (p.pos, p.scan_radius);
-    let near = |q: [f32; 3]| in_scan(sammy, radius, q);
+    let near = |q: [f32; 3]| in_scan(sammy.get(), radius, q);
     let Sim { world: w, game, events, .. } = sim;
     let shrinking = w.shrinking.clone();
 

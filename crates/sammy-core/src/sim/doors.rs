@@ -20,7 +20,7 @@ pub(super) fn run(sim: &mut Sim, dt: Dt) {
     let Some((_, p)) = sim.world.player() else { return };
     let (sammy, sammy_dead) = (p.pos, p.state == State::Dead);
     let blockers: Vec<[f32; 3]> = sim.world.enemies.values().filter(|e| e.alive()).map(|e| e.pos).collect();
-    let view = DoorView { sammy, sammy_dead, blockers: &blockers };
+    let view = DoorView { sammy: sammy.get(), sammy_dead, blockers: &blockers };
     let mut events = Vec::new();
     let ids: Vec<_> = sim.world.doors.keys().copied().collect();
     for id in ids {
@@ -33,7 +33,7 @@ pub(super) fn run(sim: &mut Sim, dt: Dt) {
         for ev in events.drain(..) {
             match ev {
                 DoorEvent::Sound(name) => sim.sound(name),
-                DoorEvent::LaunchGem { color } => spawn_door_gem(sim, id, color, sammy),
+                DoorEvent::LaunchGem { color } => spawn_door_gem(sim, id, color, sammy.get()),
                 DoorEvent::Flash { color } => {
                     let (range, rate, until) = DOOR_FLASH;
                     sim.world.lights.insert(id, Light::flash(light_color(color), range, rate, until));
@@ -67,7 +67,7 @@ pub(super) fn run_door_gems(sim: &mut Sim, dt: Dt) {
             continue;
         };
         let target = DoorGemTarget { door_pos: brush.origin, wanted: door.gem_flying, validated: door.validated };
-        match g.gem.fly(target, sammy, dt.t) {
+        match g.gem.fly(target, sammy.get(), dt.t) {
             Some(true) => {
                 door.validated = true;
                 let (at, color) = (g.gem.pos, g.gem.color);

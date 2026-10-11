@@ -40,7 +40,7 @@ pub(in crate::sim) fn collect_ammo(sim: &mut Sim) {
     let Sim { world: w, game, events, .. } = sim;
     for (id, a) in &w.ammo_pickups {
         let Some(at) = w.bodies.get(id).map(|b| b.pos) else { continue };
-        if w.shrinking.contains(id) || !crate::pickups::in_scan(sammy, radius, at.to_array()) {
+        if w.shrinking.contains(id) || !crate::pickups::in_scan(sammy.get(), radius, at.to_array()) {
             continue;
         }
         escapes.extend(a.take(game));

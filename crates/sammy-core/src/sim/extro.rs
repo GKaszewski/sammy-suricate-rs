@@ -17,7 +17,7 @@ pub const FADE_FULL: f32 = 100.0;
 pub(super) fn update_pov(sim: &mut Sim) {
     let w = &sim.world;
     sim.scanners.0.clear();
-    let sammy: Option<Body> = w.player().map(|(id, p)| (id, p.pos, p.pan.get(), p.vel));
+    let sammy: Option<Body> = w.player().map(|(id, p)| (id, p.pos.get(), p.pan.get(), p.vel));
     if let Some((_, pos, ..)) = sammy {
         sim.scanners.0.push(pos);
     }
@@ -53,7 +53,7 @@ pub(super) fn run_triggers(sim: &mut Sim) {
             }
             // First matching entity in the sphere.
             let hit: Option<(Option<Id>, [f32; 3])> = match tr.wanted() {
-                Wanted::Sammy => w.players.values().next().filter(|p| tr.within(p.pos)).map(|p| (None, p.pos)),
+                Wanted::Sammy => w.players.values().next().filter(|p| tr.within(p.pos.get())).map(|p| (None, p.pos.get())),
                 Wanted::Enemy { class, spec } => w
                     .enemies
                     .iter()
