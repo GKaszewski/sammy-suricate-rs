@@ -1,5 +1,5 @@
-//! OpenGL ES 2 drawing: three programs (the level's texture × lightmap surfaces, lit
-//! models and sprites, flat 2D for the HUD), textures and meshes. Everything is in the
+//! OpenGL ES 2 drawing: programs for the level's texture × lightmap surfaces, lit
+//! models and sprites, and flat 2D for the HUD, textures and meshes. Everything is in the
 //! game's native coordinates (X forward, Y left, Z up, quants).
 //!
 //! Colours are computed like the Bevy frontend, which lights in linear space and shows
@@ -12,8 +12,15 @@ use glow::HasContext;
 pub const MAX_LIGHTS: usize = 8;
 /// Acknex lightmaps are 2× overbright: mid-grey means full texture brightness.
 const LIGHTMAP_SCALE: f32 = 2.0;
+/// Lightmaps are stored gamma-encoded (`(2v)^(1/2.2)`), divided by its maximum.
+const GAMMA_MAX: f32 = 1.370_351; // 2^(1/2.2)
 /// Alpha below this is discarded (colour-keyed sprites and skins).
 pub const ALPHA_CUTOFF: f32 = 0.5;
+
+// Shaders are kept cheap for tile-based handheld GPUs: the level is texture × a lightmap
+// with the gamma curve baked in (`pow` only runs where a dynamic light reaches), models
+// are lit per vertex like A4's Gouraud models, and only colour-keyed textures use the
+// `discard` variant (which costs hidden-surface removal).
 
 const WORLD_VS: &str = r#"
 attribute vec3 a_pos; attribute vec2 a_uv; attribute vec2 a_uv2;
@@ -25,29 +32,44 @@ void main() { v_uv = a_uv; v_uv2 = a_uv2; v_world = a_pos; gl_Position = u_mvp *
 const WORLD_FS: &str = r#"
 precision mediump float;
 uniform sampler2D u_tex; uniform sampler2D u_lightmap;
-uniform float u_lit;
 uniform vec4 u_lights[16]; uniform int u_light_count;
 varying vec2 v_uv; varying vec2 v_uv2; varying vec3 v_world;
 void main() {
     vec4 c = texture2D(u_tex, v_uv);
-    vec3 light = u_lit > 0.5 ? texture2D(u_lightmap, v_uv2).rgb * LIGHTMAP_SCALE : vec3(1.0);
+    vec3 light = texture2D(u_lightmap, v_uv2).rgb * GAMMA_MAX;
+#ifdef DYNAMIC
+    vec3 lin = pow(light, vec3(2.2));
     for (int i = 0; i < 8; i++) {
         if (i >= u_light_count) break;
         vec4 p = u_lights[i * 2];
-        light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
+        lin += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
     }
-    gl_FragColor = vec4(c.rgb * pow(light, vec3(1.0 / 2.2)), 1.0);
+    light = pow(lin, vec3(1.0 / 2.2));
+#endif
+    gl_FragColor = vec4(c.rgb * light, 1.0);
 }
 "#;
 
 const MODEL_VS: &str = r#"
 attribute vec3 a_pos; attribute vec3 a_normal; attribute vec2 a_uv;
 uniform mat4 u_mvp; uniform mat4 u_model;
-varying vec2 v_uv; varying vec3 v_normal; varying vec3 v_world;
+uniform float u_unlit; uniform vec3 u_sun; uniform vec3 u_ambient;
+uniform vec4 u_lights[16]; uniform int u_light_count;
+varying vec2 v_uv; varying vec3 v_light;
 void main() {
     v_uv = a_uv;
-    v_normal = mat3(u_model[0].xyz, u_model[1].xyz, u_model[2].xyz) * a_normal;
-    v_world = (u_model * vec4(a_pos, 1.0)).xyz;
+    v_light = vec3(1.0);
+    if (u_unlit < 0.5) {
+        vec3 n = normalize(mat3(u_model[0].xyz, u_model[1].xyz, u_model[2].xyz) * a_normal);
+        vec3 world = (u_model * vec4(a_pos, 1.0)).xyz;
+        vec3 light = u_ambient + vec3(max(dot(n, u_sun), 0.0));
+        for (int i = 0; i < 8; i++) {
+            if (i >= u_light_count) break;
+            vec4 p = u_lights[i * 2];
+            light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(world, p.xyz) / p.w) * 2.0;
+        }
+        v_light = pow(light, vec3(1.0 / 2.2));
+    }
     gl_Position = u_mvp * vec4(a_pos, 1.0);
 }
 "#;
@@ -55,25 +77,14 @@ void main() {
 const MODEL_FS: &str = r#"
 precision mediump float;
 uniform sampler2D u_tex;
-uniform vec4 u_color; uniform vec2 u_uv_offset;
-uniform float u_cutoff; uniform float u_unlit;
-uniform vec3 u_sun; uniform vec3 u_ambient;
-uniform vec4 u_lights[16]; uniform int u_light_count;
-varying vec2 v_uv; varying vec3 v_normal; varying vec3 v_world;
+uniform vec4 u_color; uniform vec2 u_uv_offset; uniform float u_cutoff;
+varying vec2 v_uv; varying vec3 v_light;
 void main() {
     vec4 c = texture2D(u_tex, v_uv + u_uv_offset) * u_color;
+#ifdef CUTOFF
     if (c.a < u_cutoff) discard;
-    vec3 light = vec3(1.0);
-    if (u_unlit < 0.5) {
-        vec3 n = normalize(v_normal);
-        light = u_ambient + vec3(max(dot(n, u_sun), 0.0));
-        for (int i = 0; i < 8; i++) {
-            if (i >= u_light_count) break;
-            vec4 p = u_lights[i * 2];
-            light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
-        }
-    }
-    gl_FragColor = vec4(c.rgb * pow(light, vec3(1.0 / 2.2)), c.a);
+#endif
+    gl_FragColor = vec4(c.rgb * v_light, c.a);
 }
 "#;
 
@@ -98,8 +109,8 @@ pub struct Program {
 }
 
 impl Program {
-    fn new(gl: &glow::Context, vs: &str, fs: &str, attribs: &[&str], uniforms: &[&'static str]) -> anyhow::Result<Self> {
-        let header = format!("#define LIGHTMAP_SCALE {LIGHTMAP_SCALE:.1}\n");
+    fn new(gl: &glow::Context, vs: &str, fs: &str, defines: &str, attribs: &[&str], uniforms: &[&'static str]) -> anyhow::Result<Self> {
+        let header = format!("#define GAMMA_MAX {GAMMA_MAX:.6}\n{defines}");
         unsafe {
             let program = gl.create_program().map_err(anyhow::Error::msg)?;
             for (kind, src) in [(glow::VERTEX_SHADER, vs.to_owned()), (glow::FRAGMENT_SHADER, header.clone() + fs)] {
@@ -134,6 +145,8 @@ pub struct Texture {
     pub tex: glow::Texture,
     pub width: u32,
     pub height: u32,
+    /// Some texel is not fully opaque (colour-keyed): drawn with the `discard` variant.
+    pub alpha: bool,
 }
 
 /// Vertex layout of a mesh: float counts per attribute, in attribute order.
@@ -245,10 +258,16 @@ pub struct Lights {
 
 pub struct Gfx {
     pub gl: glow::Context,
+    /// Level: lightmap only, and with dynamic lights.
     world: Program,
+    world_dynamic: Program,
+    /// Models: opaque, and colour-keyed (alpha test).
     model: Program,
+    model_cutoff: Program,
     ui: Program,
     pub white: Texture,
+    /// The lightmap of unlit level batches (flat full light).
+    flat_light: Texture,
     /// Direction toward the sun and the ambient light for models.
     pub sun: Vec3,
     pub ambient: Vec3,
@@ -261,22 +280,47 @@ const AMBIENT: f32 = 0.45;
 
 impl Gfx {
     pub fn new(gl: glow::Context) -> anyhow::Result<Self> {
-        let world = Program::new(&gl, WORLD_VS, WORLD_FS, &["a_pos", "a_uv", "a_uv2"], &["u_mvp", "u_tex", "u_lightmap", "u_lit", "u_lights", "u_light_count"])?;
-        let model = Program::new(
-            &gl,
-            MODEL_VS,
-            MODEL_FS,
-            &["a_pos", "a_normal", "a_uv"],
-            &["u_mvp", "u_model", "u_tex", "u_color", "u_uv_offset", "u_cutoff", "u_unlit", "u_sun", "u_ambient", "u_lights", "u_light_count"],
-        )?;
-        let ui = Program::new(&gl, UI_VS, UI_FS, &["a_pos", "a_uv"], &["u_mvp", "u_tex", "u_color"])?;
+        const WORLD_UNIFORMS: &[&str] = &["u_mvp", "u_tex", "u_lightmap", "u_lights", "u_light_count"];
+        const MODEL_UNIFORMS: &[&str] = &["u_mvp", "u_model", "u_tex", "u_color", "u_uv_offset", "u_cutoff", "u_unlit", "u_sun", "u_ambient", "u_lights", "u_light_count"];
+        let world_attribs = &["a_pos", "a_uv", "a_uv2"];
+        let model_attribs = &["a_pos", "a_normal", "a_uv"];
+        let world = Program::new(&gl, WORLD_VS, WORLD_FS, "", world_attribs, WORLD_UNIFORMS)?;
+        let world_dynamic = Program::new(&gl, WORLD_VS, WORLD_FS, "#define DYNAMIC\n", world_attribs, WORLD_UNIFORMS)?;
+        let model = Program::new(&gl, MODEL_VS, MODEL_FS, "", model_attribs, MODEL_UNIFORMS)?;
+        let model_cutoff = Program::new(&gl, MODEL_VS, MODEL_FS, "#define CUTOFF\n", model_attribs, MODEL_UNIFORMS)?;
+        let ui = Program::new(&gl, UI_VS, UI_FS, "", &["a_pos", "a_uv"], &["u_mvp", "u_tex", "u_color"])?;
         let white = upload(&gl, &formats::image::RgbaImage { width: 1, height: 1, data: vec![255; 4] }, false, true);
-        Ok(Self { gl, world, model, ui, white, sun: Vec3::from(SUN_DIRECTION).normalize() * SUN_STRENGTH, ambient: Vec3::splat(AMBIENT) })
+        let flat = (255.0 / GAMMA_MAX).round() as u8;
+        let flat_light = upload(&gl, &formats::image::RgbaImage { width: 1, height: 1, data: vec![flat, flat, flat, 255] }, false, true);
+        Ok(Self {
+            gl,
+            world,
+            world_dynamic,
+            model,
+            model_cutoff,
+            ui,
+            white,
+            flat_light,
+            sun: Vec3::from(SUN_DIRECTION).normalize() * SUN_STRENGTH,
+            ambient: Vec3::splat(AMBIENT),
+        })
     }
 
     /// Uploads an image (`repeat` for level surfaces, clamped otherwise).
     pub fn texture(&self, img: &formats::image::RgbaImage, repeat: bool, linear: bool) -> Texture {
         upload(&self.gl, img, repeat, linear)
+    }
+
+    /// Uploads a level lightmap, gamma-encoded for the level shader.
+    pub fn lightmap(&self, img: &formats::image::RgbaImage) -> Texture {
+        let lut: Vec<u8> = (0..=255).map(|v| ((v as f32 / 255.0 * LIGHTMAP_SCALE).powf(1.0 / 2.2) / GAMMA_MAX * 255.0).round() as u8).collect();
+        let mut img = img.clone();
+        for px in img.data.chunks_exact_mut(4) {
+            for c in &mut px[..3] {
+                *c = lut[*c as usize];
+            }
+        }
+        upload(&self.gl, &img, false, true)
     }
 
     pub fn delete_texture(&self, t: Texture) {
@@ -292,24 +336,25 @@ impl Gfx {
 
     /// A level batch: texture × lightmap (or flat light) plus dynamic lights.
     pub fn draw_world(&self, mesh: &Mesh, view_proj: &Mat4, tex: Texture, lightmap: Option<Texture>, lights: &Lights) {
-        let (gl, p) = (&self.gl, &self.world);
+        let gl = &self.gl;
+        let p = if lights.count > 0 { &self.world_dynamic } else { &self.world };
         unsafe {
             gl.use_program(Some(p.program));
             gl.uniform_matrix_4_f32_slice(p.loc("u_mvp"), false, &view_proj.to_cols_array());
             gl.uniform_1_i32(p.loc("u_tex"), 0);
             gl.uniform_1_i32(p.loc("u_lightmap"), 1);
-            gl.uniform_1_f32(p.loc("u_lit"), if lightmap.is_some() { 1.0 } else { 0.0 });
             gl.uniform_4_f32_slice(p.loc("u_lights"), lights.data.as_flattened());
             gl.uniform_1_i32(p.loc("u_light_count"), lights.count as i32);
         }
         self.bind(0, tex);
-        self.bind(1, lightmap.unwrap_or(self.white));
+        self.bind(1, lightmap.unwrap_or(self.flat_light));
         mesh.draw(gl);
     }
 
     /// A model, prefab part or sprite at `model` (world transform).
     pub fn draw_model(&self, mesh: &Mesh, view_proj: &Mat4, model: &Mat4, tex: Texture, shade: &Shade, lights: &Lights) {
-        let (gl, p) = (&self.gl, &self.model);
+        let gl = &self.gl;
+        let p = if tex.alpha && shade.cutoff > 0.0 { &self.model_cutoff } else { &self.model };
         unsafe {
             gl.use_program(Some(p.program));
             gl.uniform_matrix_4_f32_slice(p.loc("u_mvp"), false, &(*view_proj * *model).to_cols_array());
@@ -364,6 +409,6 @@ fn upload(gl: &glow::Context, img: &formats::image::RgbaImage, repeat: bool, lin
             glow::UNSIGNED_BYTE,
             glow::PixelUnpackData::Slice(Some(&img.data)),
         );
-        Texture { tex, width: img.width, height: img.height }
+        Texture { tex, width: img.width, height: img.height, alpha: img.data.chunks_exact(4).any(|p| p[3] < 255) }
     }
 }

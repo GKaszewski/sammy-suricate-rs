@@ -344,7 +344,7 @@ impl Scene {
         }
         let Some(wmb) = sim.level.clone() else { return };
         let mesh = wmb.build_mesh();
-        let lightmap = mesh.lightmap.as_ref().map(|lm| gfx.texture(lm, false, true));
+        let lightmap = mesh.lightmap.as_ref().map(|lm| gfx.lightmap(lm));
         let textures: Vec<Texture> = wmb.textures.iter().map(|t| gfx.texture(&t.image, true, true)).collect();
         let menu = sim.flow.file.eq_ignore_ascii_case(sammy_core::levels::MENU_FILE);
         let mut batches = Vec::new();
