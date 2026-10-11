@@ -20,13 +20,17 @@ use sammy_core::sim::Event;
 pub use sammy_core::levels::MENU_FILE;
 pub use sammy_core::sim::MENU_ARC;
 
+mod choice;
 mod components;
+mod grid;
+mod overlay;
+mod picking;
 mod resources;
-mod systems;
 
 pub(crate) use components::*;
 pub use resources::*;
-pub use systems::*;
+pub use self::choice::*;
+pub(crate) use self::{grid::*, overlay::*, picking::*};
 
 pub struct MenuPlugin;
 
