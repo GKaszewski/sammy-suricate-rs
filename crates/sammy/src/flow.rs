@@ -149,6 +149,7 @@ fn load_pending(
     commands.insert_resource(crate::camera::CameraRuntime::default());
     commands.insert_resource(crate::actions::enemy::LionGlobals::default());
     commands.insert_resource(crate::actions::extro::Pov::default());
+    commands.insert_resource(crate::particles::Particles::default());
     commands.remove_resource::<crate::actions::extro::FinExtro>();
     for mut f in &mut follow {
         *f = FollowState::default();

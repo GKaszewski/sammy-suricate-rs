@@ -311,6 +311,8 @@ pub fn collect_health(
         }
         sfx.play("Gagne1");
         sfx.play("Chimes2");
+        let at = pos.0;
+        crate::effects::queue(&mut commands, move |ps| crate::effects::small_heart(ps, at));
         game.hearts = (game.hearts + heart.amount).min(MAX_HEARTS);
         commands.entity(e).insert(Shrinking);
     }
@@ -318,6 +320,13 @@ pub fn collect_health(
         if game.lives < MAX_LIVES && near(&pos.0) {
             game.lives = (game.lives + b.lives).min(MAX_LIVES);
             sfx.play("Getlife_son");
+            // One `particle_Getlife` every 2 ticks while the light shrinks (mm1.wdl:2696-2706).
+            let at = pos.0;
+            crate::effects::queue(&mut commands, move |ps| {
+                for i in 0..6 {
+                    crate::effects::get_life(ps, at, i as f32 * 2.0);
+                }
+            });
             commands.entity(e).insert((Shrinking, crate::lights::flash([50.0, 250.0, 10.0], 300.0, 40.0, 64.0)));
         }
     }

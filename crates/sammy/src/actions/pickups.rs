@@ -162,6 +162,8 @@ pub fn collect(
     for (e, pos, d) in &diamonds {
         if near(&pos.0) {
             commands.entity(e).insert(Shrinking);
+            let at = pos.0;
+            crate::effects::queue(&mut commands, move |ps| crate::effects::diamond_burst(ps, at));
             sfx.play("Diam_son");
             if d.points == 50 || d.points == 100 {
                 sfx.play("clog3");
@@ -193,10 +195,20 @@ pub fn collect(
             lk.home.get_or_insert(pos.0);
         }
         sfx.play("ColoredGem_son");
+        let (at, color, held) = (pos.0, gem.color, game.key);
+        crate::effects::queue(&mut commands, move |ps| crate::effects::gem_catch(ps, at, color));
         let (key, outcome) = take_key(game.key, gem.color);
         game.key = key;
         match outcome {
-            KeyOutcome::Mixed => sfx.play("GemMixing_son"),
+            KeyOutcome::Mixed => {
+                sfx.play("GemMixing_son");
+                // AnimGemMix1 end: each source primary bursts 70 stars (gems.wdl:596-605).
+                let sammy = [p.pos[0], p.pos[1], p.pos[2] + 40.0];
+                crate::effects::queue(&mut commands, move |ps| {
+                    crate::effects::gem_mix(ps, sammy, held);
+                    crate::effects::gem_mix(ps, sammy, color);
+                });
+            }
             KeyOutcome::Ejected(old) => super::gems::throw_back_key(&mut commands, &sprites, old, p, life.map_or(0.0, |l| l.ticks())),
             KeyOutcome::Taken => {}
         }

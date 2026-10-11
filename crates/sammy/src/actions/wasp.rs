@@ -47,7 +47,6 @@ pub struct Spinning {
 
 #[derive(Component)]
 pub struct Wasp {
-    #[allow(dead_code)] // type-specific trails/explosions come later
     pub kind: u32,
     pub poison: f32,
     pub pan: f32,
@@ -361,6 +360,8 @@ pub fn fly_wasps(
             w.life <= 0.0
         };
         if died {
+            let (at, kind) = (w.pos, w.kind);
+            crate::effects::queue(&mut commands, move |ps| crate::effects::wasp_explode(ps, at, kind, 2.0));
             let n = rng.random(3.0) as usize;
             sfx.play(["WaspKaputt_son", "WaspKaputt2_son", "WaspKaputt3_son"][n.min(2)]);
             commands.entity(e).despawn();
@@ -503,7 +504,7 @@ pub fn init_hive(obj: &Object, entity: &mut EntityCommands) {
 /// A wasp launched by a hive, bouncing until it settles into a pickup.
 #[derive(Component)]
 pub struct HiveWasp {
-    kind: u32,
+    pub kind: u32,
     pos: [f32; 3],
     pan: f32,
     tilt: f32,
@@ -512,6 +513,13 @@ pub struct HiveWasp {
     vz_org: f32,
     bounces: f32,
     fate: f32,
+}
+
+impl HiveWasp {
+    /// `Particle_WaspHive` trail while it still rises (`BlobVspeedOrg > 5`, bullets.wdl:1139).
+    pub fn trail(&self) -> Option<(u32, [f32; 3])> {
+        (self.vz_org > 5.0).then_some((self.kind, self.pos))
+    }
 }
 
 /// Remaining lifetime of a hive-emitted pickup (fades over its last 16 ticks).
@@ -529,10 +537,10 @@ pub fn run_hives(
     mut rng: ResMut<Rng>,
     assets: Res<GameAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut hives: Query<(Entity, &mut Hive)>,
+    mut hives: Query<(Entity, &mut Hive, &Transform)>,
 ) {
     let t = time.delta_secs() * TICKS;
-    for (e, mut h) in &mut hives {
+    for (e, mut h, tf) in &mut hives {
         if h.period <= 0.0 {
             continue;
         }
@@ -574,7 +582,10 @@ pub fn run_hives(
             },
         ));
         if h.total <= 0.0 {
-            commands.entity(e).despawn(); // exhausted: the hive bursts (particles TBD)
+            // Exhausted: the hive bursts (bullets.wdl:1255-1272).
+            let at = crate::coords::native(tf.translation);
+            crate::effects::queue(&mut commands, move |ps| crate::effects::hive_burst(ps, at));
+            commands.entity(e).despawn();
         }
     }
 }
@@ -664,14 +675,19 @@ pub fn fly_hive_wasps(
 }
 
 /// Hive pickups fade over their last 16 ticks, then disappear.
-pub fn expire_pickups(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mut PickupLifetime, &mut Transform)>) {
+pub fn expire_pickups(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mut PickupLifetime, &mut Transform, Option<&AmmoPickup>)>) {
     let t = time.delta_secs() * TICKS;
-    for (e, mut life, mut tf) in &mut q {
+    for (e, mut life, mut tf, ammo) in &mut q {
         life.0 -= t;
         if life.0 < 16.0 {
             tf.scale *= 0.85f32.powf(t);
         }
         if life.0 <= 0.0 {
+            // `InitWaspWed` countdown over: the wasp bursts (bullets.wdl:80-108).
+            if let Some(a) = ammo {
+                let (at, kind) = (crate::coords::native(tf.translation), a.kind);
+                crate::effects::queue(&mut commands, move |ps| crate::effects::wasp_explode(ps, at, kind, 2.0));
+            }
             commands.entity(e).despawn();
         }
     }

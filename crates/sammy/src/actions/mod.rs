@@ -107,7 +107,8 @@ impl Plugin for ActionsPlugin {
             .add_systems(Update, decor::snap_sprites)
             .init_resource::<extro::Pov>()
             .init_resource::<extro::Scanners>()
-            .add_systems(PreUpdate, extro::update_pov)
+            .init_resource::<extro::TriggerClock>()
+            .add_systems(PreUpdate, (extro::update_pov, extro::trigger_clock))
             .add_systems(Update, (extro::run_triggers.after(enemy::tick_enemies), extro::scripted_anims, extro::fade_out))
             .add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
     }

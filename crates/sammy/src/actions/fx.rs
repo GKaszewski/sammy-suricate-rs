@@ -164,6 +164,7 @@ pub fn run_eye(
     mut sfx: Sfx,
     player: Query<&Player>,
     mut eyes: Query<(&mut EyePickup, &PickupPos, &mut Transform, &mut Visibility), Without<SnapToGround>>,
+    mut particles: ResMut<crate::particles::Particles>,
 ) {
     let t = time.delta_secs() * TICKS;
     let Ok(p) = player.single() else { return };
@@ -195,10 +196,14 @@ pub fn run_eye(
                 }
             }
             None => {
+                for _ in 0..particles.ticks {
+                    crate::effects::eye_idle(&mut particles, pos.0);
+                }
                 let d = (0..3).map(|i| (pos.0[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt();
                 if crate::flow::playing(&current) && p.state != State::Dead && d <= p.scan_radius {
                     game.eye_ticks = game.eye_duration;
                     sfx.play("EyeTruth_Son");
+                    crate::effects::take_eye(&mut particles, pos.0);
                     eye.away = Some(128.0 + 12.0); // shrink ~12 ticks, then 128 hidden
                 }
             }

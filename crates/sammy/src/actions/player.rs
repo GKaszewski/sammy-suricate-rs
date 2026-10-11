@@ -190,7 +190,7 @@ pub struct Player {
     /// U-turn target pan and whether the first (×0.25) step was taken.
     uturn: Option<(f32, bool)>,
     /// Landing after a fall faster than 70/tick (`ForceChute < -70`).
-    hard_landing: bool,
+    pub hard_landing: bool,
     /// Shift-boosting this frame (used by platforms: ×3 while riding).
     pub boosting: bool,
     pub state: State,

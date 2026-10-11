@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 use formats::wmb::Object;
 
-use super::enemy::{AiClock, Enemy};
+use super::enemy::Enemy;
 use super::player::{Player, State};
 use crate::camera::{CameraParams, FollowState};
 
@@ -58,10 +58,27 @@ pub fn update_pov(mut pov: ResMut<Pov>, mut scanners: ResMut<Scanners>, player: 
     }
 }
 
-/// `StartExtro` (Extro.wdl:155-159): the camera opens on this wasp.
+/// `StartExtro` (Extro.wdl:155-159): after `waitt 2` the camera target becomes this wasp,
+/// overriding any trigger that fired on the first ticks.
+#[derive(Component)]
+pub struct StartExtroPov(f32);
+
 pub fn start_extro(entity: &mut EntityCommands) {
-    let id = entity.id();
-    entity.commands().queue(move |w: &mut World| w.resource_mut::<Pov>().target = Some(id));
+    entity.insert(StartExtroPov(2.0));
+}
+
+/// The triggers' own 16 Hz clock: their scan loops are not gated by `PartieEncours`, so
+/// they already run during the level-start sweep (mm1.wdl:5411-5416).
+#[derive(Resource, Default)]
+pub struct TriggerClock {
+    acc: f32,
+    ticks: u32,
+}
+
+pub fn trigger_clock(time: Res<Time>, mut clock: ResMut<TriggerClock>) {
+    clock.acc += time.delta_secs() * super::player::TICKS;
+    clock.ticks = (clock.acc.floor() as u32).min(4);
+    clock.acc = (clock.acc - clock.ticks as f32).min(1.0);
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -78,6 +95,8 @@ pub struct ExtroTrigger {
     pos: [f32; 3],
     s: [f32; 8],
     timer: f32,
+    /// Fired (despawn pending).
+    done: bool,
 }
 
 pub fn init_trigger(action: &str, obj: &Object, entity: &mut EntityCommands) {
@@ -88,7 +107,7 @@ pub fn init_trigger(action: &str, obj: &Object, entity: &mut EntityCommands) {
     };
     let mut s = [0.0; 8];
     s.copy_from_slice(&obj.skills[..8]);
-    entity.insert(ExtroTrigger { kind, pos: obj.origin, s, timer: 0.0 });
+    entity.insert(ExtroTrigger { kind, pos: obj.origin, s, timer: 0.0, done: false });
 }
 
 /// Sammy is in a scripted animation (`PlayerEtat` 2/3 forced by `SetAnimPlayer`):
@@ -107,7 +126,7 @@ pub struct FadePanel;
 
 #[allow(clippy::too_many_arguments)]
 pub fn run_triggers(
-    clock: Res<AiClock>,
+    clock: Res<TriggerClock>,
     mut commands: Commands,
     params: Res<CameraParams>,
     mut pov: ResMut<Pov>,
@@ -115,9 +134,20 @@ pub fn run_triggers(
     mut player: Query<(Entity, &mut Player, &mut crate::model::ModelAnimator)>,
     enemies: Query<(Entity, &Enemy)>,
     mut follow: Query<&mut FollowState>,
+    mut start: Query<(Entity, &mut StartExtroPov)>,
 ) {
     for _ in 0..clock.ticks {
+        for (e, mut s) in &mut start {
+            s.0 -= 1.0;
+            if s.0 <= 0.0 {
+                pov.target = Some(e);
+                commands.entity(e).remove::<StartExtroPov>();
+            }
+        }
         for (me, mut tr) in &mut triggers {
+            if tr.done {
+                continue;
+            }
             tr.timer -= 1.0;
             if tr.timer > 0.0 {
                 continue;
@@ -167,6 +197,7 @@ pub fn run_triggers(
                 }
             }
             // All shipped triggers are one-shot (Skill4 = 0).
+            tr.done = true;
             commands.entity(me).despawn();
         }
     }

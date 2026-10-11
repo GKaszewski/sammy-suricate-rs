@@ -324,10 +324,10 @@ pub fn gem_lifetimes(
     time: Res<Time>,
     mut commands: Commands,
     mut sfx: Sfx,
-    mut q: Query<(Entity, &mut GemLifetime, &mut Transform, &mut SpriteAnim), (Without<FlyingGem>, Without<Shrinking>)>,
+    mut q: Query<(Entity, &mut GemLifetime, &mut Transform, &mut SpriteAnim, Option<&KeyGem>), (Without<FlyingGem>, Without<Shrinking>)>,
 ) {
     let t = time.delta_secs() * TICKS;
-    for (e, mut l, mut tf, mut anim) in &mut q {
+    for (e, mut l, mut tf, mut anim, gem) in &mut q {
         anim.fps = l.speed * TICKS;
         let half = anim.frames as f32 / 2.0;
         if anim.frame > half && !l.small {
@@ -343,6 +343,8 @@ pub fn gem_lifetimes(
         l.ticks -= t;
         if l.ticks <= 0.0 {
             sfx.play("broken4"); // GemExplose
+            let (at, color) = (crate::coords::native(tf.translation), gem.map_or(0, |g| g.color));
+            crate::effects::queue(&mut commands, move |ps| crate::effects::gem_explode(ps, at, color));
             commands.entity(e).despawn();
         }
     }

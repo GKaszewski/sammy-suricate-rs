@@ -288,6 +288,8 @@ pub fn run_door_gems(
         match super::gems::fly_door_gem(&mut g, target, p.pos, t) {
             Some(true) => {
                 sfx.play("broken4");
+                let (at, color) = (super::gems::door_gem_pos(&g), g.color);
+                crate::effects::queue(&mut commands, move |ps| crate::effects::gem_explode(ps, at, color));
                 door.validated = true;
                 game.key_in_flight = false;
                 commands.entity(e).despawn();

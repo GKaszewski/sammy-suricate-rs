@@ -701,7 +701,11 @@ pub fn tick_enemies(
             let touching = sammy_entity.is_some_and(|s| touched.contains(&me) || e_touches(&world, &e, me, s));
             if touching && sammy_alive && e.class == LION {
                 if let Ok((_, mut p)) = player.single_mut() {
-                    contact_sammy(&mut e, &mut p, &mut game, &globals, &mut sfx, &mut rng);
+                    let n = contact_sammy(&mut e, &mut p, &mut game, &globals, &mut sfx, &mut rng);
+                    if n > 0 {
+                        let at = e.pos;
+                        crate::effects::queue(&mut commands, move |ps| crate::effects::hit_stars(ps, at, n));
+                    }
                 }
             }
             {
@@ -1347,7 +1351,8 @@ fn stuck_roar(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) -> bool {
 }
 
 /// Lion touching Sammy (§4.1/4.2): bump damage and swipe start, then the swipe hit.
-fn contact_sammy(e: &mut Enemy, p: &mut Player, game: &mut GameState, g: &LionGlobals, sfx: &mut Sfx, rng: &mut Rng) {
+/// Returns the number of hit stars to emit (`particle_Hit1`, lion.wdl:499,510).
+fn contact_sammy(e: &mut Enemy, p: &mut Player, game: &mut GameState, g: &LionGlobals, sfx: &mut Sfx, rng: &mut Rng) -> usize {
     // Sammy is pushed by the lion's motion (`ObjetPoussant`): vel × 0.8 × BounceForce.
     p.knock[0] = e.vel[0] * 0.8 * e.push_force;
     p.knock[1] = e.vel[1] * 0.8 * e.push_force;
@@ -1355,11 +1360,14 @@ fn contact_sammy(e: &mut Enemy, p: &mut Player, game: &mut GameState, g: &LionGl
         game.hearts -= e.resistance * 0.25;
         e.set_state(10, e.anim_speed); // swipe at the inherited run speed
         e.swipe_pending = true;
+        return 1;
     } else if e.etat == 10 && e.anim_step > 60.0 && e.swipe_pending {
         game.hearts -= e.resistance * g.hargne;
         e.swipe_pending = false;
         sfx.play(["Hit1", "Hit2", "Hit3"][(rng.random(3.0) as usize).min(2)]);
+        return 10;
     }
+    0
 }
 
 /// Wasp impact on a lion (§5.1, IMPACT path).

@@ -109,7 +109,7 @@ impl Spawner<'_, '_, '_> {
         });
         let start = player.map(|o| (coords::pos(o.origin), o.angles[0]));
         let pov_z = player.map_or(0.0, |o| o.origin[2]);
-        for file in PRELOAD {
+        for file in PRELOAD.iter().chain(crate::effects::PARTICLE_MAPS) {
             if file.ends_with(".mdl") {
                 self.load_model(file);
             } else if file.ends_with(".pcx") {

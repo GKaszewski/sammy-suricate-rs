@@ -4,6 +4,7 @@ mod camera;
 mod collision;
 mod coords;
 mod debug;
+mod effects;
 mod flow;
 mod game;
 mod hud;
@@ -12,6 +13,7 @@ mod level;
 mod lights;
 mod material;
 mod model;
+mod particles;
 mod shadow;
 mod vfs;
 
@@ -53,7 +55,7 @@ fn main() -> anyhow::Result<()> {
             primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
             ..default()
         }))
-        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin))
+        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin, particles::ParticlePlugin))
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, (audio::load_sounds, setup))
