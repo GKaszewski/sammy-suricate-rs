@@ -10,6 +10,7 @@ pub mod angle;
 pub mod anim;
 pub mod collision;
 pub mod doors;
+pub mod enemies;
 pub mod game;
 pub mod gems;
 pub mod health;

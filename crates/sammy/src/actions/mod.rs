@@ -193,12 +193,12 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             entity.commands().queue(move |w: &mut World| w.resource_mut::<player::JumpParams>().apply_init_game3(&o));
         }
         "initlionskills1" => {
-            let sk = obj.skills.clone();
-            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills1(&sk));
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills1(&o));
         }
         "initlionskills2" => {
-            let sk = obj.skills.clone();
-            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills2(&sk));
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills2(&o));
         }
         "initgame5" => {
             let o = obj.clone();
@@ -209,17 +209,17 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             entity.commands().queue(move |w: &mut World| w.resource_mut::<player::PlayerTuning>().apply_init_game4(&o));
         }
         "initgame6" => {
-            let sk = obj.skills.clone();
+            let o = obj.clone();
             entity.commands().queue(move |w: &mut World| {
-                w.resource_mut::<enemy::LionGlobals>().apply_game6(&sk);
-                w.resource_mut::<enemy::FriendCalls>().apply_game6(&sk);
+                w.resource_mut::<enemy::LionGlobals>().apply_game6(&o);
+                w.resource_mut::<enemy::FriendCalls>().apply_game6(&o);
             });
         }
         "initgame7" => {
             let sk = obj.skills.clone();
             let o = obj.clone();
             entity.commands().queue(move |w: &mut World| {
-                w.resource_mut::<enemy::LionGlobals>().apply_game7(&sk);
+                w.resource_mut::<enemy::LionGlobals>().apply_game7(&o);
                 w.resource_mut::<GameState>().apply_init_game7(&o);
                 if sk[0] != 0.0 {
                     w.resource_mut::<player::JumpParams>().bounce_on_enemy = sk[0];

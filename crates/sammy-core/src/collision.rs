@@ -185,6 +185,10 @@ where
 pub trait Space {
     /// Sweeps `hull` from `start` to `end` against everything solid, skipping `ignore`.
     fn trace(&self, hull: Hull, start: [f32; 3], end: [f32; 3], ignore: Option<crate::id::Id>) -> Hit<crate::id::Id>;
+
+    /// Like [`Space::trace`] but against level geometry and map entities only (WDL
+    /// `IGNORE_MODELS`).
+    fn trace_static(&self, hull: Hull, start: [f32; 3], end: [f32; 3]) -> Hit<crate::id::Id>;
 }
 
 /// The floor sonar (`playerClimb`): from 8 above `p` straight down with the narrow hull,

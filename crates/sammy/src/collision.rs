@@ -67,4 +67,9 @@ impl sammy_core::collision::Space for CollisionWorld<'_, '_> {
         let hit = CollisionWorld::trace(self, hull, start, end, ignore.map(entity));
         sammy_core::collision::Hit { trace: hit.trace, entity: hit.entity.map(id) }
     }
+
+    fn trace_static(&self, hull: Hull, start: [f32; 3], end: [f32; 3]) -> sammy_core::collision::Hit<sammy_core::id::Id> {
+        let hit = CollisionWorld::trace_static(self, hull, start, end);
+        sammy_core::collision::Hit { trace: hit.trace, entity: hit.entity.map(id) }
+    }
 }
