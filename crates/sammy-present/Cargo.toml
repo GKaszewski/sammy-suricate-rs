@@ -1,0 +1,8 @@
+[package]
+name = "sammy-present"
+version = "0.1.0"
+edition.workspace = true
+description = "How Sammy Suricate presents its game state, engine-agnostic: the HUD layout"
+
+[dependencies]
+sammy-core.workspace = true

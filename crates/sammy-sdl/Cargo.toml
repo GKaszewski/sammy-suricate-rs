@@ -1,0 +1,25 @@
+[package]
+name = "sammy-sdl"
+version = "0.1.0"
+edition.workspace = true
+description = "Sammy Suricate on SDL2 + OpenGL ES 2: the light frontend for handhelds (PS Vita) and any desktop"
+
+[dependencies]
+formats.workspace = true
+sammy-core.workspace = true
+sammy-platform.workspace = true
+sammy-present.workspace = true
+anyhow.workspace = true
+glow = "0.18"
+glam = "0.30"
+log = "0.4"
+sdl2 = "0.38"
+png = "0.18"
+
+# The Vita links SDL2 (with the vitaGL video backend) statically from vitasdk.
+[target.'cfg(target_os = "vita")'.dependencies]
+sdl2 = { version = "0.38", features = ["static-link", "use-pkgconfig"] }
+
+[package.metadata.vita]
+title_id = "SAMY00001"
+title_name = "Sammy Suricate"

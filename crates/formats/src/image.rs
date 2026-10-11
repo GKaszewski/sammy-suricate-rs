@@ -41,3 +41,9 @@ impl RgbaImage {
         Self { width, height, data }
     }
 }
+
+/// A4 colour key: the original ran in 16-bit colour, so a pixel is transparent when it
+/// becomes 0 in RGB565 (e.g. the (2,2,2) background of `boink22.pcx`).
+pub fn is_color_key(p: &[u8]) -> bool {
+    p[0] < 8 && p[1] < 4 && p[2] < 8
+}

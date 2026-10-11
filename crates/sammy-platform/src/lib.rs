@@ -2,6 +2,7 @@
 //! ([`vfs::GameFiles`]), the player's storage and saves ([`storage`], [`save`]), finding
 //! the game on a desktop ([`locate`]) and the sound table ([`sounds`]).
 
+pub mod debug;
 #[cfg(not(any(target_arch = "wasm32", target_os = "vita")))]
 pub mod locate;
 pub mod save;

@@ -1,0 +1,56 @@
+//! A new game with the debug overrides of the environment (`SAMMY_START`,
+//! `SAMMY_KEY` ...), the same for every frontend.
+
+use sammy_core::save::SaveGame;
+use sammy_core::sim::{DebugOptions, Sim};
+
+/// A game with `save`, seeded from `SAMMY_SEED` or the clock, and the environment's
+/// debug overrides.
+pub fn new_sim(save: SaveGame) -> Sim {
+    let seed = std::env::var("SAMMY_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or_else(clock_seed);
+    let mut sim = Sim::new(save, seed);
+    sim.debug = options();
+    sim.menu.debug_camera = std::env::var("SAMMY_MENU_CAM").ok().and_then(|v| {
+        let n: Vec<f32> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+        (n.len() == 5).then(|| ([n[0], n[1], n[2]], n[3], n[4]))
+    });
+    sim
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn clock_seed() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn clock_seed() -> u64 {
+    1
+}
+
+/// Debug overrides from the environment.
+pub fn options() -> DebugOptions {
+    let var = |k: &str| std::env::var(k).ok();
+    let num = |k: &str| var(k).and_then(|v| v.parse::<f32>().ok());
+    DebugOptions {
+        // SAMMY_START="x,y,z[,pan]" overrides the spawn point.
+        start: var("SAMMY_START").and_then(|v| {
+            let n: Vec<f32> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+            (n.len() >= 3).then(|| ([n[0], n[1], n[2]], n.get(3).copied()))
+        }),
+        // SAMMY_KEY=<colour> starts with a key (255 = master).
+        key: var("SAMMY_KEY").and_then(|v| v.parse().ok()),
+        lives: num("SAMMY_LIVES").map(|l| l as i32),
+        hearts: num("SAMMY_HEARTS"),
+        eye: var("SAMMY_EYE").is_some(),
+        // SAMMY_AMMO=count,type
+        ammo: var("SAMMY_AMMO").and_then(|v| {
+            let (a, b) = v.split_once(',')?;
+            Some((a.parse().ok()?, b.parse().ok()?))
+        }),
+        autowalk: var("SAMMY_AUTOWALK").is_some(),
+        autofire: var("SAMMY_AUTOFIRE").is_some(),
+        // SAMMY_SKIP=action1,action2 leaves out objects with those actions.
+        skip_actions: var("SAMMY_SKIP").map(|v| v.split(',').map(|a| a.trim().to_lowercase()).collect()).unwrap_or_default(),
+        no_intro: ["SAMMY_MENU_VIEW", "SAMMY_MENU_CAM", "SAMMY_OPTIONS", "SAMMY_MENU_CHOICE", "SAMMY_NOINTRO"].iter().any(|v| var(v).is_some()),
+    }
+}

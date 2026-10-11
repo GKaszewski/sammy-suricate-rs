@@ -28,8 +28,4 @@ pub fn to_bevy_filtered(img: &formats::image::RgbaImage, srgb: bool, repeat: boo
     image
 }
 
-/// A4 colour key: the original ran in 16-bit colour, so a pixel is transparent when it
-/// becomes 0 in RGB565 (e.g. the (2,2,2) background of `boink22.pcx`).
-pub fn is_key(p: &[u8]) -> bool {
-    p[0] < 8 && p[1] < 4 && p[2] < 8
-}
+pub use formats::image::is_color_key as is_key;
