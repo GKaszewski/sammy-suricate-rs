@@ -214,8 +214,9 @@ fn run() -> anyhow::Result<()> {
         if sim.flow.phase != sammy_core::flow::Phase::Menu && draw.contains("hud") {
             hud.draw(&gfx, &painter, &sim.game);
         }
-        menu.draw(&gfx, &painter, &fonts, &sim, &menu::Screen { scene: &scene, cam: last_cam.as_ref(), size: window_px }, &pointer);
-        options.draw(&gfx, &painter, &fonts, &sim, &pointer, controls.pad, info.as_ref());
+        let canvas = ui::Canvas { gfx: &gfx, ui: &painter, fonts: &fonts };
+        menu.draw(&canvas, &sim, &menu::Screen { scene: &scene, cam: last_cam.as_ref(), size: window_px }, &pointer);
+        options.draw(&canvas, &sim, &pointer, controls.pad, info.as_ref());
         painter.end(&gfx);
         mouse.show_cursor(!menu.owns_cursor(&sim));
         if shots.due((secs() - start) as f32) {

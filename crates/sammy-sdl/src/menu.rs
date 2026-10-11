@@ -13,8 +13,8 @@ use crate::audio::Audio;
 use crate::gfx::{Gfx, Texture};
 use crate::input::Pointer;
 use crate::scene::{Camera, Scene};
-use crate::text::{Fonts, Style};
-use crate::ui::Painter;
+use crate::text::Style;
+use crate::ui::Canvas;
 
 const WHITE: [f32; 4] = [1.0; 4];
 const VERSION_STYLE: Style = Style::new(FontKind::Standard);
@@ -117,7 +117,8 @@ impl MenuView {
     }
 
     /// Version text, tooltip and cursor (the painter's pass is begun).
-    pub fn draw(&self, gfx: &Gfx, ui: &Painter, fonts: &Fonts, sim: &Sim, screen: &Screen, pointer: &Pointer) {
+    pub fn draw(&self, c: &Canvas, sim: &Sim, screen: &Screen, pointer: &Pointer) {
+        let (gfx, ui, fonts) = (c.gfx, c.ui, c.fonts);
         let (scene, cam, window) = (screen.scene, screen.cam, screen.size);
         let s = ui.scale;
         if sim.in_menu() {

@@ -12,8 +12,8 @@ use sammy_present::options::{DisplayInfo, Effect, Element, FRAME_BORDER, FRAME_F
 
 use crate::gfx::{Gfx, Texture};
 use crate::input::Pointer;
-use crate::text::{Fonts, Style};
-use crate::ui::Painter;
+use crate::text::Style;
+use crate::ui::{Canvas, Painter};
 
 pub struct OptionsView {
     pub model: Options,
@@ -79,7 +79,8 @@ impl OptionsView {
     }
 
     /// Draws the overlay (the painter's pass is begun).
-    pub fn draw(&self, gfx: &Gfx, ui: &Painter, fonts: &Fonts, sim: &Sim, pointer: &Pointer, pad: bool, display: Option<&DisplayInfo>) {
+    pub fn draw(&self, c: &Canvas, sim: &Sim, pointer: &Pointer, pad: bool, display: Option<&DisplayInfo>) {
+        let (gfx, ui, fonts) = (c.gfx, c.ui, c.fonts);
         if !self.model.open() {
             return;
         }

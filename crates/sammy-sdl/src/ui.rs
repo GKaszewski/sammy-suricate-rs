@@ -6,6 +6,13 @@ use glow::HasContext;
 
 use crate::gfx::{Gfx, Layout, Mesh, Texture};
 
+/// What 2D screens draw with.
+pub struct Canvas<'a> {
+    pub gfx: &'a Gfx,
+    pub ui: &'a Painter,
+    pub fonts: &'a crate::text::Fonts,
+}
+
 /// Draws image regions; one per call (the HUD and menus draw a few dozen).
 pub struct Painter {
     quad: Mesh,
