@@ -92,11 +92,11 @@ pub fn run_door_gems(
             commands.entity(e).despawn();
             continue;
         };
-        let target = (brush.origin, door.gem_flying, door.validated);
-        match super::gems::fly_door_gem(&mut g, target, p.pos, t) {
+        let target = sammy_core::gems::DoorGemTarget { door_pos: brush.origin, wanted: door.gem_flying, validated: door.validated };
+        match g.fly(target, p.pos, t) {
             Some(true) => {
                 sfx.play("broken4");
-                let (at, color) = (super::gems::door_gem_pos(&g), g.color);
+                let (at, color) = (g.pos, g.color);
                 crate::effects::queue(&mut commands, move |ps| crate::effects::gem_explode(ps, at, color));
                 door.validated = true;
                 game.key_in_flight = false;
@@ -112,7 +112,7 @@ pub fn run_door_gems(
                 game.key_in_flight = false;
                 commands.entity(e).despawn();
             }
-            None => tf.translation = coords::pos(super::gems::door_gem_pos(&g)),
+            None => tf.translation = coords::pos(g.pos),
         }
     }
 }

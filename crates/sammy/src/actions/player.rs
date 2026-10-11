@@ -103,37 +103,9 @@ impl PlayerTuning {
 #[derive(Resource, Clone)]
 pub struct LevelCollision(pub Arc<Wmb>);
 
-/// Vertical physics globals (InitLvl.wdl:60-61 defaults, `InitGame3` overrides, mm1.wdl:1846).
-#[derive(Resource, Clone, Copy)]
-pub struct JumpParams {
-    /// `BlobBallVerticalSpeed`: jump impulse.
-    pub jump_speed: f32,
-    /// `BlobBallVerticalFriction`: deceleration during a jump.
-    pub jump_fric: f32,
-    /// `Gravite`: initial vertical speed when walking off a ledge.
-    pub gravity: f32,
-    /// `AccGravite`: deceleration when falling off a ledge.
-    pub acc_gravity: f32,
-    /// `BounceOnEnnemy` (InitGame7 Skill1, default 0): stomping a lion re-jumps × this.
-    pub bounce_on_enemy: f32,
-}
-
-impl Default for JumpParams {
-    fn default() -> Self {
-        Self { jump_speed: 30.0, jump_fric: 3.0, gravity: -2.0, acc_gravity: 1.5, bounce_on_enemy: 0.0 }
-    }
-}
-
-impl JumpParams {
-    pub fn apply_init_game3(&mut self, obj: &Object) {
-        let s = &obj.skills;
-        for (v, i) in [(&mut self.jump_speed, 0), (&mut self.jump_fric, 1), (&mut self.gravity, 4), (&mut self.acc_gravity, 5)] {
-            if s[i] != 0.0 {
-                *v = s[i];
-            }
-        }
-    }
-}
+/// [`sammy_core::physics::JumpParams`] as a resource.
+#[derive(Resource, Clone, Copy, Default, Deref, DerefMut)]
+pub struct JumpParams(pub sammy_core::physics::JumpParams);
 
 /// `PlayerEtat` / `PlayerAnimEtat`, reduced to what is ported.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

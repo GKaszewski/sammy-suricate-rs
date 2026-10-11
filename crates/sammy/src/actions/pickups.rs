@@ -131,7 +131,7 @@ pub fn snap_pickups(
         let tr = world.trace(Hull::Narrow, [x, y, z + 8.0], [x, y, z - 2000.0], None).trace;
         if hover && let Some(mut g) = gravity {
             // Flag5: keep the WED height above the floor (+HeightGem) as the rest height.
-            g.set_rest(z - (tr.end[2] - 16.0) + HEIGHT_GEM);
+            g.rest = z - (tr.end[2] - 16.0) + HEIGHT_GEM;
         }
         if tr.hit() && !tr.start_solid {
             p.0[2] = tr.end[2] - 16.0 + HEIGHT_GEM + extra.map_or(0.0, |h| h.0);
@@ -211,7 +211,7 @@ pub fn collect(
                     crate::effects::gem_mix(ps, sammy, color);
                 });
             }
-            KeyOutcome::Ejected(old) => super::gems::throw_back_key(&mut commands, &sprites, old, p, life.map_or(0.0, |l| l.ticks())),
+            KeyOutcome::Ejected(old) => super::gems::throw_back_key(&mut commands, &sprites, old, p, life.map_or(0.0, |l| l.ticks)),
             KeyOutcome::Taken => {}
         }
         break; // one gem per scan
@@ -280,7 +280,7 @@ pub fn reset_keys(
                 // InitKey runs again: a surprise gem re-rolls (its colour keeps climbing).
                 match surprise {
                     Some(mut s) => {
-                        s.rearm(&mut rng);
+                        s.rearm(&mut rng.0);
                         ent.remove::<super::gems::Collectable>();
                     }
                     None => {

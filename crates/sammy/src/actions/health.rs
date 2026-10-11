@@ -189,7 +189,7 @@ pub fn run_death(
                     game.key = 0;
                     let pos = [p.pos[0], p.pos[1], p.pos[2] + 30.0];
                     let hs = p.vel[0].abs() + p.vel[1].abs();
-                    super::gems::launch_gem(&mut commands, &sprites, &jump, key, pos, p.pan, hs, 40.0, 0.0);
+                    super::gems::launch_gem(&mut commands, &sprites, &jump, sammy_core::gems::Launch { color: key, pos, pan: p.pan, hspeed: hs, vz: 40.0, fate: sammy_core::gems::Fate::Decorative });
                 }
                 if d.kind == DeathKind::Kaputt
                     && let Some(a) = anim.as_deref_mut()

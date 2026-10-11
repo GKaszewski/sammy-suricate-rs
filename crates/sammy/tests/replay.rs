@@ -199,3 +199,22 @@ fn extro_ride() {
 fn menu_intro() {
     run("intro", "menu", 50.0, |_| Controls::default());
 }
+
+/// Every level for 20 s with a generic walk/turn/jump/fire/boost script.
+#[test]
+fn all_levels_sweep() {
+    for (slot, _) in sammy::flow::LEVELS {
+        if *slot == 49 {
+            continue; // the extro has its own scenario
+        }
+        run(&format!("sweep{slot:02}"), &slot.to_string(), 20.0, |f| {
+            let mut c = walk(if (90..130).contains(&(f % 400)) { 1.0 } else if (250..270).contains(&(f % 400)) { -1.0 } else { 0.0 });
+            c.jump_hit = f % 150 == 75;
+            c.jump = (75..95).contains(&(f % 150));
+            c.fire_hit = f % 110 == 55;
+            c.boost = (200..240).contains(&(f % 500));
+            c.uturn_hit = f % 700 == 350;
+            c
+        });
+    }
+}
