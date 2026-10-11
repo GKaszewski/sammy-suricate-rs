@@ -1,0 +1,18 @@
+[package]
+name = "sammy-platform"
+version = "0.1.0"
+edition.workspace = true
+description = "Sammy Suricate on a machine, engine-agnostic: game files, the player's storage and saves, the sound table"
+
+[dependencies]
+formats.workspace = true
+sammy-core.workspace = true
+anyhow.workspace = true
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Desktop: per-user folders and the native folder dialog.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "vita")))'.dependencies]
+dirs = "6"
+rfd = "0.15"

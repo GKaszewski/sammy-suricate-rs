@@ -46,8 +46,8 @@ pub fn run() -> anyhow::Result<()> {
         Some(level) => Args { model: None, level: level.to_owned() },
         None => Args { model: None, level: "menu".into() },
     };
-    let storage = platform::storage::Storage::user();
-    let files = platform::game_files(data, &storage)?;
+    let storage = sammy_platform::Storage::user();
+    let files = sammy_platform::game_files(data, &storage)?;
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
@@ -93,14 +93,14 @@ impl PluginGroup for SammyPlugins {
 
 /// Adds the game (all feature plugins, data and start-up) to an app that already has
 /// Bevy's default plugins (windowed or headless).
-pub fn add_game(app: &mut App, files: GameFiles, storage: platform::storage::Storage, args: Args) {
+pub fn add_game(app: &mut App, files: sammy_platform::GameFiles, storage: sammy_platform::Storage, args: Args) {
     // A test may supply its own game (and never touches the player's save).
     if !app.world().contains_resource::<game::Game>() {
         app.insert_resource(game::new_game(platform::save::load(&storage, &files)));
     }
     app.add_plugins(SammyPlugins)
-        .insert_resource(files)
-        .insert_resource(storage)
+        .insert_resource(GameFiles(files))
+        .insert_resource(platform::storage::Storage(storage))
         .insert_resource(args)
         .add_systems(Startup, (platform::audio::load_sounds, setup));
 }

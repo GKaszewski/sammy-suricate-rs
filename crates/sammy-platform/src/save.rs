@@ -2,10 +2,10 @@
 //! original game's `.SAV` files (in its folder) on first run. The model is
 //! [`sammy_core::save`].
 
-use bevy::prelude::*;
+use log::{info, warn};
 
-use super::storage::Storage;
-use super::vfs::GameFiles;
+use crate::storage::Storage;
+use crate::vfs::GameFiles;
 
 pub use sammy_core::levels::NBR_LEVELS;
 pub use sammy_core::save::{DisplayMode, DisplaySettings, LevelState, SaveGame};
@@ -52,7 +52,7 @@ mod tests {
     fn imports_user_progress_when_present() {
         let storage = Storage::user();
         #[cfg(not(any(target_arch = "wasm32", target_os = "vita")))]
-        let Some(files) = crate::platform::locate::known(&storage).and_then(|d| GameFiles::open(&d).ok()) else { return };
+        let Some(files) = crate::locate::known(&storage).and_then(|d| GameFiles::open(&d).ok()) else { return };
         let Some(s) = SaveGame::import(|name| files.read(name).ok()) else { return };
         assert!(s.playable(1) && s.playable(17) && s.playable(33));
         assert_eq!(s.state(14), LevelState::Absent);

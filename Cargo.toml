@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/formats", "crates/sammy-convert", "crates/sammy-core", "crates/sammy"]
+members = ["crates/formats", "crates/sammy-convert", "crates/sammy-core", "crates/sammy-platform", "crates/sammy"]
 
 [workspace.package]
 edition = "2024"
@@ -8,6 +8,7 @@ edition = "2024"
 [workspace.dependencies]
 formats = { path = "crates/formats" }
 sammy-core = { path = "crates/sammy-core" }
+sammy-platform = { path = "crates/sammy-platform" }
 anyhow = "1"
 
 [profile.dev.package."*"]

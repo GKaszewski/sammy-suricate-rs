@@ -10,10 +10,10 @@
 
 use std::path::{Path, PathBuf};
 
-use bevy::prelude::*;
+use log::info;
 
-use super::storage::{Settings, Storage};
-use super::vfs::GameFiles;
+use crate::storage::{Settings, Storage};
+use crate::vfs::GameFiles;
 
 /// Opens the game in `dir` if it is one.
 fn open(dir: &Path) -> Option<GameFiles> {

@@ -23,8 +23,8 @@ const FPS: f64 = 60.0;
 /// A headless game on `level` driven by `script`, or `None` without game data.
 fn headless(level: &str, script: impl FnMut(u64) -> Controls + Send + Sync + 'static) -> Option<App> {
     // The game folder of this machine: `SAMMY_DIR`, else the one the game remembered.
-    let storage = sammy::platform::storage::Storage::user();
-    let Some(files) = sammy::platform::locate::known(&storage).and_then(|d| sammy::platform::vfs::GameFiles::open(&d).ok()).filter(|f| f.is_game()) else {
+    let storage = sammy_platform::Storage::user();
+    let Some(files) = sammy_platform::locate::known(&storage).and_then(|d| sammy_platform::GameFiles::open(&d).ok()).filter(|f| f.is_game()) else {
         eprintln!("skipped: no game data (set SAMMY_DIR)");
         return None;
     };

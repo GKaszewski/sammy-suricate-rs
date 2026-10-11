@@ -15,17 +15,9 @@ pub struct Sounds(HashMap<String, Handle<AudioSource>>);
 
 pub fn load_sounds(files: Res<GameFiles>, mut sources: ResMut<Assets<AudioSource>>, mut commands: Commands) {
     let mut map = HashMap::new();
-    let Ok(script) = files.read("sons.wdl") else { return };
-    let text: String = script.iter().map(|&b| b as char).collect();
-    for line in text.lines() {
-        let line = line.split("//").next().unwrap_or("").trim();
-        let Some(rest) = line.strip_prefix("Sound").or_else(|| line.strip_prefix("SOUND")).or_else(|| line.strip_prefix("sound")) else {
-            continue;
-        };
-        let Some((name, file)) = rest.split_once(',') else { continue };
-        let file = file.trim().trim_end_matches(';').trim().trim_start_matches('<').trim_end_matches('>');
-        if let Ok(bytes) = files.read(file) {
-            map.insert(name.trim().to_lowercase(), sources.add(AudioSource { bytes: Arc::from(bytes) }));
+    for (name, file) in sammy_platform::sounds::table(&files) {
+        if let Ok(bytes) = files.read(&file) {
+            map.insert(name, sources.add(AudioSource { bytes: Arc::from(bytes) }));
         }
     }
     info!("loaded {} sounds from sons.wdl", map.len());

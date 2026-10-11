@@ -5140,11 +5140,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
- "dirs",
  "formats",
- "rfd",
  "rustysynth",
  "sammy-core",
+ "sammy-platform",
  "serde",
  "serde_json",
 ]
@@ -5166,6 +5165,20 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "formats",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "sammy-platform"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "formats",
+ "log",
+ "rfd",
+ "sammy-core",
  "serde",
  "serde_json",
 ]
