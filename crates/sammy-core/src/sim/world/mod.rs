@@ -11,6 +11,7 @@ use crate::anim::Anim;
 use crate::collision::{BoxCollider, Brush};
 use crate::id::Id;
 use crate::sim::assets::Model;
+use crate::space::Pos;
 
 mod components;
 
@@ -168,7 +169,7 @@ impl World {
     }
 
     /// Where an entity is (its body).
-    pub fn pos(&self, id: Id) -> Option<[f32; 3]> {
+    pub fn pos(&self, id: Id) -> Option<Pos> {
         self.bodies.get(&id).map(|b| b.pos)
     }
 }

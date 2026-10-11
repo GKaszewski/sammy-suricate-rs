@@ -13,6 +13,7 @@ use crate::player::BLOB_HAUT;
 use crate::time::TICKS_PER_SEC;
 use crate::time::Ticks;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 /// Intro fog is a percentage; the fog starts fully black.
 const FULL_PERCENT: f32 = 100.0;
@@ -130,7 +131,7 @@ pub(super) fn tick(sim: &mut Sim, controls: &Controls, dt: Dt) {
             w.pos = pos;
         }
         if let Some(b) = sim.world.bodies.get_mut(&id) {
-            b.pos = pos;
+            b.pos = Pos(pos);
             b.angles = Angles::from_array([pan, 0.0, 0.0]);
         }
         if let Some(a) = sim.world.animators.get_mut(&id) {

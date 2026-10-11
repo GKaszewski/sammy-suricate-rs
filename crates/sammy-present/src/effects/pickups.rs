@@ -1,6 +1,7 @@
 //! Pickup effects: hearts, the Eye of Truth and menu sparkles.
 
 use super::*;
+use sammy_core::space::Pos;
 
 // ---------------------------------------------------------------- pickups
 
@@ -29,7 +30,8 @@ pub(super) fn init_life(p: &mut Particle, rng: &mut ParticleRng) {
 }
 
 /// `particle_Getlife` (§2.16): the life bonus; each one sheds a heart every tick.
-pub fn get_life(ps: &mut Particles, pos: [f32; 3], delay: f32) {
+pub fn get_life(ps: &mut Particles, pos: Pos, delay: f32) {
+    let pos = pos.get();
     ps.emit_delayed(1, pos, delay, |p, rng| {
         p.vel = [rng.random(30.0) - 15.0, rng.random(30.0) - 15.0, rng.random(15.0) - 5.0];
         p.size = rng.random(1000.0) + 500.0;
@@ -47,7 +49,8 @@ pub fn get_life(ps: &mut Particles, pos: [f32; 3], delay: f32) {
 }
 
 /// `particle_SmallHeart` ×30 (§2.16): small heart picked up.
-pub fn small_heart(ps: &mut Particles, pos: [f32; 3]) {
+pub fn small_heart(ps: &mut Particles, pos: Pos) {
+    let pos = pos.get();
     ps.emit(30, pos, |p, rng| {
         p.vel = rnd_dir(rng, 4.0, 10.0);
         p.size = 400.0 + rng.random(400.0);
@@ -62,7 +65,8 @@ pub fn small_heart(ps: &mut Particles, pos: [f32; 3]) {
 }
 
 /// `particle_TakeEyeTruth` ×30 (§2.17): Eye of Truth picked up.
-pub fn take_eye(ps: &mut Particles, pos: [f32; 3]) {
+pub fn take_eye(ps: &mut Particles, pos: Pos) {
+    let pos = pos.get();
     ps.emit(30, pos, |p, rng| {
         p.vel = rnd_dir(rng, 4.0, 10.0);
         p.size = 400.0 + rng.random(600.0);
@@ -92,7 +96,8 @@ pub fn menu_sparkle(ps: &mut Particles, pos: [f32; 3]) {
 }
 
 /// `InitEyeOfTruth` idle (mm1.wdl:5002-5006): p = 1/8 per tick, `RangeLion1/2`.
-pub fn eye_idle(ps: &mut Particles, pos: [f32; 3]) {
+pub fn eye_idle(ps: &mut Particles, pos: Pos) {
+    let pos = pos.get();
     if ps.random(8.0) >= 1.0 {
         return;
     }

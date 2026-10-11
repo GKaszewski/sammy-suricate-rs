@@ -36,7 +36,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim, dt: Dt) {
             continue;
         }
         let Some(at) = w.bodies.get(id).map(|b| b.pos) else { continue };
-        if h.item.away.is_some() || !near(at) {
+        if h.item.away.is_some() || !near(at.to_array()) {
             continue;
         }
         if !crate::health::take_small_heart(&mut h.item, game) {
@@ -49,7 +49,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim, dt: Dt) {
     }
     for (id, b) in &w.big_hearts {
         let Some(at) = w.bodies.get(id).map(|b| b.pos) else { continue };
-        if shrinking.contains(id) || !near(at) || !crate::health::take_big_heart(b, game) {
+        if shrinking.contains(id) || !near(at.to_array()) || !crate::health::take_big_heart(b, game) {
             continue;
         }
         events.push(Event::Sound("Getlife_son"));
@@ -82,7 +82,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim, dt: Dt) {
             }
             continue;
         }
-        if !near(body.pos) || !crate::health::take_boost(&mut b.item, game) {
+        if !near(body.pos.to_array()) || !crate::health::take_boost(&mut b.item, game) {
             continue;
         }
         events.push(Event::Sound("chimes2"));
@@ -92,7 +92,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim, dt: Dt) {
     }
     for (id, c) in &w.checkpoints {
         let Some(at) = w.bodies.get(id).map(|b| b.pos) else { continue };
-        if shrinking.contains(id) || w.collected.contains(id) || !near(at) {
+        if shrinking.contains(id) || w.collected.contains(id) || !near(at.to_array()) {
             continue;
         }
         events.push(Event::Sound("Restart_Son"));

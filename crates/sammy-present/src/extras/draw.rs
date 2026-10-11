@@ -12,7 +12,7 @@ impl Extras {
             if e.gone() {
                 continue;
             }
-            let x = w.bodies.get(id).map_or(e.pos, |b| b.pos);
+            let x = w.bodies.get(id).map_or(e.pos, |b| b.pos.to_array());
             out.push(Item::Decal { file: SHADOW_FILE, pos: [x[0], x[1], e.floor() + SHADOW_LIFT], pan: e.pan + SHADOW_PAN_OFFSET, size: SHADOW_SIZE * SHADOW_SCALE * e.scale(), alpha: SHADOW_ALPHA });
             // Range rings while the Eye of Truth is active.
             if sim.game.eye_ticks > 0.0

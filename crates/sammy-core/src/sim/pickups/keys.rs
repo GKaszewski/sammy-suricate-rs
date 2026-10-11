@@ -1,6 +1,7 @@
 //! Level keys: placing, snapping and resetting.
 
 use super::*;
+use crate::space::Pos;
 
 /// A key placed in the level (or settled with `respawns`): restored at its home on each
 /// respawn, at its level size.
@@ -44,7 +45,7 @@ pub(in crate::sim) fn snap(sim: &mut Sim) {
     let space = Space { level: level.as_deref(), brushes: &w.brushes, boxes: &w.boxes };
     for id in std::mem::take(&mut w.snap_to_ground) {
         let Some(b) = w.bodies.get_mut(&id) else { continue };
-        let [x, y, z] = b.pos;
+        let [x, y, z] = b.pos.to_array();
         let tr = space.trace(Hull::Narrow, [x, y, z + SNAP_START], [x, y, z - FLOOR_PROBE], None).trace;
         let floor = tr.end[2] - NARROW_FLOOR_OFFSET;
         if w.hover_from_wed.contains(&id)
@@ -74,7 +75,7 @@ pub(in crate::sim) fn reset_keys(sim: &mut Sim, reset: bool) {
                 let (home, scale) = (lk.home, lk.scale);
                 if let Some(b) = w.bodies.get_mut(&id) {
                     if let Some(h) = home {
-                        b.pos = h;
+                        b.pos = Pos(h);
                     }
                     b.scale = scale;
                     b.hidden = false;

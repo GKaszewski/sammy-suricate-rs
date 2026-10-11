@@ -28,7 +28,7 @@ fn gems_stay_inside_the_level() {
         }
         sim.drain_events().for_each(drop);
         let mut starts: Vec<[f32; 3]> = sim.world.players.values().map(|p| p.pos).collect();
-        starts.extend(sim.world.key_gems.keys().filter_map(|id| sim.world.bodies.get(id)).map(|b| b.pos));
+        starts.extend(sim.world.key_gems.keys().filter_map(|id| sim.world.bodies.get(id)).map(|b| b.pos.to_array()));
         let mut rng = sammy_core::rng::Rng::seeded(7);
         let jump = sim.jump;
         let mut bad = 0;

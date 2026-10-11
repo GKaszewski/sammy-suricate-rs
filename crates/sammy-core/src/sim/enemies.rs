@@ -8,6 +8,7 @@ use crate::id::Id;
 use crate::player::{SCALE, State};
 use crate::percent::Percent;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 /// Wasp homing and fear tagging.
 pub(super) fn home_wasps(sim: &mut Sim, dt: Dt) {
@@ -89,9 +90,9 @@ pub(super) fn ai(sim: &mut Sim, dt: Dt) {
         }
     }
     events.extend(out.sounds.into_iter().map(Event::Sound));
-    events.extend(out.hit_stars.into_iter().map(|(at, count)| Event::Effect(Effect::HitStars { at, count })));
+    events.extend(out.hit_stars.into_iter().map(|(at, count)| Event::Effect(Effect::HitStars { at: Pos(at), count })));
     *warn |= out.warn;
-    events.extend(out.call_rings.into_iter().map(|at| Event::CallRings { at }));
+    events.extend(out.call_rings.into_iter().map(|at| Event::CallRings { at: Pos(at) }));
 }
 
 /// Adds an enemy's collision box once it is initialised.
@@ -129,7 +130,7 @@ pub(super) fn place(sim: &mut Sim) {
         let Some(b) = w.bodies.get_mut(id) else { continue };
         b.alpha = Percent(e.alpha);
         if let Some((pos, angles)) = e.pose(a) {
-            b.pos = pos;
+            b.pos = Pos(pos);
             b.angles = Angles::from_array(angles);
         }
     }

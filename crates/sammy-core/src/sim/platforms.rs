@@ -10,6 +10,7 @@ use crate::id::Id;
 use crate::platforms::{CAMERA_SNAP, Platform, TeleportStep, UNLOCKED_PLATFORM};
 use crate::player::State;
 use crate::percent::Percent;
+use crate::space::Pos;
 
 /// A platform or body and the engine it follows.
 #[derive(Clone, Debug)]
@@ -70,7 +71,7 @@ fn follow_engines(sim: &mut Sim) {
         let Some(brush) = w.brushes.get_mut(id) else { continue };
         p.platform.follow(&mut brush.origin, eng);
         if let Some(b) = w.bodies.get_mut(id) {
-            b.pos = brush.origin;
+            b.pos = Pos(brush.origin);
         }
     }
 }

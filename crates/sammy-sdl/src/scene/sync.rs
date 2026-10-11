@@ -91,7 +91,7 @@ impl Scene {
             lo = [lo[0].min(x), lo[1].min(y)];
             hi = [hi[0].max(x), hi[1].max(y)];
         }
-        Some(([lo[0], lo[1], hi[0], hi[1]], (Vec3::from(b.pos) - cam.pos).length()))
+        Some(([lo[0], lo[1], hi[0], hi[1]], (Vec3::from(b.pos.get()) - cam.pos).length()))
     }
 
     pub(super) fn view(&mut self, gfx: &Gfx, files: &GameFiles, sim: &Sim, id: Id, look: &Look) -> View {

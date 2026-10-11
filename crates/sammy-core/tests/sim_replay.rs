@@ -58,7 +58,7 @@ fn digest(sim: &Sim) -> String {
         .bodies
         .values()
         .map(|b| {
-            let [x, y, z] = b.pos.map(|v| r(v / 32.0));
+            let [x, y, z] = b.pos.to_array().map(|v| r(v / 32.0));
             let [p, t, ro] = b.angles.to_array().map(r);
             format!("{} {x} {y} {z} {p} {t} {ro} {} {}", b.name, b.hidden, r(b.scale[0]))
         })
@@ -287,7 +287,7 @@ fn sim_at(slot: LevelSlot, ammo: Option<(i32, u32)>, start: impl Fn(&Sim) -> Opt
 #[test]
 fn old_wasps_escape_on_type_switch() {
     // Slot 5 has type 1 and type 7 pickups; Sammy holds 20 of type 7 on a type-1 pickup.
-    let Some(mut sim) = sim_at(LevelSlot(5), Some((20, 7)), |s| s.world.ammo_pickups.iter().find(|(_, a)| a.kind == 1).and_then(|(id, _)| s.world.pos(*id)).map(|p| (p, 0.0))) else { return };
+    let Some(mut sim) = sim_at(LevelSlot(5), Some((20, 7)), |s| s.world.ammo_pickups.iter().find(|(_, a)| a.kind == 1).and_then(|(id, _)| s.world.pos(*id)).map(|p| (p.to_array(), 0.0))) else { return };
     let files = files().unwrap();
     let mut most = 0;
     for f in 0..(10.0 * FPS) as u64 {

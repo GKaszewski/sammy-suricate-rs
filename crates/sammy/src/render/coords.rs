@@ -6,7 +6,8 @@ use bevy::prelude::*;
 /// World scale: quants per Bevy unit. Sammy is ~50 quants tall.
 pub const QUANTS_PER_UNIT: f32 = 32.0;
 
-pub fn pos([x, y, z]: [f32; 3]) -> Vec3 {
+pub fn pos(p: impl Into<sammy_core::space::Pos>) -> Vec3 {
+    let [x, y, z] = p.into().get();
     Vec3::new(-y, z, -x) / QUANTS_PER_UNIT
 }
 

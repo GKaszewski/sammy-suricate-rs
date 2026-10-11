@@ -16,6 +16,7 @@ use crate::id::Id;
 use crate::level::{Presentation, is_passable};
 use crate::percent::Percent;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 /// Frame rate a model animator starts with (the A4 default); speeds are then set in
 /// percent with `set_speed_pct`.
@@ -100,7 +101,7 @@ impl Sim {
         if init.hidden_but_alive {
             return; // logic only: nothing to show
         }
-        let body = Body { name: obj.name.clone(), pos: obj.origin, angles: Angles::from_array(obj.angles), scale: obj.scale.map(f32::abs), hidden: false, alpha: super::world::OPAQUE };
+        let body = Body { name: obj.name.clone(), pos: Pos(obj.origin), angles: Angles::from_array(obj.angles), scale: obj.scale.map(f32::abs), hidden: false, alpha: super::world::OPAQUE };
         // Some inits set their own body (titles start hidden).
         let body = match self.world.bodies.remove(&id) {
             Some(b) => Body { hidden: b.hidden, ..body },

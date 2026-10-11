@@ -7,6 +7,7 @@ use crate::doors::{DARK_DOOR, DoorEvent, DoorView};
 use crate::gems::DoorGemTarget;
 use crate::keys::{MASTER_KEY, light_color};
 use crate::player::State;
+use crate::space::Pos;
 
 /// Door flash when a key fits: start range, shrink per tick, cut-off range.
 const DOOR_FLASH: (f32, f32, f32) = (600.0, 50.0, 100.0);
@@ -26,7 +27,7 @@ pub(super) fn run(sim: &mut Sim, dt: Dt) {
         let (Some(door), Some(brush)) = (w.doors.get_mut(&id), w.brushes.get_mut(&id)) else { continue };
         door.step(&mut brush.origin, &mut sim.game, &view, dt.t, &mut events);
         if let Some(b) = w.bodies.get_mut(&id) {
-            b.pos = brush.origin;
+            b.pos = Pos(brush.origin);
         }
         for ev in events.drain(..) {
             match ev {
@@ -72,7 +73,7 @@ pub(super) fn run_door_gems(sim: &mut Sim, dt: Dt) {
                 sim.game.key_in_flight = false;
                 w.despawn(id);
                 sim.sound("broken4");
-                sim.effect(Effect::GemExplode { at, color });
+                sim.effect(Effect::GemExplode { at: Pos(at), color });
             }
             Some(false) => {
                 // Back with Sammy: the key is returned. The original also overwrote a master
@@ -87,7 +88,7 @@ pub(super) fn run_door_gems(sim: &mut Sim, dt: Dt) {
             None => {
                 let pos = g.gem.pos;
                 if let Some(b) = w.bodies.get_mut(&id) {
-                    b.pos = pos;
+                    b.pos = Pos(pos);
                 }
             }
         }

@@ -14,6 +14,7 @@ use crate::level::Presentation;
 use crate::menu::{Bob, Choice, LEVEL_ICON, Look, MenuAction};
 use crate::percent::Percent;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 /// Camera `arc` in the menu (degrees).
 pub const MENU_ARC: f32 = 70.0;
@@ -156,7 +157,7 @@ pub(super) fn step(sim: &mut Sim, dt: Dt) {
             }
         }
         if item.bob.moves() && item.code != 0 {
-            b.pos = item.bob.step(dt.t);
+            b.pos = Pos(item.bob.step(dt.t));
             if !item.sprite {
                 b.angles = Angles::from_array(item.bob.angles);
             }

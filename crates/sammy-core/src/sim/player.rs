@@ -7,6 +7,7 @@ use crate::id::Id;
 use crate::input::Controls;
 use crate::player::{Frame, Player, SCALE, StepOut, Touch};
 use crate::angle::Angles;
+use crate::space::Pos;
 
 pub(super) fn init(sim: &mut Sim, id: Id, obj: &mut Object) {
     obj.scale = [SCALE; 3];
@@ -52,7 +53,7 @@ pub(super) fn step(sim: &mut Sim, controls: &Controls, dt: Dt) {
         events.extend(out.sounds.into_iter().map(Event::Sound));
         touched.extend(out.touched);
         if let Some(b) = w.bodies.get_mut(&me) {
-            b.pos = p.pos;
+            b.pos = Pos(p.pos);
             b.angles = Angles::from_array(p.angles());
         }
     }

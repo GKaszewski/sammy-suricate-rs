@@ -1,6 +1,7 @@
 //! Effects around Sammy: dust, hit stars, boosts, teleports and respawns.
 
 use super::*;
+use sammy_core::space::Pos;
 
 // ---------------------------------------------------------------- Sammy
 
@@ -33,7 +34,8 @@ pub(super) fn random_starhit(rng: &mut ParticleRng) -> &'static str {
 }
 
 /// `particle_hit1` (§2.12): the lion's swipe connects (10) or contact (1).
-pub fn hit_stars(ps: &mut Particles, pos: [f32; 3], n: usize) {
+pub fn hit_stars(ps: &mut Particles, pos: Pos, n: usize) {
+    let pos = pos.get();
     ps.emit(n, pos, |p, rng| {
         p.vel = rnd_dir(rng, 4.0, 10.0);
         p.size = 1500.0 + rng.random(500.0);
@@ -83,7 +85,8 @@ pub fn boost_sparkle(ps: &mut Particles, pos: [f32; 3]) {
 }
 
 /// `particle_Teleport` (idle pad) and `particle_Teleport2` (around Sammy) (§2.15).
-pub fn teleport_sparkle(ps: &mut Particles, pos: [f32; 3], around_sammy: bool, n: usize) {
+pub fn teleport_sparkle(ps: &mut Particles, pos: Pos, around_sammy: bool, n: usize) {
+    let pos = pos.get();
     ps.emit(n, pos, |p, rng| {
         if around_sammy {
             p.vel = [rng.random(32.0) - 16.0, rng.random(32.0) - 16.0, rng.random(5.0) + 3.0];
@@ -114,7 +117,8 @@ pub(super) fn sparkle(p: &mut Particle, ctx: &mut ParticleCtx, every: i32, damp:
 }
 
 /// `particle_GemRestart` (§2.8): idle restart point, 100 below it.
-pub fn restart_sparkle(ps: &mut Particles, pos: [f32; 3]) {
+pub fn restart_sparkle(ps: &mut Particles, pos: Pos) {
+    let pos = pos.get();
     ps.emit(1, [pos[0], pos[1], pos[2] - 100.0], |p, rng| {
         p.vel = [rng.random(40.0) - 20.0, rng.random(40.0) - 20.0, rng.random(10.0) + 3.0];
         p.size = rng.random(2000.0);
@@ -133,7 +137,8 @@ pub fn restart_sparkle(ps: &mut Particles, pos: [f32; 3]) {
 }
 
 /// `particle_TileDeath` (§2.9): smoke from death tiles and lava.
-pub fn tile_smoke(ps: &mut Particles, pos: [f32; 3]) {
+pub fn tile_smoke(ps: &mut Particles, pos: Pos) {
+    let pos = pos.get();
     ps.emit(1, pos, |p, rng| {
         p.vel = [rng.random(64.0) - 32.0, rng.random(64.0) - 32.0, rng.random(10.0) + 3.0];
         p.size = rng.random(1500.0);

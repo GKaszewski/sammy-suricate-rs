@@ -1,6 +1,7 @@
 //! Events and the frame's advance: call rings, popups, the lose title, the sun.
 
 use super::*;
+use sammy_core::space::Pos;
 
 impl Extras {
     /// Takes a game event (call rings and popups start, a new level clears).
@@ -72,7 +73,7 @@ impl Extras {
             let (f, u) = (view.forward(), view.up());
             l.pos = [0, 1, 2].map(|i| view.pos[i] + f[i] * l.depth + u[i] * LOSE_RAISE);
             for _ in 0..particles.ticks {
-                crate::effects::tile_smoke(particles, l.pos);
+                crate::effects::tile_smoke(particles, Pos(l.pos));
             }
         } else {
             self.lose = None;

@@ -6,6 +6,7 @@ use super::*;
 
 use sammy_core::player::State;
 use sammy_core::sim::{Effect, Event, Sim};
+use sammy_core::space::Pos;
 
 /// Idle emitters further than this from the camera target are skipped (the original
 /// relied on its frame budget instead).
@@ -41,7 +42,7 @@ pub fn play(ps: &mut Particles, e: &Event) {
 pub fn emit_trails(ps: &mut Particles, game: &Sim) {
     let w = &game.world;
     let pov = game.pov.pos;
-    let near = |p: [f32; 3]| (0..3).map(|i| (p[i] - pov[i]).powi(2)).sum::<f32>() < IDLE_RANGE * IDLE_RANGE;
+    let near = |p: Pos| (0..3).map(|i| (p[i] - pov[i]).powi(2)).sum::<f32>() < IDLE_RANGE * IDLE_RANGE;
     let pos = |id: &sammy_core::id::Id| w.bodies.get(id).map(|b| b.pos);
     for _ in 0..ps.ticks {
         for wasp in w.wasps.values() {
@@ -142,7 +143,7 @@ pub fn emit_sammy(ps: &mut Particles, game: &Sim, prev: &mut Option<(State, bool
         }
     }
     if teleporting && !was_tp {
-        teleport_sparkle(ps, above, true, 5);
+        teleport_sparkle(ps, Pos(above), true, 5);
     }
     *prev = Some((p.state, teleporting));
     for _ in 0..ps.ticks {
@@ -164,7 +165,7 @@ pub fn emit_sammy(ps: &mut Particles, game: &Sim, prev: &mut Option<(State, bool
             }
         }
         if teleporting {
-            teleport_sparkle(ps, above, true, 2);
+            teleport_sparkle(ps, Pos(above), true, 2);
         }
     }
 }

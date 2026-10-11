@@ -3,6 +3,7 @@
 use super::*;
 use crate::time::Ticks;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 pub(in crate::sim) fn hives(sim: &mut Sim, dt: Dt) {
     if !sim.playing() {
@@ -21,7 +22,7 @@ pub(in crate::sim) fn hives(sim: &mut Sim, dt: Dt) {
         sim.world.hive_wasps.insert(wid, HiveWasp::new(&l, pos));
         if exhausted {
             // Exhausted: the hive bursts (bullets.wdl:1255-1272).
-            let at = sim.world.pos(id).unwrap_or(pos);
+            let at = sim.world.pos(id).unwrap_or(Pos(pos));
             sim.effect(Effect::HiveBurst { at });
             sim.world.despawn(id);
         }
@@ -39,7 +40,7 @@ pub(in crate::sim) fn hive_wasps(sim: &mut Sim, dt: Dt) {
         let done = hw.step(|a, b| space.trace_static(Hull::Point, a, b).trace, rng, dt.t, &mut sounds);
         events.extend(sounds.drain(..).map(Event::Sound));
         if let Some(b) = w.bodies.get_mut(id) {
-            b.pos = hw.pos;
+            b.pos = Pos(hw.pos);
             b.angles = Angles::from_array([hw.pan, hw.tilt, 0.0]);
         }
         if let Some((pickup, lifetime)) = done {

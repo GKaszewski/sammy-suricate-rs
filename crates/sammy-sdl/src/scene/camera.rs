@@ -52,7 +52,7 @@ pub fn rotation(angles: impl Into<sammy_core::angle::Angles>) -> Quat {
 }
 
 pub(super) fn transform(b: &Body, rot: Quat) -> Mat4 {
-    Mat4::from_scale_rotation_translation(Vec3::from(b.scale), rot, Vec3::from(b.pos))
+    Mat4::from_scale_rotation_translation(Vec3::from(b.scale), rot, Vec3::from(b.pos.get()))
 }
 
 /// How a sprite is turned this frame.
@@ -60,7 +60,7 @@ pub(super) fn sprite_rotation(b: &Body, facing: SpriteFacing, cam: &Camera) -> Q
     match facing {
         // Turn about the vertical axis to face the camera (A4 sprites).
         SpriteFacing::Billboard => {
-            let d = Vec3::from(b.pos) - cam.pos;
+            let d = Vec3::from(b.pos.get()) - cam.pos;
             Quat::from_rotation_z(d.y.atan2(d.x))
         }
         SpriteFacing::Screen => Quat::from_mat3(&cam.axes),

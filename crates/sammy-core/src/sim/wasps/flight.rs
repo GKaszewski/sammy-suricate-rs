@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 /// Escaping wasps spiral upward and vanish.
 pub(in crate::sim) fn escapees(sim: &mut Sim, dt: Dt) {
@@ -12,7 +13,7 @@ pub(in crate::sim) fn escapees(sim: &mut Sim, dt: Dt) {
             gone.push(*id);
         }
         if let Some(b) = w.bodies.get_mut(id) {
-            b.pos = e.pos;
+            b.pos = Pos(e.pos);
             b.angles = Angles::from_array([e.pan, e.tilt, 0.0]);
         }
     }
@@ -29,13 +30,13 @@ pub(in crate::sim) fn corpses(sim: &mut Sim, dt: Dt) {
     for (id, c) in w.wasp_corpses.iter_mut() {
         let step = c.step(w.animators.get_mut(id).map(|a| &mut a.anim), dt.t, |a, b| space.trace_static(Hull::Point, a, b).trace);
         if step.puffs > 0 {
-            events.push(Event::Effect(Effect::HitStars { at: c.pos, count: step.puffs }));
+            events.push(Event::Effect(Effect::HitStars { at: Pos(c.pos), count: step.puffs }));
         }
         if step.sound {
             events.push(Event::Sound(crate::wasps::burst_sound(rng)));
         }
         if let Some(b) = w.bodies.get_mut(id) {
-            b.pos = c.pos;
+            b.pos = Pos(c.pos);
             b.hidden = !step.visible;
         }
         if step.done {
@@ -58,7 +59,7 @@ pub(in crate::sim) fn fly(sim: &mut Sim, dt: Dt) {
             if wasp.visible {
                 b.hidden = false;
             }
-            b.pos = wasp.pos;
+            b.pos = Pos(wasp.pos);
             b.angles = Angles::from_array([wasp.pan, wasp.tilt, 0.0]);
         }
         if let WaspStep::Burst { hit } = step {
@@ -76,7 +77,7 @@ pub(in crate::sim) fn fly(sim: &mut Sim, dt: Dt) {
                     }
                 }
             }
-            events.push(Event::Effect(Effect::WaspExplode { at: wasp.pos, kind: wasp.kind, spread: WASP_BURST_SPREAD }));
+            events.push(Event::Effect(Effect::WaspExplode { at: Pos(wasp.pos), kind: wasp.kind, spread: WASP_BURST_SPREAD }));
             gone.push(*id);
         }
     }

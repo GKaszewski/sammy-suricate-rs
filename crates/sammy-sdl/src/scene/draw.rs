@@ -20,7 +20,7 @@ pub(super) fn sphere(b: &Body, view: &View) -> Sphere {
         View::Missing => (Vec3::ZERO, Vec3::ZERO),
     };
     let scale = b.scale.iter().fold(0.0f32, |m, s| m.max(s.abs()));
-    (Vec3::from(b.pos), lo.length().max(hi.length()) * scale)
+    (Vec3::from(b.pos.get()), lo.length().max(hi.length()) * scale)
 }
 
 impl Scene {
@@ -74,7 +74,7 @@ impl Scene {
             }
             let alpha = w.bodies.get(id).map_or(Percent::FULL, |b| b.alpha);
             if look.blend || look.flare || alpha < Percent::FULL {
-                let d = w.bodies.get(id).map_or(0.0, |b| (Vec3::from(b.pos) - cam.pos).length_squared());
+                let d = w.bodies.get(id).map_or(0.0, |b| (Vec3::from(b.pos.get()) - cam.pos).length_squared());
                 translucent.push((d, *id));
             } else {
                 self.draw_entity(gfx, sim, cam, *id, Pass::Opaque, &mut f);

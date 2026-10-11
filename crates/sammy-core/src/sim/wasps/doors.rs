@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 /// `ExplodeDoorWeak`: HP 3/2/1 morph to doorwk2/3/4; otherwise the door breaks into planks.
 pub(in crate::sim) fn weak_doors(sim: &mut Sim) {
@@ -46,7 +47,7 @@ pub(in crate::sim) fn planks(sim: &mut Sim, dt: Dt) {
             events.push(Event::Sound("plank1_Son"));
         }
         if let Some(b) = w.bodies.get_mut(id) {
-            b.pos = p.pos;
+            b.pos = Pos(p.pos);
             b.angles = Angles::from_array(p.angles);
         }
         if done {

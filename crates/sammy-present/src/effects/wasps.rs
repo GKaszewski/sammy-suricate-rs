@@ -1,6 +1,7 @@
 //! Wasp effects: trails, bursts and hives.
 
 use super::*;
+use sammy_core::space::Pos;
 
 // ---------------------------------------------------------------- wasps
 
@@ -80,7 +81,8 @@ pub fn wasp_trail(ps: &mut Particles, pos: [f32; 3], kind: u32, scale: f32) {
 
 /// Wasp death burst (`particle_WaspExplode*`, §2.11): 1 particle per tick for 4 ticks,
 /// with a per-tick random spread vector `(rand(2s)-s)³ × rand(5)` (s = 2; 10 for hives).
-pub fn wasp_explode(ps: &mut Particles, pos: [f32; 3], kind: u32, spread: f32) {
+pub fn wasp_explode(ps: &mut Particles, pos: Pos, kind: u32, spread: f32) {
+    let pos = pos.get();
     let family = wasp_family(kind);
     for tick in 0..4 {
         let v = [ps.random(spread * 2.0) - spread, ps.random(spread * 2.0) - spread, ps.random(spread * 2.0) - spread];
@@ -92,7 +94,8 @@ pub fn wasp_explode(ps: &mut Particles, pos: [f32; 3], kind: u32, spread: f32) {
 }
 
 /// Hive exhausted (bullets.wdl:1255-1272): 12 bursts 3 ticks apart of 6 colours.
-pub fn hive_burst(ps: &mut Particles, pos: [f32; 3]) {
+pub fn hive_burst(ps: &mut Particles, pos: Pos) {
+    let pos = pos.get();
     for burst in 0..12 {
         for family in [YELLOW, RED, BLUE, GREEN, MAGENTA, GRADIENT] {
             let v = [ps.random(20.0) - 10.0, ps.random(20.0) - 10.0, ps.random(20.0) - 10.0];

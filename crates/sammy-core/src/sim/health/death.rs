@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::percent::Percent;
+use crate::space::Pos;
 
 /// Hazards under Sammy's feet and running out of health start a death.
 pub(in crate::sim) fn detect_deaths(sim: &mut Sim, dt: Dt) {
@@ -86,7 +87,7 @@ pub(in crate::sim) fn reset_checkpoints(sim: &mut Sim, reset: bool) {
         if w.collected.remove(id)
             && let Some(b) = w.bodies.get_mut(id)
         {
-            b.pos = c.home;
+            b.pos = Pos(c.home);
             b.scale = [1.0; 3];
             b.hidden = false;
         }

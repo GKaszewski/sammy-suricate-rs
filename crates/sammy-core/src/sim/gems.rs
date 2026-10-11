@@ -10,6 +10,7 @@ use crate::gems::{FlyingGem, GemGravity, GemLifetime, HEIGHT_GEM, Launch, Rest};
 use crate::id::Id;
 use crate::player::Player;
 use crate::time::{TICKS_PER_SEC, Ticks};
+use crate::space::Pos;
 
 /// Gem sprite animation speed (frames per second), backwards for door gems.
 pub(super) const GEM_FPS: f32 = 48.0;
@@ -89,7 +90,7 @@ pub(super) fn fly(sim: &mut Sim, dt: Dt) {
                 w.collectable.insert(*id);
             }
             if let Some(b) = w.bodies.get_mut(id) {
-                b.pos = g.pos;
+                b.pos = Pos(g.pos);
             }
             if step.done {
                 settled.push((*id, g.clone()));
@@ -146,12 +147,12 @@ pub(super) fn gravity(sim: &mut Sim, dt: Dt) {
         }
         let Some(b) = w.bodies.get_mut(id) else { continue };
         let p = b.pos;
-        let hit = space.trace(Hull::Point, p, [p[0], p[1], p[2] - FLOOR_PROBE], None);
+        let hit = space.trace(Hull::Point, p.to_array(), [p[0], p[1], p[2] - FLOOR_PROBE], None);
         if !hit.trace.hit() {
             continue;
         }
         if let Some(plat) = hit.entity.and_then(|e| w.platforms.get(&e)) {
-            for (c, d) in b.pos.iter_mut().zip(plat.platform.delta) {
+            for (c, d) in b.pos.0.iter_mut().zip(plat.platform.delta) {
                 *c += d;
             }
         }

@@ -1,6 +1,7 @@
 //! Sprites placed after the level is loaded.
 
 use super::*;
+use crate::space::Pos;
 
 
 /// Sprites snapped onto the floor below their editor origin (once the level is there).
@@ -16,7 +17,7 @@ pub(in crate::sim) fn snap_sprites(sim: &mut Sim) {
     for (id, pos) in done {
         sim.world.sprite_ground.remove(&id);
         if let (Some(p), Some(b)) = (pos, sim.world.bodies.get_mut(&id)) {
-            b.pos = p;
+            b.pos = Pos(p);
         }
     }
 }

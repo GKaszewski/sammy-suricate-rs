@@ -1,6 +1,7 @@
 //! Gem effects: trails, bursts, catches and mixes.
 
 use super::*;
+use sammy_core::space::Pos;
 
 // ---------------------------------------------------------------- gem colours
 
@@ -59,7 +60,8 @@ pub(super) fn init_star(p: &mut Particle, rng: &mut ParticleRng, color: u32) {
 }
 
 /// `Particle_GemKeys` (§3.2): a flying gem's trail, 3 stars of its colour (255 = one of each).
-pub fn gem_trail(ps: &mut Particles, pos: [f32; 3], color: u32) {
+pub fn gem_trail(ps: &mut Particles, pos: Pos, color: u32) {
+    let pos = pos.get();
     if color == sammy_core::keys::MASTER_KEY {
         for c in 1..=GEM_COLORS {
             ps.emit(1, pos, |p, rng| init_star(p, rng, c));
@@ -70,7 +72,8 @@ pub fn gem_trail(ps: &mut Particles, pos: [f32; 3], color: u32) {
 }
 
 /// `GemExplose` (§2.3, gems.wdl:364-391): ~15 falling shards dropping dots.
-pub fn gem_explode(ps: &mut Particles, pos: [f32; 3], color: u32) {
+pub fn gem_explode(ps: &mut Particles, pos: Pos, color: u32) {
+    let pos = pos.get();
     let color = if (1..=GEM_COLORS).contains(&color) { color } else { 1 + ps.random(GEM_COLORS as f32) as u32 };
     let v4 = ps.random(5.0) + 5.0;
     ps.emit(15, pos, |p, rng| {
@@ -93,7 +96,8 @@ pub(super) fn shard(p: &mut Particle, ctx: &mut ParticleCtx) -> bool {
 }
 
 /// `GemCatch` (§2.4, gems.wdl:395-449): 25 rising stars, in three waves.
-pub fn gem_catch(ps: &mut Particles, pos: [f32; 3], color: u32) {
+pub fn gem_catch(ps: &mut Particles, pos: Pos, color: u32) {
+    let pos = pos.get();
     let color = if (1..=GEM_COLORS).contains(&color) { color } else { 0 };
     let v4 = ps.random(2.0) + 1.0;
     for (n, delay) in [(5, 0.0), (10, 2.0), (10, 6.0)] {
@@ -113,7 +117,8 @@ pub fn gem_catch(ps: &mut Particles, pos: [f32; 3], color: u32) {
 }
 
 /// Gem mix end burst (§2.5, gems.wdl:596-605): 70 stars of a primary colour.
-pub fn gem_mix(ps: &mut Particles, pos: [f32; 3], color: u32) {
+pub fn gem_mix(ps: &mut Particles, pos: Pos, color: u32) {
+    let pos = pos.get();
     let speed = ps.random(10.0) + 10.0;
     ps.emit(70, pos, |p, rng| {
         p.vel = rnd_dir(rng, 2.5, speed);
@@ -130,7 +135,8 @@ pub fn gem_mix(ps: &mut Particles, pos: [f32; 3], color: u32) {
 }
 
 /// `particle_ExploseDiam` ×15 (§2.6): diamond picked up.
-pub fn diamond_burst(ps: &mut Particles, pos: [f32; 3]) {
+pub fn diamond_burst(ps: &mut Particles, pos: Pos) {
+    let pos = pos.get();
     ps.emit(15, pos, |p, rng| {
         p.vel = rnd_dir(rng, 2.5, 10.0);
         p.size = 400.0 + rng.random(100.0);

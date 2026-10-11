@@ -7,6 +7,7 @@ use crate::flow::Phase;
 use crate::id::Id;
 use crate::time::TICKS_PER_SEC;
 use crate::angle::Angles;
+use crate::space::Pos;
 
 /// The camera's state and this frame's pose.
 #[derive(Clone, Debug, Default)]
@@ -80,7 +81,7 @@ pub(super) fn sky(sim: &mut Sim, dt: Dt) {
             *a += spin * ticks;
         }
         if let Some(b) = w.bodies.get_mut(id) {
-            b.pos = [cam[0], cam[1], cam[2] + s.dz];
+            b.pos = Pos([cam[0], cam[1], cam[2] + s.dz]);
             b.angles = Angles::from_array(s.angles);
         }
     }
