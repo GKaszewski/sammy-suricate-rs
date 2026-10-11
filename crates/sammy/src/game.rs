@@ -91,3 +91,26 @@ impl GameState {
         }
     }
 }
+
+/// WDL `random(x)`: uniform in [0, x). Small xorshift so runs are reproducible
+/// with `SAMMY_SEED`.
+#[derive(Resource)]
+pub struct Rng(u64);
+
+impl Default for Rng {
+    fn default() -> Self {
+        let seed = std::env::var("SAMMY_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or_else(|| {
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64)
+        });
+        Self(seed | 1)
+    }
+}
+
+impl Rng {
+    pub fn random(&mut self, x: f32) -> f32 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 >> 40) as f32 / (1u64 << 24) as f32 * x
+    }
+}

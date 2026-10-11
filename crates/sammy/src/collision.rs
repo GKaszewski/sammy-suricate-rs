@@ -34,6 +34,68 @@ impl Brush {
     }
 }
 
+/// Axis-aligned box of a model entity (A4 collides models by bounding box).
+/// `center` and `half` are native coordinates; updated by whoever moves the entity.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct BoxCollider {
+    pub center: [f32; 3],
+    pub half: [f32; 3],
+    pub solid: bool,
+}
+
+/// Extents a hull adds around a traced point (empirical: see formats::trace).
+fn hull_extents(hull: usize) -> ([f32; 3], [f32; 3]) {
+    match hull {
+        0 => ([0.0; 3], [0.0; 3]),
+        1 => ([16.0; 3], [16.0; 3]),
+        _ => ([32.0, 32.0, 16.0], [32.0, 32.0, 32.0]), // (below/negative, above/positive)
+    }
+}
+
+/// Slab test of the segment start→end against an AABB. Returns (fraction, normal)
+/// of the entry point, or None if missed or starting inside.
+fn segment_box(start: [f32; 3], end: [f32; 3], min: [f32; 3], max: [f32; 3]) -> Option<(f32, [f32; 3])> {
+    let mut t_in = 0.0f32;
+    let mut t_out = 1.0f32;
+    let mut normal = [0.0; 3];
+    let mut inside = true;
+    for i in 0..3 {
+        let d = end[i] - start[i];
+        if start[i] < min[i] || start[i] > max[i] {
+            inside = false;
+        }
+        if d.abs() < 1e-6 {
+            if start[i] < min[i] || start[i] > max[i] {
+                return None;
+            }
+            continue;
+        }
+        let (mut t0, mut t1) = ((min[i] - start[i]) / d, (max[i] - start[i]) / d);
+        let mut n = -d.signum();
+        if t0 > t1 {
+            std::mem::swap(&mut t0, &mut t1);
+        }
+        if t0 > t_in {
+            t_in = t0;
+            normal = [0.0; 3];
+            if d > 0.0 {
+                n = -1.0;
+            } else {
+                n = 1.0;
+            }
+            normal[i] = n;
+        }
+        t_out = t_out.min(t1);
+        if t_in > t_out {
+            return None;
+        }
+    }
+    if inside {
+        return None; // let things escape overlaps
+    }
+    (t_in < 1.0).then_some(((t_in - 0.001).max(0.0), normal))
+}
+
 /// Result of a world trace: the closest hit across the level and all solid brushes.
 #[derive(Clone, Copy, Debug)]
 pub struct Hit {
@@ -46,6 +108,7 @@ pub struct Hit {
 pub struct CollisionWorld<'w, 's> {
     level: Option<Res<'w, LevelCollision>>,
     brushes: Query<'w, 's, (Entity, &'static Brush)>,
+    boxes: Query<'w, 's, (Entity, &'static BoxCollider)>,
 }
 
 impl CollisionWorld<'_, '_> {
@@ -84,6 +147,45 @@ impl CollisionWorld<'_, '_> {
                 };
             }
         }
+        let (below, above) = hull_extents(hull);
+        for (e, b) in &self.boxes {
+            if !b.solid || Some(e) == ignore {
+                continue;
+            }
+            let min = [0, 1, 2].map(|i| b.center[i] - b.half[i] - above[i]);
+            let max = [0, 1, 2].map(|i| b.center[i] + b.half[i] + below[i]);
+            if let Some((f, normal)) = segment_box(start, end, min, max)
+                && f < best.trace.fraction
+            {
+                best = Hit {
+                    trace: Trace {
+                        fraction: f,
+                        end: [0, 1, 2].map(|i| start[i] + (end[i] - start[i]) * f),
+                        normal,
+                        start_solid: false,
+                        all_solid: false,
+                    },
+                    entity: Some(e),
+                };
+            }
+        }
         best
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::segment_box;
+
+    #[test]
+    fn segment_hits_box_face() {
+        let (f, n) = segment_box([-10.0, 0.0, 0.0], [10.0, 0.0, 0.0], [-1.0; 3], [1.0; 3]).unwrap();
+        assert!((f - 0.45).abs() < 0.01, "{f}");
+        assert_eq!(n, [-1.0, 0.0, 0.0]);
+        let (f, n) = segment_box([0.0, 0.0, 10.0], [0.0, 0.0, -10.0], [-1.0; 3], [1.0; 3]).unwrap();
+        assert!((f - 0.45).abs() < 0.01, "{f}");
+        assert_eq!(n, [0.0, 0.0, 1.0]);
+        assert!(segment_box([-10.0, 5.0, 0.0], [10.0, 5.0, 0.0], [-1.0; 3], [1.0; 3]).is_none());
+        assert!(segment_box([0.0; 3], [10.0, 0.0, 0.0], [-1.0; 3], [1.0; 3]).is_none(), "inside start escapes");
     }
 }

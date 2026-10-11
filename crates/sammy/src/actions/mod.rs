@@ -22,6 +22,7 @@ impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<player::JumpParams>()
             .init_resource::<GameState>()
+            .init_resource::<crate::game::Rng>()
             .init_resource::<pickups::GemSprites>()
             .add_message::<crate::game::ResetScan>()
             .add_systems(
