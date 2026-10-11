@@ -9,6 +9,7 @@ mod flow;
 mod game;
 mod hud;
 mod hud3d;
+mod intro;
 mod image;
 mod level;
 mod lights;
@@ -62,7 +63,7 @@ fn main() -> anyhow::Result<()> {
             ..default()
         }))
         .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin, particles::ParticlePlugin))
-        .add_plugins((hud3d::Hud3dPlugin, ui_text::UiTextPlugin, menu::MenuPlugin, options::OptionsPlugin, music::MusicPlugin))
+        .add_plugins((hud3d::Hud3dPlugin, ui_text::UiTextPlugin, menu::MenuPlugin, options::OptionsPlugin, music::MusicPlugin, intro::IntroPlugin))
         .insert_resource(save::load(&dir))
         .insert_resource(files)
         .insert_resource(args)

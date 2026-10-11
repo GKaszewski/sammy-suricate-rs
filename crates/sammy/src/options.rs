@@ -119,8 +119,10 @@ fn open_on_esc(
     current: Res<CurrentLevel>,
     state: Res<OptionsState>,
     mut req: ResMut<OptionsRequest>,
+    intro: Res<crate::intro::Intro>,
 ) {
-    if !keys.just_pressed(KeyCode::Escape) || state.open() {
+    // Esc skips the intro instead (and its release is awaited, Intro2.wdl:209).
+    if !keys.just_pressed(KeyCode::Escape) || state.open() || intro.active {
         return;
     }
     req.open = match current.phase {

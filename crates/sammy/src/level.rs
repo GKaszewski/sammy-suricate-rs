@@ -58,6 +58,8 @@ impl GameAssets {
 /// Files gameplay may need at runtime (morphs, projectiles, debris), loaded with every level.
 const PRELOAD: &[&str] = &[
     "wasp1.mdl",
+    "publogo.mdl",
+    "surilogo.mdl",
     "plank1.mdl",
     "plank2.mdl",
     "plank3.mdl",

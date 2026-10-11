@@ -693,3 +693,8 @@ Birgit,Manfred...
 (beta testerzy)
 
 ```
+
+## Port status (intro, music)
+- Intro: `crates/sammy/src/intro.rs`. Walker runs the §2.3 state machine per frame (rates × frame ticks), nearest-in-cone wins scans [U]; follow camera type 3 with the menu's camera zones; logos per §2.2 drive the black fog (drawn as a near-layer quad) [U: the intro loop's own fog writes are dropped]; glide per §2.6. Only a boot that lands on the menu plays it; `SAMMY_NOINTRO` or any menu debug var skips it.
+- The A5 logo's background is (13,5,5), not a colour key even in RGB565, so its dark square is drawn as in the original.
+- Music: `crates/sammy/src/music.rs`, MIDI rendered by `rustysynth` with a GM SoundFont (`$SAMMY_SOUNDFONT`, else first `.sf2` in `~/.local/share/sammy-suricate/` or `/usr/share/soundfonts`). Menu after a level = silence (`Play_Song_Once Musique1,0`).

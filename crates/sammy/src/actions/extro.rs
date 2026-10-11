@@ -44,11 +44,27 @@ impl Scanners {
     }
 }
 
-pub fn update_pov(mut pov: ResMut<Pov>, mut scanners: ResMut<Scanners>, player: Query<(Entity, &Player)>, enemies: Query<(Entity, &Enemy)>) {
+pub fn update_pov(
+    mut pov: ResMut<Pov>,
+    mut scanners: ResMut<Scanners>,
+    player: Query<(Entity, &Player)>,
+    enemies: Query<(Entity, &Enemy)>,
+    (intro, walker): (Res<crate::intro::Intro>, Query<(Entity, &crate::intro::Walker)>),
+) {
     scanners.0.clear();
     let sammy = player.single().ok();
     if let Some((_, p)) = sammy {
         scanners.0.push(p.pos);
+    }
+    // The intro's scripted Sammy scans id 25 (camera zones, hint title) while it runs.
+    let walker = walker.single().ok();
+    if let Some((ent, w)) = walker {
+        if intro.active {
+            scanners.0.push(w.pos);
+        }
+        if sammy.is_none() {
+            (pov.entity, pov.pos, pov.pan, pov.vel) = (Some(ent), w.pos, w.pan, w.vel);
+        }
     }
     scanners.0.extend(enemies.iter().filter(|(_, e)| e.scans_25()).map(|(_, e)| e.pos));
     if let Some((ent, e)) = pov.target.and_then(|t| enemies.get(t).ok()).filter(|(_, e)| !e.gone()) {

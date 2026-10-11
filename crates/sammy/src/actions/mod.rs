@@ -313,8 +313,14 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "posjumplevels" => crate::menu::init_marker(obj, 3, entity),
         "posthinklevels" => crate::menu::init_marker(obj, 4, entity),
         "posbonuslevels" => crate::menu::init_marker(obj, 50, entity),
-        // The intro walk (Intro2.wdl:231-456) is not ported yet: hide its actors.
-        "initplayerpatrol" | "initpathplayer" => ActionInit { hidden: true, ..default() },
+        "initplayerpatrol" => {
+            crate::intro::init_walker(obj, entity);
+            ActionInit { anim: Some(("walkB", 0.0)), ..default() }
+        }
+        "initpathplayer" => {
+            crate::intro::init_node(obj, entity);
+            ActionInit { hidden_but_alive: true, ..default() }
+        }
         "initstartennemy" => {
             enemy::init_start_ennemy(obj, entity);
             ActionInit { hidden_but_alive: true, ..default() }

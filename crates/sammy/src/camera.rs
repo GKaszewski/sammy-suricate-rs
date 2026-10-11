@@ -218,9 +218,10 @@ pub fn camera_zones(
     mut rt: ResMut<CameraRuntime>,
     scanners: Res<crate::actions::extro::Scanners>,
     mut zones: Query<(Entity, &mut CameraZone)>,
+    intro: Res<crate::intro::Intro>,
 ) {
     let Some(level) = level else { return };
-    if current.phase != Phase::Playing {
+    if current.phase != Phase::Playing && !intro.following() {
         return;
     }
     rt.acc += time.delta_secs() * TICKS;
@@ -341,6 +342,15 @@ pub struct FollowState {
 
 impl FollowState {
     /// Places the camera proxy directly (respawn: `Camera_Syn` at Sammy + (32,32,150)).
+    /// A fresh follow that eases in from `pos` (the intro starts at `CameraPosOrigine`).
+    pub fn start_from(&mut self, pos: [f32; 3], ang: f32, params: &CameraParams) {
+        *self = Self::default();
+        self.pos = Some(pos);
+        self.ang = ang;
+        self.dist = params.dist;
+        self.height = params.height;
+    }
+
     pub fn snap_to(&mut self, pos: [f32; 3]) {
         self.pos = Some(pos);
         self.tilt_scale = None;
@@ -374,8 +384,9 @@ fn angle_diff(a: f32) -> f32 {
     (a + 180.0).rem_euclid(360.0) - 180.0
 }
 
-fn follow(
+pub fn follow(
     time: Res<Time>,
+    intro: Res<crate::intro::Intro>,
     params: Res<CameraParams>,
     mut rt: ResMut<CameraRuntime>,
     current: Res<CurrentLevel>,
@@ -384,12 +395,20 @@ fn follow(
     pov: Res<crate::actions::extro::Pov>,
     mut cam: Query<(&mut Transform, &mut FollowState), With<MainCamera>>,
 ) {
-    let (Ok(p), Ok((mut tf, mut st))) = (player.single(), cam.single_mut()) else { return };
+    // The menu has a fixed camera, except while the intro follows the scripted Sammy.
+    if current.phase == Phase::Menu && !intro.following() {
+        return;
+    }
+    let Ok((mut tf, mut st)) = cam.single_mut() else { return };
+    if pov.entity.is_none() {
+        return;
+    }
     let t = time.delta_secs() * TICKS;
     if rt.cam_type == 0 {
         rt.cam_type = params.start_type;
     }
     if rt.cam_type == 2 {
+        let Ok(p) = player.single() else { return };
         follow_type2(&params, &level, p, &mut st, &mut tf, t, time.delta_secs());
         st.converged = true; // no level-start sweep for type 2
         return;

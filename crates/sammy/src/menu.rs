@@ -32,8 +32,8 @@ impl Plugin for MenuPlugin {
     }
 }
 
-pub fn in_menu(current: Res<CurrentLevel>) -> bool {
-    current.phase == Phase::Menu
+pub fn in_menu(current: Res<CurrentLevel>, intro: Res<crate::intro::Intro>) -> bool {
+    current.phase == Phase::Menu && !intro.active
 }
 
 /// `InitMainMenu` / `InitMainTitle` entity (interfac.wdl:23-199, :950-1014).
@@ -436,12 +436,13 @@ fn overlay(
 fn show_cursor(
     current: Res<CurrentLevel>,
     state: Res<MenuState>,
+    intro: Res<crate::intro::Intro>,
     ui_scale: Res<UiScale>,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut cursor: Query<(&mut Node, &mut Visibility), With<Cursor>>,
 ) {
     let Ok((win, mut opts)) = windows.single_mut() else { return };
-    let on = current.phase == Phase::Menu || state.modal;
+    let on = (current.phase == Phase::Menu && !intro.active) || state.modal;
     if opts.visible == on {
         opts.visible = !on;
     }
@@ -458,12 +459,18 @@ fn show_cursor(
 
 /// The HUD only shows in a game; the menu's texts only in the menu.
 #[allow(clippy::type_complexity)]
-fn hide_hud(current: Res<CurrentLevel>, mut hud: ResMut<crate::hud::HudVisible>, mut texts: Query<&mut Visibility, Or<(With<VersionText>, With<TooltipTitle>, With<TooltipMessage>)>>) {
+fn hide_hud(
+    current: Res<CurrentLevel>,
+    intro: Res<crate::intro::Intro>,
+    mut hud: ResMut<crate::hud::HudVisible>,
+    mut texts: Query<&mut Visibility, Or<(With<VersionText>, With<TooltipTitle>, With<TooltipMessage>)>>,
+) {
     let show = current.phase != Phase::Menu;
     if hud.0 != show {
         hud.0 = show;
     }
-    if show {
+    // `Texte_Version` only appears once `MainMenuSammy` starts.
+    if show || intro.active {
         for mut v in &mut texts {
             *v = Visibility::Hidden;
         }
