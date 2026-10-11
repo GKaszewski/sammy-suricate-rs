@@ -355,10 +355,23 @@ impl Scene {
             }
             // Batches without lightmap UVs draw with flat light.
             let lit = b.lit && lightmap.is_some();
-            let v: Vec<f32> = (0..b.positions.len()).flat_map(|i| b.positions[i].into_iter().chain(b.uvs[i]).chain(if lit { b.lightmap_uvs[i] } else { [0.0, 0.0] })).collect();
-            let (lo, hi) = b.positions.iter().fold((Vec3::MAX, Vec3::MIN), |(lo, hi), p| (lo.min(Vec3::from(*p)), hi.max(Vec3::from(*p))));
-            let bounds = ((lo + hi) / 2.0, (hi - lo).length() / 2.0);
-            batches.push((Mesh::new(&gfx.gl, Layout::World, &v, &b.indices, false), b.texture.map_or(gfx.white, |t| textures[t]), lit, bounds));
+            let tex = b.texture.map_or(gfx.white, |t| textures[t]);
+            for (indices, bounds) in chunks(&b.positions, &b.indices) {
+                // Each chunk gets its own vertices, numbered from 0.
+                let mut map = HashMap::new();
+                let mut v: Vec<f32> = Vec::new();
+                let local: Vec<u32> = indices
+                    .iter()
+                    .map(|&i| {
+                        *map.entry(i).or_insert_with(|| {
+                            let i = i as usize;
+                            v.extend(b.positions[i].into_iter().chain(b.uvs[i]).chain(if lit { b.lightmap_uvs[i] } else { [0.0, 0.0] }));
+                            (v.len() / Layout::World.floats() - 1) as u32
+                        })
+                    })
+                    .collect();
+                batches.push((Mesh::new(&gfx.gl, Layout::World, &v, &local, false), tex, lit, bounds));
+            }
         }
         let walls = if menu {
             sammy_present::menu::grid_walls(&wmb, sim.world.menu_markers.values())
@@ -580,6 +593,27 @@ enum Pass {
     Sky,
     Opaque,
     Translucent,
+}
+
+/// Level chunk edge (quants): batches are split so a dynamic light only re-shades the
+/// chunks it reaches and off-screen chunks are skipped.
+const CHUNK: f32 = 1024.0;
+
+/// Splits a batch's triangles by the chunk of their centre: each chunk's indices and
+/// bounding sphere.
+fn chunks(positions: &[[f32; 3]], indices: &[u32]) -> Vec<(Vec<u32>, Sphere)> {
+    let mut cells: std::collections::BTreeMap<[i32; 3], Vec<u32>> = Default::default();
+    for tri in indices.chunks_exact(3) {
+        let c = tri.iter().map(|&i| Vec3::from(positions[i as usize])).sum::<Vec3>() / 3.0;
+        cells.entry((c / CHUNK).floor().as_ivec3().to_array()).or_default().extend_from_slice(tri);
+    }
+    cells
+        .into_values()
+        .map(|idx| {
+            let (lo, hi) = idx.iter().fold((Vec3::MAX, Vec3::MIN), |(lo, hi), &i| (lo.min(Vec3::from(positions[i as usize])), hi.max(Vec3::from(positions[i as usize]))));
+            (idx, ((lo + hi) / 2.0, (hi - lo).length() / 2.0))
+        })
+        .collect()
 }
 
 /// A conservative bounding sphere of an entity: its local bounds about its origin,

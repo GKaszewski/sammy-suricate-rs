@@ -18,7 +18,7 @@ const GAMMA_MAX: f32 = 1.370_351; // 2^(1/2.2)
 pub const ALPHA_CUTOFF: f32 = 0.5;
 
 // Shaders are kept cheap for tile-based handheld GPUs: the level is texture × a lightmap
-// with the gamma curve baked in (`pow` only runs where a dynamic light reaches), models
+// with the gamma curve baked in (dynamic lights add in gamma space, in chunks they reach), models
 // are lit per vertex like A4's Gouraud models, and only colour-keyed textures use the
 // `discard` variant (which costs hidden-surface removal).
 
@@ -38,13 +38,12 @@ void main() {
     vec4 c = texture2D(u_tex, v_uv);
     vec3 light = texture2D(u_lightmap, v_uv2).rgb * GAMMA_MAX;
 #ifdef DYNAMIC
-    vec3 lin = pow(light, vec3(2.2));
+    // Added on top of the lightmap in gamma space (as A4's 16-bit renderer did): no pow.
     for (int i = 0; i < 8; i++) {
         if (i >= u_light_count) break;
         vec4 p = u_lights[i * 2];
-        lin += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * 2.0;
+        light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * GAMMA_MAX;
     }
-    light = pow(lin, vec3(1.0 / 2.2));
 #endif
     gl_FragColor = vec4(c.rgb * light, 1.0);
 }
