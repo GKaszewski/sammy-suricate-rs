@@ -85,6 +85,8 @@ pub enum Phase {
     /// Win / lose screens, with elapsed ticks (320 or any key).
     Won(f32),
     Lost(f32),
+    /// The 3D main menu scene (no game running).
+    Menu,
 }
 
 #[derive(Resource, Default)]
@@ -163,7 +165,8 @@ fn load_pending(
     let slot = slot_for(&file);
     // `sun_angle`: pan 135 / tilt 85 in levels (mm1.wdl:618-620), pan 90 in the extro (Extro.wdl:81).
     commands.insert_resource(if slot == Some(EXTRO_SLOT) { crate::shadow::SunAngle(90.0, 85.0) } else { crate::shadow::SunAngle::default() });
-    *current = CurrentLevel { slot, file: file.clone(), phase: Phase::Intro, intro_ticks: 0.0 };
+    let phase = if file.eq_ignore_ascii_case(crate::menu::MENU_FILE) { Phase::Menu } else { Phase::Intro };
+    *current = CurrentLevel { slot, file: file.clone(), phase, intro_ticks: 0.0 };
     let mut spawner = Spawner {
         commands: &mut commands,
         files: &files,
@@ -272,7 +275,7 @@ fn run_flow(
         {
             let won = matches!(current.phase, Phase::Won(_));
             pending.0 = match current.slot {
-                Some(slot) if won => file_for(next_slot(slot)).map(str::to_owned),
+                Some(slot) if won => Some(after_win(slot, &save).to_owned()),
                 _ => Some(current.file.clone()), // lose: same level again
             };
             current.phase
@@ -281,6 +284,20 @@ fn run_flow(
         Phase::Lost(ticks) => Phase::Lost(ticks + t),
         p => p,
     };
+}
+
+/// After a win (mm1.wdl:988-1123): the last level of a world returns to the menu, unless
+/// both 28 and 44 are reached, which starts the extro; otherwise the next level starts.
+fn after_win(slot: u32, save: &crate::save::SaveGame) -> &'static str {
+    use crate::save::UNLOCKED;
+    let both = save.state(28) == UNLOCKED && save.state(44) == UNLOCKED;
+    if matches!(slot, 28 | 44) && both {
+        return file_for(EXTRO_SLOT).unwrap_or(crate::menu::MENU_FILE);
+    }
+    if matches!(slot, 12 | 28 | 44) || slot == EXTRO_SLOT {
+        return crate::menu::MENU_FILE;
+    }
+    file_for(next_slot(slot)).unwrap_or(crate::menu::MENU_FILE)
 }
 
 pub fn playing(current: &CurrentLevel) -> bool {

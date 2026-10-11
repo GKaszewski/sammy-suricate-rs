@@ -222,6 +222,7 @@ pub fn fade_out(
     current: Res<crate::flow::CurrentLevel>,
     mut pending: ResMut<crate::flow::PendingLoad>,
     mut panel: Query<&mut BackgroundColor, With<FadePanel>>,
+    mut save: ResMut<crate::save::SaveGame>,
 ) {
     let Some(mut fin) = fin else { return };
     fin.0 = (fin.0 + 6.0 * time.delta_secs() * super::player::TICKS).min(100.0);
@@ -230,7 +231,10 @@ pub fn fade_out(
     }
     if fin.0 >= 100.0 {
         commands.remove_resource::<FinExtro>();
-        let next = current.slot.map_or(1, crate::flow::next_slot);
-        pending.0 = crate::flow::file_for(next).map(str::to_owned);
+        // `Branch MainMenu` (Extro.wdl:152); Play then resumes level 20 (Extro.wdl:114).
+        let _ = &current;
+        save.last_level = 20;
+        crate::save::write(&save);
+        pending.0 = Some(crate::menu::MENU_FILE.to_owned());
     }
 }

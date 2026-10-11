@@ -41,8 +41,14 @@ pub struct Sfx<'w, 's> {
 impl Sfx<'_, '_> {
     /// `play_sound` / `play_entsound` by WDL sound name.
     pub fn play(&mut self, name: &str) {
+        self.play_vol(name, 100.0);
+    }
+
+    /// `play_sound name, vol` with the WDL volume 0..100.
+    pub fn play_vol(&mut self, name: &str, vol: f32) {
         if let Some(h) = self.sounds.as_ref().and_then(|s| s.0.get(&name.to_lowercase())) {
-            self.commands.spawn((AudioPlayer(h.clone()), PlaybackSettings::DESPAWN));
+            let v = bevy::audio::Volume::Linear((vol / 100.0).clamp(0.0, 2.0));
+            self.commands.spawn((AudioPlayer(h.clone()), PlaybackSettings::DESPAWN.with_volume(v)));
         }
     }
 }

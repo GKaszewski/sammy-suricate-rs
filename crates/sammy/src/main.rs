@@ -13,10 +13,13 @@ mod image;
 mod level;
 mod lights;
 mod material;
+mod menu;
 mod model;
+mod options;
 mod particles;
 mod save;
 mod shadow;
+mod ui_text;
 mod vfs;
 
 use std::path::PathBuf;
@@ -50,7 +53,7 @@ fn main() -> anyhow::Result<()> {
             level: String::new(),
         },
         Some(level) => Args { model: None, level: level.to_owned() },
-        None => Args { model: None, level: "1".into() },
+        None => Args { model: None, level: "menu".into() },
     };
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -58,7 +61,7 @@ fn main() -> anyhow::Result<()> {
             ..default()
         }))
         .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin, particles::ParticlePlugin))
-        .add_plugins(hud3d::Hud3dPlugin)
+        .add_plugins((hud3d::Hud3dPlugin, ui_text::UiTextPlugin, menu::MenuPlugin, options::OptionsPlugin))
         .insert_resource(save::load(&dir))
         .insert_resource(files)
         .insert_resource(args)
@@ -99,6 +102,7 @@ fn setup(
     // A slot number (1-49) or a WMB file name.
     let file = match args.level.parse::<u32>() {
         Ok(slot) => flow::file_for(slot).map(str::to_owned).unwrap_or_else(|| panic!("no level in slot {slot}")),
+        Err(_) if args.level == "menu" => menu::MENU_FILE.to_owned(),
         Err(_) => args.level.clone(),
     };
     pending.0 = Some(file);

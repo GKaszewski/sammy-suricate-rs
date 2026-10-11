@@ -504,10 +504,11 @@ fn fly(
     }
 }
 
-/// Acknex `arc` is horizontal; Bevy wants a vertical FOV for the current aspect.
+/// Acknex `arc` is horizontal for the original 4:3 screens; keep that vertical view and
+/// let wider windows see more at the sides (Hor+).
 fn apply_arc(params: Res<CameraParams>, windows: Query<&Window>, mut q: Query<&mut Projection>) {
     let Ok(w) = windows.single() else { return };
-    let aspect = w.width() / w.height().max(1.0);
+    let aspect = (w.width() / w.height().max(1.0)).min(4.0 / 3.0);
     let fov = 2.0 * ((params.arc.to_radians() / 2.0).tan() / aspect).atan();
     for mut proj in &mut q {
         if let Projection::Perspective(p) = &mut *proj

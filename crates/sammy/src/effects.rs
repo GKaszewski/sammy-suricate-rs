@@ -539,6 +539,20 @@ pub fn take_eye(ps: &mut Particles, pos: [f32; 3]) {
     });
 }
 
+/// `particle_interface1` (particul.wdl:1173-1206): menu icon sparkle.
+pub fn menu_sparkle(ps: &mut Particles, pos: [f32; 3]) {
+    ps.emit(1, pos, |p, rng| {
+        p.vel = [rng.random(4.0) - 2.0, rng.random(4.0) - 2.0, rng.random(4.0) - 2.0];
+        p.size = 200.0 + rng.random(50.0);
+        mapped(p, ["tistar0a.pcx", "tistar2a.pcx", "tistar4a.pcx"][(rng.random(3.0) as usize).min(2)]);
+        p.behaviour = |p, _| {
+            p.size -= 10.0;
+            p.vel[2] += 0.1;
+            p.size > 1.0
+        };
+    });
+}
+
 /// `InitEyeOfTruth` idle (mm1.wdl:5002-5006): p = 1/8 per tick, `RangeLion1/2`.
 pub fn eye_idle(ps: &mut Particles, pos: [f32; 3]) {
     if ps.random(8.0) >= 1.0 {

@@ -307,6 +307,14 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             extro::init_trigger(&action, obj, entity);
             ActionInit { hidden_but_alive: true, ..default() }
         }
+        "initmainmenu" => crate::menu::init_item(obj, false, entity),
+        "initmaintitle" => crate::menu::init_item(obj, true, entity),
+        "postutoriallevels" => crate::menu::init_marker(obj, 2, entity),
+        "posjumplevels" => crate::menu::init_marker(obj, 3, entity),
+        "posthinklevels" => crate::menu::init_marker(obj, 4, entity),
+        "posbonuslevels" => crate::menu::init_marker(obj, 50, entity),
+        // The intro walk (Intro2.wdl:231-456) is not ported yet: hide its actors.
+        "initplayerpatrol" | "initpathplayer" => ActionInit { hidden: true, ..default() },
         "initstartennemy" => {
             enemy::init_start_ennemy(obj, entity);
             ActionInit { hidden_but_alive: true, ..default() }
