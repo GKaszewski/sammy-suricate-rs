@@ -139,14 +139,14 @@ pub(super) fn run_teleports(sim: &mut Sim, dt: Dt) {
             let alpha = tp.state.alpha;
             w.teleporting.remove(&me);
             if let Some(b) = w.bodies.get_mut(&me) {
-                b.alpha = Percent(alpha);
+                b.alpha = alpha;
             }
             return;
         }
     }
     let alpha = tp.state.alpha;
     if let Some(b) = w.bodies.get_mut(&me) {
-        b.alpha = Percent(alpha);
+        b.alpha = alpha;
     }
 }
 

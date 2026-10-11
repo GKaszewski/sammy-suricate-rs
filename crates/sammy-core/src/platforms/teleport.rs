@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::angle::Degrees;
+use crate::percent::Percent;
 use crate::time::Ticks;
 
 /// A teleport pad.
@@ -44,7 +45,7 @@ pub struct Teleporting {
     pub pan: Degrees,
     pub(super) stage: TeleportStage,
     /// Sammy's opacity (percent).
-    pub alpha: f32,
+    pub alpha: Percent,
 }
 
 /// What a teleport step asks of the frontend.
@@ -59,7 +60,7 @@ pub enum TeleportStep {
 
 impl Teleporting {
     pub fn new(pad: &Teleport) -> Self {
-        Self { dest: pad.dest, pan: pad.pan, stage: TeleportStage::Settle(SETTLE_TICKS), alpha: 100.0 }
+        Self { dest: pad.dest, pan: pad.pan, stage: TeleportStage::Settle(SETTLE_TICKS), alpha: Percent::FULL }
     }
 
     pub fn step(&mut self, t: Ticks) -> TeleportStep {
@@ -68,8 +69,8 @@ impl Teleporting {
             TeleportStage::Settle(left) if left - t > Ticks(0.0) => TeleportStage::Settle(left - t),
             TeleportStage::Settle(_) => TeleportStage::FadeOut,
             TeleportStage::FadeOut => {
-                self.alpha = (self.alpha - FADE_SPEED * t).max(0.0);
-                if self.alpha <= 0.0 {
+                self.alpha = (self.alpha - Percent(FADE_SPEED * t)).max(Percent::ZERO);
+                if self.alpha <= Percent::ZERO {
                     out = TeleportStep::Jump;
                     TeleportStage::FadeIn
                 } else {
@@ -77,8 +78,8 @@ impl Teleporting {
                 }
             }
             TeleportStage::FadeIn => {
-                self.alpha = (self.alpha + FADE_SPEED * t).min(100.0);
-                if self.alpha >= 100.0 {
+                self.alpha = (self.alpha + Percent(FADE_SPEED * t)).min(Percent::FULL);
+                if self.alpha >= Percent::FULL {
                     out = TeleportStep::Done;
                 }
                 TeleportStage::FadeIn

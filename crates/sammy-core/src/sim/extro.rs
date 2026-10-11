@@ -120,7 +120,7 @@ pub(super) fn titles(sim: &mut Sim, controls: &Controls, dt: Dt) {
         if let Some(b) = w.bodies.get_mut(id) {
             b.hidden = !shown;
             if shown {
-                b.alpha = Percent(title.alpha);
+                b.alpha = title.alpha;
             }
         }
     }

@@ -1,6 +1,7 @@
 //! Weak doors that wasps break, and their planks.
 
 use super::*;
+use crate::angle::Angles;
 use crate::time::Ticks;
 
 /// A door wasps can break (`InitDoorWeak`).
@@ -53,7 +54,7 @@ impl WeakDoor {
 pub struct Plank {
     pub(super) v: [f32; 3],
     pub(super) spin: [f32; 2],
-    pub angles: [f32; 3],
+    pub angles: Angles,
     pub pos: [f32; 3],
     pub(super) still: Ticks,
 }
@@ -69,7 +70,7 @@ impl Plank {
         Self {
             v: [rng.random(40.0) - 20.0, rng.random(40.0) - 20.0, 30.0],
             spin: [30.0 * rng.random(2.0) - 1.0, 30.0 * rng.random(2.0) - 1.0],
-            angles,
+            angles: Angles::from_array(angles),
             pos,
             still: PLANK_STILL,
         }
@@ -91,10 +92,10 @@ impl Plank {
         let speed = self.v[0].abs() + self.v[1].abs();
         if speed < 2.0 && hit.hit() {
             self.still -= t;
-            self.angles[1] += (90.0 - self.angles[1]) * (0.5 * t).min(1.0);
+            self.angles.tilt.0 += (90.0 - self.angles.tilt.0) * (0.5 * t).min(1.0);
         } else {
-            self.angles[1] += self.spin[0] * t;
-            self.angles[2] += self.spin[1] * t;
+            self.angles.tilt.0 += self.spin[0] * t;
+            self.angles.roll.0 += self.spin[1] * t;
         }
         (sound, self.still <= Ticks(0.0))
     }

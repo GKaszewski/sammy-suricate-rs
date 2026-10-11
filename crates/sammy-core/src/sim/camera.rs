@@ -78,12 +78,10 @@ pub(super) fn sky(sim: &mut Sim, dt: Dt) {
     let ticks = dt.secs * TICKS_PER_SEC;
     let w = &mut sim.world;
     for (id, s) in w.sky_follow.iter_mut() {
-        for (a, spin) in s.angles.iter_mut().zip(s.spin) {
-            *a += spin * ticks;
-        }
+        s.angles.turn(s.spin.map(|spin| spin * ticks));
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = Pos([cam[0], cam[1], cam[2] + s.dz]);
-            b.angles = Angles::from_array(s.angles);
+            b.angles = Angles::from_array(s.angles.to_array());
         }
     }
 }

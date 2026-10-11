@@ -128,7 +128,7 @@ pub(super) fn place(sim: &mut Sim) {
             c.solid = solid;
         }
         let Some(b) = w.bodies.get_mut(id) else { continue };
-        b.alpha = Percent(e.alpha);
+        b.alpha = e.alpha;
         if let Some((pos, angles)) = e.pose(a) {
             b.pos = Pos(pos);
             b.angles = Angles::from_array(angles);

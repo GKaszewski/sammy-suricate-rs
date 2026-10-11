@@ -54,7 +54,7 @@ pub(in crate::sim) fn run_eye(sim: &mut Sim, dt: Dt) {
         }
         let Some(b) = w.bodies.get_mut(id) else { continue };
         if eye.item.spin(t) {
-            b.angles = Angles::from_array(eye.item.angles);
+            b.angles = Angles::from_array(eye.item.angles.to_array());
         }
         let reach = playing && !dead && in_scan(sammy, radius, b.pos.to_array());
         match eye.item.step(game, reach, t) {

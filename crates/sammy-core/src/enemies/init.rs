@@ -1,6 +1,7 @@
 //! Building lions and wasp enemies from level objects.
 
 use super::*;
+use crate::percent::Percent;
 
 /// `InitLion`: returns the enemy and its skin override.
 pub fn init_lion(obj: &Object) -> (Enemy, Option<u32>) {
@@ -96,7 +97,7 @@ pub(super) fn build_enemy(
         dist: f32::MAX,
         floor_entity: None,
         teleport: None,
-        alpha: 100.0,
+        alpha: Percent::FULL,
         passable: false,
         flying_init: false,
         wasp_spec: 0,

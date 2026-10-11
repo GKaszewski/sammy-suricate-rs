@@ -160,7 +160,7 @@ pub(super) fn step(sim: &mut Sim, dt: Dt) {
         if item.bob.moves() && item.code != 0 {
             b.pos = Pos(item.bob.step(dt.t));
             if !item.sprite {
-                b.angles = Angles::from_array(item.bob.angles);
+                b.angles = Angles::from_array(item.bob.angles.to_array());
             }
         }
         let k = if hovered == Some(*id) && item.is_icon() && !item.locked { HOVER_SCALE } else { 1.0 };

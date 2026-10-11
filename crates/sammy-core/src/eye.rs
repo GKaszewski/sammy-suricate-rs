@@ -3,6 +3,7 @@
 
 use formats::wmb::Object;
 
+use crate::angle::Angles;
 use crate::game::GameState;
 use crate::gems::HEIGHT_GEM;
 use crate::time::Ticks;
@@ -34,14 +35,14 @@ pub struct EyePickup {
     away: Option<Ticks>,
     /// Flag3: spins by Skill2-4 per tick.
     spin: Option<[f32; 3]>,
-    pub angles: [f32; 3],
+    pub angles: Angles,
     /// Snaps onto the floor (Flag6 keeps the WED height).
     pub snap: bool,
 }
 
 impl EyePickup {
     pub fn from_object(obj: &Object) -> Self {
-        Self { away: None, spin: obj.flag(3).then_some([obj.skill(2), obj.skill(3), obj.skill(4)]), angles: obj.angles, snap: !obj.flag(6) }
+        Self { away: None, spin: obj.flag(3).then_some([obj.skill(2), obj.skill(3), obj.skill(4)]), angles: Angles::from_array(obj.angles), snap: !obj.flag(6) }
     }
 
     /// Waiting to be taken (shown, sparkling).
@@ -52,9 +53,7 @@ impl EyePickup {
     /// Spins; true if it has a spin.
     pub fn spin(&mut self, t: Ticks) -> bool {
         let Some(spin) = self.spin else { return false };
-        for (a, s) in self.angles.iter_mut().zip(spin) {
-            *a += s * t;
-        }
+        self.angles.turn(spin.map(|s| s * t));
         true
     }
 

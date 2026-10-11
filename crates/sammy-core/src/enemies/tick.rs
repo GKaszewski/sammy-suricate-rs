@@ -1,6 +1,7 @@
 //! One AI tick of one enemy and the frame's inputs and outputs.
 
 use super::*;
+use crate::percent::Percent;
 
 /// Context shared by one enemy's tick.
 pub(super) struct Ctx<'a> {
@@ -79,17 +80,17 @@ pub fn tick(e: &mut Enemy, me: Id, anim: &mut Anim, model: &Mdl, player: Option<
     if let Some((pad, dest, fading_in)) = e.teleport {
         e.etat = 0;
         if !fading_in {
-            e.alpha -= 2.0;
-            if e.alpha <= 0.0 {
-                e.alpha = 0.0;
+            e.alpha -= Percent(2.0);
+            if e.alpha <= Percent::ZERO {
+                e.alpha = Percent::ZERO;
                 e.pos = dest;
                 e.prev_pos = dest;
                 e.teleport = Some((pad, dest, true));
             }
         } else {
-            e.alpha += 1.5;
-            if e.alpha >= 100.0 {
-                e.alpha = 100.0;
+            e.alpha += Percent(1.5);
+            if e.alpha >= Percent::FULL {
+                e.alpha = Percent::FULL;
                 e.teleport = None;
                 if let Some((_, p)) = s.pads.iter_mut().find(|(id, _)| *id == pad) {
                     p.busy = false;

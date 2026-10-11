@@ -1,6 +1,7 @@
 //! Menu items bobbing and flipping.
 
 use super::*;
+use crate::angle::Angles;
 use crate::time::Ticks;
 
 /// Bob and spin of an `InitMainMenu` / `InitMainTitle` item (interfac.wdl:74-198,
@@ -9,7 +10,7 @@ use crate::time::Ticks;
 #[derive(Clone, Debug)]
 pub struct Bob {
     pub(super) org: [f32; 3],
-    pub angles: [f32; 3],
+    pub angles: Angles,
     pub(super) spin: [f32; 3],
     /// int(Skill7): amplitude; frac(Skill7): easing per tick.
     pub(super) hover: f32,
@@ -32,7 +33,7 @@ impl Bob {
         let s7 = obj.skill(7);
         Self {
             org: obj.origin,
-            angles: obj.angles,
+            angles: Angles::from_array(obj.angles),
             spin: [obj.skill(2), obj.skill(3), obj.skill(4)],
             hover: s7.trunc(),
             damping: s7 - s7.trunc(),
@@ -51,9 +52,7 @@ impl Bob {
     /// One frame; returns the position.
     pub fn step(&mut self, t: Ticks) -> [f32; 3] {
         self.z += (self.target - self.z) * self.damping * t;
-        for i in 0..3 {
-            self.angles[i] += self.spin[i] * t;
-        }
+        self.angles.turn(self.spin.map(|s| s * t));
         let threshold = if self.title { TITLE_FLIP } else { FLIP };
         if (self.z - self.target).abs() < threshold {
             self.dir = -self.dir;

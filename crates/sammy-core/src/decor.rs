@@ -4,6 +4,7 @@
 
 use formats::wmb::{Object, entity_flags};
 
+use crate::angle::Angles;
 use crate::level::Presentation;
 
 /// A sky dome kept centred on the camera horizontally at a fixed height offset, spinning
@@ -13,7 +14,7 @@ pub struct SkyFollow {
     /// Z offset from the camera.
     pub dz: f32,
     pub spin: [f32; 3],
-    pub angles: [f32; 3],
+    pub angles: Angles,
 }
 
 /// Default sky height (`-3300 + Skill3 × 10`).
@@ -39,7 +40,7 @@ pub fn init_sky_menu(obj: &mut Object, pov_z: f32) -> (Presentation, Option<SkyF
             if obj.skill(6) != 0.0 { obj.skill(3) } else { 0.0 },
             if obj.skill(7) != 0.0 { obj.skill(4) } else { 0.0 },
         ];
-        follow = Some(SkyFollow { dz: obj.origin[2] - pov_z, spin, angles: obj.angles });
+        follow = Some(SkyFollow { dz: obj.origin[2] - pov_z, spin, angles: Angles::from_array(obj.angles) });
     }
     (Presentation { sky: true, ..Default::default() }, follow)
 }

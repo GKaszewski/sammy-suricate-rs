@@ -4,6 +4,7 @@ use super::*;
 use crate::angle::Degrees;
 use crate::game::Lives;
 use crate::keys::KeyColor;
+use crate::percent::Percent;
 use crate::space::Placement;
 use crate::time::Ticks;
 
@@ -84,13 +85,13 @@ pub struct Dying {
     pub(super) stage: Stage,
     pub(super) ticks: Ticks,
     /// Sammy's opacity in percent (`my.alpha`).
-    pub alpha: f32,
+    pub alpha: Percent,
     pub(super) sound_played: bool,
 }
 
 impl Dying {
     pub fn new(kind: DeathKind) -> Self {
-        Self { kind, stage: Stage::Dying, ticks: Ticks::ZERO, alpha: 100.0, sound_played: false }
+        Self { kind, stage: Stage::Dying, ticks: Ticks::ZERO, alpha: Percent::FULL, sound_played: false }
     }
 
     /// Whether the sequence is fading Sammy (the frontend applies [`Dying::alpha`]).
@@ -151,8 +152,8 @@ impl Dying {
                 }
             }
             Stage::FadeOut => {
-                self.alpha = (self.alpha - FADE_OUT_SPEED * t).max(0.0);
-                if self.alpha <= 0.0 {
+                self.alpha = (self.alpha - Percent(FADE_OUT_SPEED * t)).max(Percent::ZERO);
+                if self.alpha <= Percent::ZERO {
                     self.respawn(game, out);
                 }
             }
@@ -160,15 +161,15 @@ impl Dying {
                 let visible = (self.ticks.get() / blink_period(self.ticks.get())) as i32 % 2 != 0;
                 if self.ticks >= BLINK_TICKS {
                     out.push(DeathEvent::Visible(true));
-                    self.alpha = 0.0;
+                    self.alpha = Percent::ZERO;
                     self.respawn(game, out);
                 } else {
                     out.push(DeathEvent::Visible(visible));
                 }
             }
             Stage::FadeIn => {
-                self.alpha = (self.alpha + FADE_IN_SPEED * t).min(100.0);
-                if self.alpha >= 100.0 {
+                self.alpha = (self.alpha + Percent(FADE_IN_SPEED * t)).min(Percent::FULL);
+                if self.alpha >= Percent::FULL {
                     out.push(DeathEvent::Finished);
                 }
             }

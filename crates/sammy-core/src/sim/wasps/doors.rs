@@ -27,7 +27,7 @@ pub(in crate::sim) fn weak_doors(sim: &mut Sim) {
                     }
                     let plank = Plank::burst(origin, &mut sim.rng);
                     let mut body = Body::new("plank", plank.pos);
-                    body.angles = Angles::from_array(plank.angles);
+                    body.angles = Angles::from_array(plank.angles.to_array());
                     let pid = sim.world.spawn_body(body);
                     sim.world.looks.insert(pid, Look::new(Visual::Model { file: file.into(), skin: 1, overlay: false, frame: Some(0) }));
                     sim.world.planks.insert(pid, plank);
@@ -48,7 +48,7 @@ pub(in crate::sim) fn planks(sim: &mut Sim, dt: Dt) {
         }
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = Pos(p.pos);
-            b.angles = Angles::from_array(p.angles);
+            b.angles = Angles::from_array(p.angles.to_array());
         }
         if done {
             gone.push(*id);

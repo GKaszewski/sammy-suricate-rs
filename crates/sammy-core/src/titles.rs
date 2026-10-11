@@ -4,6 +4,7 @@
 
 use formats::wmb::Object;
 
+use crate::percent::Percent;
 use crate::time::Ticks;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -34,7 +35,7 @@ pub struct Title {
     life: Ticks,
     fade_out: f32,
     /// Opacity in percent.
-    pub alpha: f32,
+    pub alpha: Percent,
     phase: Phase,
 }
 
@@ -49,7 +50,7 @@ impl Title {
             fade_in: or1(obj.skill(5)),
             life: Ticks(or1(obj.skill(6))),
             fade_out: or1(obj.skill(7)),
-            alpha: 0.0,
+            alpha: Percent::ZERO,
             phase: Phase::Waiting,
         }
     }
@@ -61,9 +62,9 @@ impl Title {
             Phase::Waiting if near => Phase::FadeIn,
             Phase::FadeIn | Phase::Near | Phase::Linger(_) if enter => Phase::FadeOut,
             Phase::FadeIn => {
-                self.alpha += self.alpha_max / self.fade_in * t;
-                if self.alpha >= self.alpha_max {
-                    self.alpha = self.alpha_max;
+                self.alpha += Percent(self.alpha_max / self.fade_in * t);
+                if self.alpha >= Percent(self.alpha_max) {
+                    self.alpha = Percent(self.alpha_max);
                     Phase::Near
                 } else {
                     Phase::FadeIn
@@ -73,8 +74,8 @@ impl Title {
             Phase::Linger(left) if left - t <= Ticks::ZERO => Phase::FadeOut,
             Phase::Linger(left) => Phase::Linger(left - t),
             Phase::FadeOut => {
-                self.alpha -= self.alpha_max / self.fade_out * t;
-                if self.alpha <= 0.0 { Phase::Done } else { Phase::FadeOut }
+                self.alpha -= Percent(self.alpha_max / self.fade_out * t);
+                if self.alpha <= Percent::ZERO { Phase::Done } else { Phase::FadeOut }
             }
             other => other,
         };

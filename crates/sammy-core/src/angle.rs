@@ -106,6 +106,13 @@ impl Angles {
         [self.pan.0, self.tilt.0, self.roll.0]
     }
 
+    /// Turns each axis by `by` degrees (pan, tilt, roll).
+    pub fn turn(&mut self, by: [f32; 3]) {
+        self.pan.0 += by[0];
+        self.tilt.0 += by[1];
+        self.roll.0 += by[2];
+    }
+
     /// The facing direction.
     pub fn forward(self) -> [f32; 3] {
         forward(self.pan.0, self.tilt.0)

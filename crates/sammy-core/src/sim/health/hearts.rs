@@ -49,11 +49,9 @@ pub(in crate::sim) fn spin(sim: &mut Sim, dt: Dt) {
             continue;
         }
         if let Some(spin) = c.spin {
-            for (a, s) in c.angles.iter_mut().zip(spin) {
-                *a += s * t;
-            }
+            c.angles.turn(spin.map(|s| s * t));
             if let Some(b) = w.bodies.get_mut(id) {
-                b.angles = Angles::from_array(c.angles);
+                b.angles = Angles::from_array(c.angles.to_array());
             }
         }
     }

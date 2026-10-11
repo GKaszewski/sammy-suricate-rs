@@ -1,6 +1,7 @@
 //! An enemy's state, its patrol nodes and what the frontend reads from it.
 
 use super::*;
+use crate::percent::Percent;
 
 /// Patrol path node (`InitPath`, lion.wdl:774-780).
 #[derive(Clone, Debug)]
@@ -93,7 +94,7 @@ pub struct Enemy {
     /// Teleport pad in use: (pad, destination, fading in?).
     pub(super) teleport: Option<(Id, [f32; 3], bool)>,
     /// Opacity in percent (teleport fades).
-    pub alpha: f32,
+    pub alpha: Percent,
     /// Editor/script `passable` (wasp enemies): never blocks movers.
     pub(super) passable: bool,
     /// Wasp enemy: keeps its editor height instead of snapping to the floor.
