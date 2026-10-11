@@ -135,7 +135,7 @@ pub fn run_exits(
     let Ok(p) = player.single() else { return };
     let t = time.delta_secs() * TICKS;
     for (e, mut exit) in &mut exits {
-        let on = p.grounded && p.ground_entity == Some(e);
+        let on = p.grounded && p.ground() == Some(e);
         if let Some(sound) = exit.step(on, &mut game, t) {
             sfx.play(sound);
         }

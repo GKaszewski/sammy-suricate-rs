@@ -80,7 +80,7 @@ pub fn run_engines(
         .single()
         .ok()
         .filter(|p| p.boosting && p.grounded)
-        .and_then(|p| p.ground_entity)
+        .and_then(|p| p.ground())
         .and_then(|g| platforms.get(g).ok())
         .and_then(|pl| pl.engine);
     for (id, mut e) in &mut engines {
@@ -113,7 +113,7 @@ pub fn ride_platforms(
     if !p.grounded {
         return;
     }
-    let Some(plat) = p.ground_entity.and_then(|g| platforms.get(g).ok()) else { return };
+    let Some(plat) = p.ground().and_then(|g| platforms.get(g).ok()) else { return };
     for i in 0..3 {
         p.pos[i] += plat.delta[i];
     }
@@ -124,7 +124,7 @@ pub fn ride_platforms(
         eng.unlocked = true;
         sfx.play("platform1_son");
         // The platform turns into the plain wooden one (`morph <platfor1.wmb>`).
-        if let Some(g) = p.ground_entity
+        if let Some(g) = p.ground()
             && let Ok((mut brush, children)) = bodies.get_mut(g)
         {
             super::door::morph(&mut commands, g, &mut brush, children, &assets, UNLOCKED_PLATFORM);
@@ -138,7 +138,7 @@ pub fn enter_teleports(mut commands: Commands, mut pads: Query<&mut Teleport>, p
     if !p.grounded || p.vz != 0.0 || p.state == State::Dead {
         return;
     }
-    if let Some(g) = p.ground_entity
+    if let Some(g) = p.ground()
         && let Ok(mut pad) = pads.get_mut(g)
         && !pad.busy
     {

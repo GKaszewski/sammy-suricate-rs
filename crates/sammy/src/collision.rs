@@ -18,6 +18,16 @@ pub struct BoxCollider(pub sammy_core::collision::BoxCollider);
 
 pub type Hit = sammy_core::collision::Hit<Entity>;
 
+/// A Bevy entity as a core [`Id`](sammy_core::id::Id).
+pub fn id(e: Entity) -> sammy_core::id::Id {
+    sammy_core::id::Id(e.to_bits())
+}
+
+/// A core [`Id`](sammy_core::id::Id) back as a Bevy entity.
+pub fn entity(id: sammy_core::id::Id) -> Entity {
+    Entity::from_bits(id.0)
+}
+
 #[derive(SystemParam)]
 pub struct CollisionWorld<'w, 's> {
     level: Option<Res<'w, LevelCollision>>,
@@ -49,5 +59,12 @@ impl CollisionWorld<'_, '_> {
             brushes: self.brushes.iter().map(|(e, b)| (e, &b.0)),
             boxes: self.boxes.iter().map(|(e, b)| (e, &b.0)),
         }
+    }
+}
+
+impl sammy_core::collision::Space for CollisionWorld<'_, '_> {
+    fn trace(&self, hull: Hull, start: [f32; 3], end: [f32; 3], ignore: Option<sammy_core::id::Id>) -> sammy_core::collision::Hit<sammy_core::id::Id> {
+        let hit = CollisionWorld::trace(self, hull, start, end, ignore.map(entity));
+        sammy_core::collision::Hit { trace: hit.trace, entity: hit.entity.map(id) }
     }
 }

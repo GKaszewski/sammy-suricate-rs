@@ -201,12 +201,12 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills2(&sk));
         }
         "initgame5" => {
-            let sk = obj.skills.clone();
-            entity.commands().queue(move |w: &mut World| w.resource_mut::<player::PlayerTuning>().apply_game5(&sk));
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<player::PlayerTuning>().apply_init_game5(&o));
         }
         "initgame4" => {
-            let sk = obj.skills.clone();
-            entity.commands().queue(move |w: &mut World| w.resource_mut::<player::PlayerTuning>().apply_game4(&sk));
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<player::PlayerTuning>().apply_init_game4(&o));
         }
         "initgame6" => {
             let sk = obj.skills.clone();

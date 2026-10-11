@@ -99,7 +99,7 @@ pub fn detect_deaths(
     if matches!(p.state, State::Dead | State::Scripted) {
         return;
     }
-    let (death, lava) = p.ground_entity.filter(|_| p.grounded && p.vz == 0.0).and_then(|g| tiles.get(g).ok()).unwrap_or_default();
+    let (death, lava) = p.ground().filter(|_| p.grounded && p.vz == 0.0).and_then(|g| tiles.get(g).ok()).unwrap_or_default();
     if let Some(kind) = sammy_core::health::check_death(&mut game, death, lava, time.delta_secs() * TICKS) {
         commands.entity(e).insert(Dying(sammy_core::health::Dying::new(kind)));
     }

@@ -20,6 +20,7 @@ pub mod levels;
 pub mod physics;
 pub mod pickups;
 pub mod platforms;
+pub mod player;
 pub mod rng;
 pub mod save;
 pub mod time;
