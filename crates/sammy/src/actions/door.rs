@@ -295,8 +295,12 @@ pub fn run_door_gems(
                 commands.entity(e).despawn();
             }
             Some(false) => {
-                // Back with Sammy: the key is returned (even over a master key, original quirk).
-                game.key = g.color;
+                // Back with Sammy: the key is returned. The original also overwrote a master
+                // key won during the flight (gems.wdl:1200), leaving only a colour the exit
+                // refuses: a soft-lock, so the port keeps the master key.
+                if game.key != MASTER_KEY {
+                    game.key = g.color;
+                }
                 game.key_in_flight = false;
                 commands.entity(e).despawn();
             }

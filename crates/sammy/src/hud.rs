@@ -286,7 +286,8 @@ fn update(
         img.rect = Some(Rect::new(0.0, h, 12.0, h + 48.0));
     }
     // Key gem: slot = key bitmask (255 = master → slot 7); blinks every ~4 ticks once the goal is reached.
-    let slot = if game.goal_reached || game.key == MASTER_KEY { 7 } else { game.key.min(7) };
+    // `WindowKeyPlayer1`: the key actually held (7 = master).
+    let slot = if game.key == MASTER_KEY { 7 } else { game.key.min(7) };
     *blink = if game.goal_reached { *blink + t } else { 0.0 };
     let blink_on = !game.goal_reached || (*blink / 4.0) as i32 % 2 == 0;
     if let Ok((mut img, mut n)) = images.p1().single_mut() {
