@@ -1,15 +1,15 @@
-//! Sammy Suricate on Bevy: the frontend for [`sammy_core`] (rendering, audio, input,
-//! windows, UI) and the feature plugins that drive the core rules each frame.
+//! Sammy Suricate on Bevy: the frontend for [`sammy_core`]. The game runs as one
+//! [`sammy_core::sim::Sim`] ticked each frame ([`game`]); the plugins here show it
+//! (scene, cameras, HUD, menus, effects) and connect it to the machine (input, audio,
+//! windows, files, saves).
 // Bevy systems take their parameters (queries, resources) as arguments.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 pub mod camera;
-pub mod flow;
-pub mod gameplay;
-pub mod level;
+pub mod game;
 pub mod platform;
 pub mod render;
-pub mod schedule;
+pub mod scene;
 pub mod ui;
 
 use std::path::{Path, PathBuf};
@@ -18,7 +18,7 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use bevy::render::view::Tonemapping;
 
-use camera::{CameraPlugin, FlyCamera, FollowState, MainCamera, SkyCamera};
+use camera::{CameraPlugin, FlyCamera, MainCamera, SkyCamera};
 use render::model::{LoadedModel, ModelAnimator, ModelPlugin};
 use platform::vfs::GameFiles;
 
@@ -67,30 +67,29 @@ pub struct SammyPlugins;
 
 impl PluginGroup for SammyPlugins {
     fn build(self) -> bevy::app::PluginGroupBuilder {
-        // Registration order matters to ECS iteration order (and so to some random
-        // rolls) until those systems iterate in a defined order: keep it.
         let g = bevy::app::PluginGroupBuilder::start::<Self>()
-            .add(schedule::SchedulePlugin)
+            .add(platform::input::InputPlugin)
+            .add(platform::display::DisplayPlugin)
+            .add(game::GamePlugin)
+            .add(scene::ScenePlugin)
             .add(CameraPlugin)
             .add(ModelPlugin)
-            .add(gameplay::GameplayPlugin)
             .add(render::material::LevelMaterialPlugin)
-            .add(ui::hud::HudPlugin)
-            .add(flow::FlowPlugin)
-            .add(render::lights::LightsPlugin);
-        #[cfg(feature = "debug-tools")]
-        let g = g.add(platform::debug::DebugPlugin);
-        let g = g
+            .add(render::lights::LightsPlugin)
             .add(render::shadow::ShadowPlugin)
             .add(render::particles::ParticlePlugin)
-            .add(ui::hud3d::Hud3dPlugin)
             .add(ui::text::UiTextPlugin)
+            .add(ui::hud::HudPlugin)
+            .add(ui::hud3d::Hud3dPlugin)
             .add(ui::menu::MenuPlugin)
             .add(ui::options::OptionsPlugin);
+        #[cfg(feature = "intro")]
+        let g = g.add(ui::intro::IntroPlugin);
         #[cfg(feature = "music")]
         let g = g.add(platform::music::MusicPlugin);
-        
-        g.add(ui::intro::IntroPlugin).add(platform::input::InputPlugin).add(platform::display::DisplayPlugin)
+        #[cfg(feature = "debug-tools")]
+        let g = g.add(platform::debug::DebugPlugin);
+        g
     }
 }
 
@@ -98,15 +97,11 @@ impl PluginGroup for SammyPlugins {
 /// Bevy's default plugins (windowed or headless).
 pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
     let files = GameFiles::open(dir)?;
-    // A test may supply its own save (and never touches the player's).
-    if !app.world().contains_resource::<platform::save::SaveGame>() {
-        app.insert_resource(platform::save::load(dir));
+    // A test may supply its own game (and never touches the player's save).
+    if !app.world().contains_resource::<game::Game>() {
+        app.insert_resource(game::new_game(platform::save::load(dir)));
     }
-    app.add_plugins(SammyPlugins)
-        .insert_resource(files)
-        .insert_resource(args)
-        .add_systems(Startup, (platform::audio::load_sounds, setup))
-        .add_systems(Update, (level::face_camera.in_set(schedule::GameSet::FaceCamera), level::animate_sprites));
+    app.add_plugins(SammyPlugins).insert_resource(files).insert_resource(args).add_systems(Startup, (platform::audio::load_sounds, setup));
     Ok(())
 }
 
@@ -125,7 +120,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut pending: ResMut<flow::PendingLoad>,
+    mut game: ResMut<game::Game>,
 ) {
     commands.spawn((DirectionalLight { illuminance: SUN_ILLUMINANCE, ..default() }, Transform::from_translation(SUN_DIRECTION).looking_at(Vec3::ZERO, Vec3::Y)));
     commands.insert_resource(GlobalAmbientLight { brightness: AMBIENT_BRIGHTNESS, ..default() });
@@ -148,11 +143,11 @@ fn setup(
 
     // A slot number (1-49) or a WMB file name.
     let file = match args.level.parse::<u32>() {
-        Ok(slot) => flow::file_for(slot).map(str::to_owned).unwrap_or_else(|| panic!("no level in slot {slot}")),
-        Err(_) if args.level == "menu" => ui::menu::MENU_FILE.to_owned(),
+        Ok(slot) => sammy_core::levels::file_for(slot).map(str::to_owned).unwrap_or_else(|| panic!("no level in slot {slot}")),
+        Err(_) if args.level == "menu" => sammy_core::levels::MENU_FILE.to_owned(),
         Err(_) => args.level.clone(),
     };
-    pending.0 = Some(file);
+    game.request_load(file);
     let cam_tf = Transform::default();
     // Sky domes render first on their own layer; the world camera draws on top
     // with a fresh depth buffer, like Acknex's sky pass.
@@ -160,7 +155,7 @@ fn setup(
         Camera3d::default(),
         Camera { order: 0, ..default() },
         Tonemapping::Linear,
-        level::SKY_LAYER,
+        scene::SKY_LAYER,
         cam_tf,
         SkyCamera,
     ));
@@ -170,7 +165,6 @@ fn setup(
         Tonemapping::Linear,
         cam_tf,
         FlyCamera::default(),
-        FollowState::default(),
         MainCamera,
     ));
     // `Near` entities (help signs) are drawn last over a fresh depth buffer.
@@ -178,7 +172,7 @@ fn setup(
         Camera3d::default(),
         Camera { order: 2, clear_color: ClearColorConfig::None, ..default() },
         Tonemapping::Linear,
-        level::NEAR_LAYER,
+        scene::NEAR_LAYER,
         IsDefaultUiCamera,
         cam_tf,
         SkyCamera,

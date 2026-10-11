@@ -9,14 +9,6 @@ pub struct MainCamera;
 #[derive(Component)]
 pub struct SkyCamera;
 
-/// A camera zone ([`sammy_core::camera::CameraZone`]).
-#[derive(Component, Deref, DerefMut)]
-pub struct CameraZone(pub(crate) sammy_core::camera::CameraZone);
-
-/// Follow-camera state ([`sammy_core::camera::FollowState`]).
-#[derive(Component, Default, Deref, DerefMut)]
-pub struct FollowState(pub sammy_core::camera::FollowState);
-
 #[derive(Component, Default)]
 pub struct FlyCamera {
     pub yaw: f32,

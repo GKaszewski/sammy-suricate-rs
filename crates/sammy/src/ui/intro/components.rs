@@ -1,14 +1,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-/// The scripted Sammy ([`sammy_core::intro::Walker`]).
-#[derive(Component, Deref, DerefMut)]
-pub struct Walker(pub sammy_core::intro::Walker);
-
-/// A path node of the intro walk ([`sammy_core::intro::PathNode`]).
-#[derive(Component, Deref)]
-pub struct PathNode(pub(crate) sammy_core::intro::PathNode);
-
+/// The logo shown (1 A5 sprite, 2 publisher, 3 Suricate).
 #[derive(Component)]
 pub(crate) struct LogoView(pub(crate) u8);
 

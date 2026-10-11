@@ -4,8 +4,9 @@
 
 use bevy::prelude::*;
 
-use crate::gameplay::player::TICKS;
-use crate::gameplay::state::{BOOST_MAX, GameState, MASTER_KEY, MAX_HEARTS, MAX_LIVES};
+use crate::game::Game;
+use sammy_core::game::{BOOST_MAX, MASTER_KEY, MAX_HEARTS, MAX_LIVES};
+use sammy_core::time::TICKS_PER_SEC as TICKS;
 use crate::platform::vfs::GameFiles;
 
 pub struct HudPlugin;
@@ -289,7 +290,7 @@ fn setup(mut commands: Commands, files: Res<GameFiles>, mut images: ResMut<Asset
 #[allow(clippy::type_complexity)]
 fn update(
     time: Res<Time>,
-    mut game: ResMut<GameState>,
+    sim: Res<Game>,
     visible: Res<HudVisible>,
     fonts: Option<Res<HudFonts>>,
     mut blink: Local<f32>,
@@ -313,7 +314,7 @@ fn update(
     )>,
 ) {
     let t = time.delta_secs() * TICKS;
-    game.warn_score = (game.warn_score - t).max(0.0);
+    let game = &sim.game;
     if let Ok(mut v) = root.single_mut() {
         *v = if visible.0 { Visibility::Inherited } else { Visibility::Hidden };
     }

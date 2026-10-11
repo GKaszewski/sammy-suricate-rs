@@ -6,15 +6,11 @@ use std::path::{Path, PathBuf};
 use bevy::prelude::*;
 
 pub use sammy_core::levels::NBR_LEVELS;
-pub use sammy_core::save::{DisplayMode, DisplaySettings, LevelState};
-
-/// [`sammy_core::save::SaveGame`] as a resource.
-#[derive(Resource, Default, Clone, Debug, Deref, DerefMut)]
-pub struct SaveGame(pub sammy_core::save::SaveGame);
+pub use sammy_core::save::{DisplayMode, DisplaySettings, LevelState, SaveGame};
 
 /// The original game's saves in `dir`.
-fn import(dir: &Path) -> Option<sammy_core::save::SaveGame> {
-    sammy_core::save::SaveGame::import(|name| {
+fn import(dir: &Path) -> Option<SaveGame> {
+    SaveGame::import(|name| {
         let entry = std::fs::read_dir(dir).ok()?.flatten().find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(name))?;
         std::fs::read(entry.path()).ok()
     })
@@ -36,10 +32,10 @@ pub fn save_path() -> PathBuf {
 pub fn load(game_dir: &Path) -> SaveGame {
     let path = save_path();
     if let Ok(text) = std::fs::read_to_string(&path) {
-        match serde_json::from_str::<sammy_core::save::SaveGame>(&text) {
+        match serde_json::from_str::<SaveGame>(&text) {
             Ok(mut s) => {
                 s.fix_lengths();
-                return SaveGame(s);
+                return s;
             }
             Err(e) => warn!("ignoring unreadable save {}: {e}", path.display()),
         }
@@ -47,7 +43,6 @@ pub fn load(game_dir: &Path) -> SaveGame {
     match import(game_dir) {
         Some(s) => {
             info!("imported the original game's saves from {}", game_dir.display());
-            let s = SaveGame(s);
             write(&s);
             s
         }
@@ -64,7 +59,7 @@ pub fn write(save: &SaveGame) {
     let result = path
         .parent()
         .map_or(Ok(()), std::fs::create_dir_all)
-        .and_then(|_| std::fs::write(&path, serde_json::to_string_pretty(&save.0).unwrap_or_default()));
+        .and_then(|_| std::fs::write(&path, serde_json::to_string_pretty(save).unwrap_or_default()));
     if let Err(e) = result {
         warn!("could not write {}: {e}", path.display());
     }

@@ -15,7 +15,7 @@ pub struct ModelPlugin;
 
 impl Plugin for ModelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, animate_models.in_set(crate::schedule::GameSet::AnimateModels));
+        app.add_systems(Update, animate_models);
     }
 }
 
@@ -99,6 +99,15 @@ impl LoadedModel {
             .with_inserted_indices(Indices::U32(self.vb.indices.clone()))
     }
 
+    /// Vertex positions and normals blended between frames `a` and `b` by `f`.
+    pub fn blend(&self, (a, b, f): (usize, usize, f32)) -> (Vec<[f32; 3]>, Vec<[f32; 3]>) {
+        let last = self.frames.len() - 1;
+        let (pa, na) = &self.frames[a.min(last)];
+        let (pb, nb) = &self.frames[b.min(last)];
+        let lerp = |x: &[[f32; 3]], y: &[[f32; 3]]| -> Vec<[f32; 3]> { x.iter().zip(y).map(|(x, y)| Vec3::from(*x).lerp(Vec3::from(*y), f).to_array()).collect() };
+        (lerp(pa, pb), lerp(na, nb))
+    }
+
     pub fn animation(&self, name: &str) -> Vec<usize> {
         self.scenes.frames(name)
     }
@@ -122,14 +131,10 @@ impl ModelAnimator {
 
 pub fn animate_models(time: Res<Time>, mut meshes: ResMut<Assets<Mesh>>, mut q: Query<(&mut ModelAnimator, &Mesh3d)>) {
     for (mut anim, mesh) in &mut q {
-        let Some((a, b, f)) = anim.anim.advance(time.delta_secs()) else { continue };
+        let Some(blend) = anim.anim.advance(time.delta_secs()) else { continue };
         let Some(mut mesh) = meshes.get_mut(&mesh.0) else { continue };
-        let (pa, na) = &anim.model.frames[a];
-        let (pb, nb) = &anim.model.frames[b];
-        let lerp = |x: &[[f32; 3]], y: &[[f32; 3]]| -> Vec<[f32; 3]> {
-            x.iter().zip(y).map(|(x, y)| Vec3::from(*x).lerp(Vec3::from(*y), f).to_array()).collect()
-        };
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, VertexAttributeValues::Float32x3(lerp(pa, pb)));
-        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, VertexAttributeValues::Float32x3(lerp(na, nb)));
+        let (p, n) = anim.model.blend(blend);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, VertexAttributeValues::Float32x3(p));
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, VertexAttributeValues::Float32x3(n));
     }
 }

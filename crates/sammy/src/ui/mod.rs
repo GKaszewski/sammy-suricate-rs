@@ -3,6 +3,7 @@
 
 pub mod hud;
 pub mod hud3d;
+#[cfg(feature = "intro")]
 pub mod intro;
 pub mod menu;
 pub mod options;

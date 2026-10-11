@@ -152,7 +152,7 @@ fn init_star(p: &mut Particle, rng: &mut ParticleRng, color: u32) {
 
 /// `Particle_GemKeys` (§3.2): a flying gem's trail, 3 stars of its colour (255 = one of each).
 pub fn gem_trail(ps: &mut Particles, pos: [f32; 3], color: u32) {
-    if color == crate::gameplay::state::MASTER_KEY {
+    if color == sammy_core::keys::MASTER_KEY {
         for c in 1..=GEM_COLORS {
             ps.emit(1, pos, |p, rng| init_star(p, rng, c));
         }
@@ -640,56 +640,62 @@ pub fn eye_idle(ps: &mut Particles, pos: [f32; 3]) {
     });
 }
 
-/// Runs `f` on the particle list at the end of the frame's command flush (for systems
-/// that only have `Commands`).
-pub fn queue(commands: &mut bevy::prelude::Commands, f: impl FnOnce(&mut Particles) + Send + 'static) {
-    commands.queue(move |w: &mut bevy::prelude::World| f(&mut w.resource_mut::<Particles>()));
-}
-
-// ---------------------------------------------------------------- per-tick emitters
+// ---------------------------------------------------------------- the game's effects
 
 use bevy::prelude::*;
+use sammy_core::player::State;
+use sammy_core::sim::{Effect, Event};
 
-use crate::gameplay::enemies::Enemy;
-use crate::gameplay::gems::{DoorGem, FlyingGem};
-use crate::gameplay::health::{BoostPickup, Checkpoint, DeathTile, LavaTile};
-use crate::gameplay::pickups::{Collected, KeyGem, PickupPos};
-use crate::gameplay::platforms::{Teleport, Teleporting};
-use crate::gameplay::player::{Player, State};
-use crate::gameplay::wasps::{HiveWasp, Wasp};
-use crate::level::LevelObject;
+use crate::game::{Game, GameEvent};
 
 /// Idle emitters further than this from the camera target are skipped (the original
 /// relied on its frame budget instead).
 const IDLE_RANGE: f32 = 3000.0;
+/// Sammy's teleport sparkle is this high above his origin.
+const TELEPORT_SPARKLE_HEIGHT: f32 = 20.0;
 
-#[allow(clippy::type_complexity)]
-pub fn emit_trails(
-    mut ps: ResMut<Particles>,
-    pov: Res<crate::gameplay::extro::Pov>,
-    wasps: Query<&Wasp>,
-    hive_wasps: Query<&HiveWasp>,
-    enemies: Query<&Enemy>,
-    gems: Query<(&Transform, &KeyGem), Or<(With<FlyingGem>,)>>,
-    door_gems: Query<(&Transform, &DoorGem)>,
-    (tiles, pads, checkpoints, boosts): (
-        Query<(&Transform, &LevelObject, Has<LavaTile>), Or<(With<DeathTile>, With<LavaTile>)>>,
-        Query<(&Transform, &LevelObject), With<Teleport>>,
-        Query<&PickupPos, (With<Checkpoint>, Without<Collected>)>,
-        Query<(&PickupPos, &Visibility), With<BoostPickup>>,
-    ),
-) {
-    let near = |p: [f32; 3]| (0..3).map(|i| (p[i] - pov.pos[i]).powi(2)).sum::<f32>() < IDLE_RANGE * IDLE_RANGE;
-    for _ in 0..ps.ticks {
-        for w in &wasps {
-            wasp_trail(&mut ps, w.pos, w.kind, 1.0);
+/// The game's one-shot effects; a new level starts without particles.
+pub fn play_effects(mut ps: ResMut<Particles>, mut events: MessageReader<GameEvent>) {
+    for GameEvent(e) in events.read() {
+        match *e {
+            Event::Loaded { .. } => ps.list.clear(),
+            Event::Effect(fx) => match fx {
+                Effect::GemExplode { at, color } => gem_explode(&mut ps, at, color),
+                Effect::DiamondBurst { at } => diamond_burst(&mut ps, at),
+                Effect::GemCatch { at, color } => gem_catch(&mut ps, at, color),
+                Effect::GemMix { at, colors } => {
+                    for c in colors {
+                        gem_mix(&mut ps, at, c);
+                    }
+                }
+                Effect::SmallHeart { at } => small_heart(&mut ps, at),
+                Effect::GetLife { at, delay } => get_life(&mut ps, at, delay),
+                Effect::WaspExplode { at, kind, spread } => wasp_explode(&mut ps, at, kind, spread),
+                Effect::HiveBurst { at } => hive_burst(&mut ps, at),
+                Effect::HitStars { at, count } => hit_stars(&mut ps, at, count),
+                Effect::TakeEye { at } => take_eye(&mut ps, at),
+            },
+            _ => {}
         }
-        for w in &hive_wasps {
-            if let Some((kind, pos)) = w.trail() {
-                hive_wasp_trail(&mut ps, pos, kind);
+    }
+}
+
+/// Per-tick emitters on the game's entities (docs/particles.md §3).
+pub fn emit_trails(mut ps: ResMut<Particles>, game: Res<Game>) {
+    let w = &game.world;
+    let pov = game.pov.pos;
+    let near = |p: [f32; 3]| (0..3).map(|i| (p[i] - pov[i]).powi(2)).sum::<f32>() < IDLE_RANGE * IDLE_RANGE;
+    let pos = |id: &sammy_core::id::Id| w.bodies.get(id).map(|b| b.pos);
+    for _ in 0..ps.ticks {
+        for wasp in w.wasps.values() {
+            wasp_trail(&mut ps, wasp.pos, wasp.kind, 1.0);
+        }
+        for hw in w.hive_wasps.values() {
+            if let Some((kind, p)) = hw.trail() {
+                hive_wasp_trail(&mut ps, p, kind);
             }
         }
-        for e in &enemies {
+        for e in w.enemies.values() {
             if e.gone() {
                 continue;
             }
@@ -701,16 +707,20 @@ pub fn emit_trails(
                 wasp_trail(&mut ps, e.pos, e.wasp_spec - WASP_SPEC_BASE, 1.0);
             }
         }
-        for (tf, gem) in &gems {
-            gem_trail(&mut ps, crate::render::coords::native(tf.translation), gem.color);
+        for id in w.flying_gems.keys() {
+            if let (Some(at), Some(color)) = (pos(id), w.key_gems.get(id)) {
+                gem_trail(&mut ps, at, *color);
+            }
         }
-        for (tf, gem) in &door_gems {
-            gem_trail(&mut ps, crate::render::coords::native(tf.translation), gem.color);
+        for (id, g) in &w.door_gems {
+            if let Some(at) = pos(id) {
+                gem_trail(&mut ps, at, g.gem.color);
+            }
         }
         // Death tiles every 2 ticks, lava 1/9 of that (mm1.wdl:4033,4878); Flag3 = no smoke.
-        for (tf, obj, lava) in &tiles {
-            let at = crate::render::coords::native(tf.translation);
-            if obj.0.flags & FLAG3 != 0 || !near(at) {
+        for (id, lava) in w.death_tiles.iter().map(|id| (id, false)).chain(w.lava_tiles.iter().map(|id| (id, true))) {
+            let (Some(at), Some(obj)) = (pos(id), w.objects.get(id)) else { continue };
+            if obj.flags & FLAG3 != 0 || !near(at) {
                 continue;
             }
             if ps.random(if lava { 18.0 } else { 2.0 }) < 1.0 {
@@ -718,35 +728,50 @@ pub fn emit_trails(
             }
         }
         // Idle teleport pads (Flag3 != 1), 1/4 per tick (mm1.wdl:4109).
-        for (tf, obj) in &pads {
-            let at = crate::render::coords::native(tf.translation);
-            if obj.0.flags & FLAG3 == 0 && near(at) && ps.random(4.0) < 1.0 {
+        for id in w.teleports.keys() {
+            let (Some(at), Some(obj)) = (pos(id), w.objects.get(id)) else { continue };
+            if obj.flags & FLAG3 == 0 && near(at) && ps.random(4.0) < 1.0 {
                 teleport_sparkle(&mut ps, at, false, 1);
             }
         }
-        for pos in &checkpoints {
-            if near(pos.0) && ps.random(4.0) < 1.0 {
-                restart_sparkle(&mut ps, pos.0);
+        for id in w.checkpoints.keys().filter(|id| !w.collected.contains(id)) {
+            if let Some(at) = pos(id)
+                && near(at)
+                && ps.random(4.0) < 1.0
+            {
+                restart_sparkle(&mut ps, at);
             }
         }
         // Boost arrows: 2 stars at mesh vertices 3 and 11, 1/6 per tick (mm1.wdl:4360-4362).
-        for (pos, vis) in &boosts {
-            if *vis != Visibility::Hidden && near(pos.0) && ps.random(6.0) < 1.0 {
+        for id in w.boosts.keys() {
+            let Some(b) = w.bodies.get(id) else { continue };
+            if !b.hidden && near(b.pos) && ps.random(6.0) < 1.0 {
                 for side in [-1.0, 1.0] {
-                    let at = [pos.0[0] + side * 12.0, pos.0[1] + ps.random(16.0) - 8.0, pos.0[2] + 8.0];
+                    let at = [b.pos[0] + side * 12.0, b.pos[1] + ps.random(16.0) - 8.0, b.pos[2] + 8.0];
                     boost_sparkle(&mut ps, at);
                 }
+            }
+        }
+        // The Eye of Truth sparkles while it waits.
+        for (id, eye) in &w.eyes {
+            if eye.item.idle()
+                && !w.snap_to_ground.contains(id)
+                && let Some(at) = pos(id)
+            {
+                eye_idle(&mut ps, at);
             }
         }
     }
 }
 
 /// Sammy's dust, boost stars and teleport sparkle (docs/particles.md §3.5).
-pub fn emit_sammy(mut ps: ResMut<Particles>, player: Query<(&Player, Has<Teleporting>)>, mut prev: Local<Option<(State, bool)>>) {
-    let Ok((p, teleporting)) = player.single() else { return };
+pub fn emit_sammy(mut ps: ResMut<Particles>, game: Res<Game>, mut prev: Local<Option<(State, bool)>>) {
+    let Some((me, p)) = game.world.player() else { return };
+    let teleporting = game.world.teleporting.contains_key(&me);
     let ground = [p.pos[0], p.pos[1], p.floor];
     let fwd = (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1]).sqrt();
     let (was, was_tp) = prev.unwrap_or((p.state, teleporting));
+    let above = [p.pos[0], p.pos[1], p.pos[2] + TELEPORT_SPARKLE_HEIGHT];
     // Landing: one big puff on a hard landing, a smaller one landing on the move.
     if p.state == State::Land && was != State::Land {
         if p.hard_landing {
@@ -756,7 +781,7 @@ pub fn emit_sammy(mut ps: ResMut<Particles>, player: Query<(&Player, Has<Telepor
         }
     }
     if teleporting && !was_tp {
-        teleport_sparkle(&mut ps, [p.pos[0], p.pos[1], p.pos[2] + 20.0], true, 5);
+        teleport_sparkle(&mut ps, above, true, 5);
     }
     *prev = Some((p.state, teleporting));
     for _ in 0..ps.ticks {
@@ -778,7 +803,7 @@ pub fn emit_sammy(mut ps: ResMut<Particles>, player: Query<(&Player, Has<Telepor
             }
         }
         if teleporting {
-            teleport_sparkle(&mut ps, [p.pos[0], p.pos[1], p.pos[2] + 20.0], true, 2);
+            teleport_sparkle(&mut ps, above, true, 2);
         }
     }
 }
@@ -793,7 +818,7 @@ mod tests {
         let o = [0.0; 3];
         let effects: Vec<(&str, Box<dyn Fn(&mut Particles)>)> = vec![
             ("gem_trail", Box::new(move |ps| gem_trail(ps, o, 3))),
-            ("gem_trail_master", Box::new(move |ps| gem_trail(ps, o, crate::gameplay::state::MASTER_KEY))),
+            ("gem_trail_master", Box::new(move |ps| gem_trail(ps, o, sammy_core::keys::MASTER_KEY))),
             ("gem_explode", Box::new(move |ps| gem_explode(ps, o, 4))),
             ("gem_catch", Box::new(move |ps| gem_catch(ps, o, 1))),
             ("gem_mix", Box::new(move |ps| gem_mix(ps, o, 2))),

@@ -4,7 +4,7 @@
 //! `sun_angle` (pan 135, tilt 85 in levels, mm1.wdl:618-620; pan 90 in the extro,
 //! Extro.wdl:81). The exact A4 projection and darkness are [U]; 50 % black is used.
 
-use crate::gameplay::collision::Hull;
+use sammy_core::collision::Hull;
 use bevy::asset::embedded_asset;
 use bevy::light::NotShadowCaster;
 use bevy::mesh::MeshVertexBufferLayoutRef;
@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, CompareFunction, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError};
 use bevy::shader::ShaderRef;
 
-use crate::gameplay::collision::CollisionWorld;
+use crate::game::{Game, GameEvent, GameSystems};
 use crate::render::coords;
 
 pub struct ShadowPlugin;
@@ -23,8 +23,7 @@ impl Plugin for ShadowPlugin {
         embedded_asset!(app, "shadow.wesl");
         app.add_plugins(MaterialPlugin::<ShadowMaterial>::default())
             .init_resource::<SunAngle>()
-            .add_systems(Update, (spin_sun, attach_shadows).chain().in_set(crate::schedule::GameSet::Flow))
-            .add_systems(Update, update_shadows.in_set(crate::schedule::GameSet::Shadows));
+            .add_systems(Update, (sun_for_level, spin_sun, attach_shadows, update_shadows).chain().after(GameSystems::Tick));
     }
 }
 
@@ -116,22 +115,32 @@ fn attach_shadows(
 #[derive(Component)]
 pub struct ModelShadowLink(#[allow(dead_code)] Entity);
 
+/// Extro `sun_angle` (pan 90, Extro.wdl:81; levels use the default).
+const EXTRO_SUN: SunAngle = SunAngle(90.0, DEFAULT_SUN_TILT);
+
+/// `sun_angle` per level: pan 135 / tilt 85 (mm1.wdl:618-620), pan 90 in the extro.
+fn sun_for_level(game: Res<Game>, mut events: MessageReader<GameEvent>, mut sun: ResMut<SunAngle>) {
+    if events.read().any(|e| matches!(e.0, sammy_core::sim::Event::Loaded { .. })) {
+        *sun = if game.flow.slot == Some(sammy_core::levels::EXTRO_SLOT) { EXTRO_SUN } else { SunAngle::default() };
+    }
+}
+
 /// Win/lose screen: `Sun_Angle.pan += 10 * time` (mm1.wdl:966), so the shadow circles Sammy.
-fn spin_sun(time: Res<Time>, current: Res<crate::flow::CurrentLevel>, mut sun: ResMut<SunAngle>) {
-    use crate::flow::Phase;
-    if matches!(current.phase, Phase::Won(_) | Phase::Lost(_)) {
-        sun.0 += SUN_SPIN_RATE * time.delta_secs() * crate::gameplay::player::TICKS;
+fn spin_sun(time: Res<Time>, game: Res<Game>, mut sun: ResMut<SunAngle>) {
+    use sammy_core::flow::Phase;
+    if matches!(game.flow.phase, Phase::Won(_) | Phase::Lost(_)) {
+        sun.0 += SUN_SPIN_RATE * time.delta_secs() * sammy_core::time::TICKS_PER_SEC;
     }
 }
 
 fn update_shadows(
-    world: CollisionWorld,
+    game: Res<Game>,
     sun: Res<SunAngle>,
     mut materials: ResMut<Assets<ShadowMaterial>>,
     owners: Query<&GlobalTransform>,
     q: Query<(&ModelShadow, &MeshMaterial3d<ShadowMaterial>)>,
 ) {
-    if !world.ready() {
+    if game.level.is_none() {
         return;
     }
     let (p, t) = (sun.0.to_radians(), sun.1.to_radians());
@@ -141,7 +150,7 @@ fn update_shadows(
     for (s, mat) in &q {
         let Ok(gt) = owners.get(s.owner) else { continue };
         let o = coords::native(gt.translation());
-        let tr = world.trace_static(Hull::Point, [o[0], o[1], o[2] + FLOOR_PROBE_UP], [o[0], o[1], o[2] - FLOOR_PROBE_DOWN]).trace;
+        let tr = game.trace_static(Hull::Point, [o[0], o[1], o[2] + FLOOR_PROBE_UP], [o[0], o[1], o[2] - FLOOR_PROBE_DOWN]).trace;
         let floor = if tr.hit() && !tr.start_solid { tr.end[2] } else { o[2] - FLOOR_PROBE_DOWN };
         if let Some(mut m) = materials.get_mut(&mat.0) {
             m.params.sun = dir.extend((floor + FLOOR_LIFT) / coords::QUANTS_PER_UNIT);

@@ -1,16 +1,15 @@
 #[allow(unused_imports)]
 use super::*;
 
-/// What the menu shows and what is under the cursor.
+/// The menu's interaction state (the view and the hovered item are the game's).
 #[derive(Resource, Default)]
 pub struct MenuState {
-    /// 0 = root view, else the code of the level grid shown (2, 3, 4, 50).
-    pub view: u32,
-    pub(crate) hovered: Option<Entity>,
     /// `Texte_Version` is hidden by the first click (interfac.wdl:442).
     pub(crate) clicked_once: bool,
     /// A modal overlay (options, Yes/No) owns the mouse.
     pub modal: bool,
+    /// Sparkle orbit angles of the hovered icon.
+    pub(crate) sparkle: [f32; 2],
 }
 
 /// A click on a menu item (`ChoixMenu`).

@@ -33,7 +33,7 @@ pub use assets::{Assets, Files, Model};
 pub use camera::Camera;
 pub use events::{Effect, Event};
 pub use intro::IntroState;
-pub use menu::{MenuItem, MenuMarker, MenuState};
+pub use menu::{MENU_ARC, MenuItem, MenuMarker, MenuState};
 pub use world::{Animator, Body, Light, Look, SpriteAnim, SpriteFacing, Table, Tag, Visual, World};
 
 use crate::collision::{BoxCollider, Brush, Hit, Hull};
@@ -180,6 +180,12 @@ impl Sim {
         self.flow.playing()
     }
 
+    /// Sweeps `hull` through the level and its map entities (not models), e.g. to find
+    /// the floor under something.
+    pub fn trace_static(&self, hull: Hull, start: [f32; 3], end: [f32; 3]) -> Hit<Id> {
+        crate::collision::Space::trace_static(&Space::new(&self.level, &self.world), hull, start, end)
+    }
+
     /// Takes this frame's events.
     pub fn drain_events(&mut self) -> std::vec::Drain<'_, Event> {
         self.events.drain(..)
@@ -271,6 +277,8 @@ impl Sim {
         health::run_death(self, dt);
         extro::titles(self, &controls, dt);
         self.fade_lights(dt);
+        // `WarnScoreGoal`: the score panel's blink runs out.
+        self.game.warn_score = (self.game.warn_score - dt.t).max(0.0);
 
         // After the frame: the camera, then what hangs on it.
         camera::follow(self, dt);

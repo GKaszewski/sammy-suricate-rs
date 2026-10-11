@@ -44,3 +44,9 @@ impl GameFiles {
     }
 
 }
+
+impl sammy_core::sim::Files for GameFiles {
+    fn read(&self, name: &str) -> Option<Vec<u8>> {
+        GameFiles::read(self, name).ok()
+    }
+}

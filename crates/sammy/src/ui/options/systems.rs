@@ -104,20 +104,30 @@ const FRAME_RGB: (f32, f32, f32) = (1.0, 0.85, 0.2);
 const FRAME_FILL_ALPHA: f32 = 0.15;
 const FRAME_PAD: f32 = 6.0;
 
+/// The menu's Options and Quit items.
+pub(crate) fn menu_requests(mut events: MessageReader<crate::game::GameEvent>, mut req: ResMut<OptionsRequest>) {
+    for crate::game::GameEvent(e) in events.read() {
+        match e {
+            sammy_core::sim::Event::OpenOptions => req.open = Some(OptionsMode::Menu),
+            sammy_core::sim::Event::Quit => req.quit = true,
+            _ => {}
+        }
+    }
+}
+
 pub(crate) fn open_on_esc(
     controls: Res<crate::platform::input::Controls>,
-    current: Res<CurrentLevel>,
+    game: Res<Game>,
     state: Res<OptionsState>,
     mut req: ResMut<OptionsRequest>,
-    intro: Res<crate::ui::intro::Intro>,
 ) {
     // Esc skips the intro instead (and its release is awaited, Intro2.wdl:209).
-    if !controls.options || state.open() || intro.active {
+    if !controls.options || state.open() || game.intro.active {
         return;
     }
-    req.open = match current.phase {
+    req.open = match game.flow.phase {
         Phase::Menu => Some(OptionsMode::Menu),
-        Phase::Playing if current.slot == Some(crate::flow::EXTRO_SLOT) => Some(OptionsMode::Extro),
+        Phase::Playing if game.flow.slot == Some(sammy_core::levels::EXTRO_SLOT) => Some(OptionsMode::Extro),
         Phase::Playing => Some(OptionsMode::Level),
         _ => None,
     };
@@ -322,7 +332,7 @@ pub(crate) fn buttons(
     mut sfx: crate::platform::audio::Sfx,
     mut time: ResMut<Time<Virtual>>,
     roots: Query<Entity, With<OptionsRoot>>,
-    (mut save, mut game, current, mut pending, mut exit): (ResMut<SaveGame>, ResMut<GameState>, Res<CurrentLevel>, ResMut<PendingLoad>, MessageWriter<AppExit>),
+    (mut game, mut exit): (ResMut<Game>, MessageWriter<AppExit>),
 ) {
     // Hover shows the "2" image (the selected tab / device stays lit).
     let mut fired = None;
@@ -362,12 +372,7 @@ pub(crate) fn buttons(
             close(&mut commands, &mut state, &mut time, &roots);
             // In a game: abandon it (stored like a lost game, no lose screen) and go to the menu.
             if mode != Some(OptionsMode::Menu) {
-                if let Some(slot) = current.slot {
-                    let checkpoint = game.checkpoint.then_some(game.start).flatten().map(|(p, _)| p);
-                    save.record_game(slot, game.score, checkpoint, false, None);
-                    crate::platform::save::write(&save);
-                }
-                pending.0 = Some(crate::ui::menu::MENU_FILE.to_owned());
+                game.abandon();
             }
         }
         Action::Quit => {
@@ -375,8 +380,8 @@ pub(crate) fn buttons(
             state.dialog = Some(Question::Quit);
         }
         Action::Restart => state.dialog = Some(Question::Restart),
-        Action::Yes => answer(true, &mut commands, &mut state, &mut time, &roots, &save, &mut game, &mut exit),
-        Action::No => answer(false, &mut commands, &mut state, &mut time, &roots, &save, &mut game, &mut exit),
+        Action::Yes => answer(true, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit),
+        Action::No => answer(false, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit),
     }
 }
 
@@ -387,8 +392,7 @@ pub(crate) fn answer(
     state: &mut OptionsState,
     time: &mut Time<Virtual>,
     roots: &Query<Entity, With<OptionsRoot>>,
-    save: &SaveGame,
-    game: &mut GameState,
+    game: &mut Game,
     exit: &mut MessageWriter<AppExit>,
 ) {
     let q = state.dialog.take();
@@ -398,14 +402,13 @@ pub(crate) fn answer(
     match q {
         Some(Question::Quit) => {
             // `QuitSammy`: save, then exit.
-            crate::platform::save::write(save);
+            crate::platform::save::write(&game.save);
             exit.write(AppExit::Success);
         }
         Some(Question::Restart) => {
             // `OuiRestartLevel`: close, `BallesJoueur1 = 0` → lose screen, same level again.
             close(commands, state, time, roots);
-            game.lives = 0;
-            game.lost = true;
+            game.give_up();
         }
         None => {}
     }
@@ -415,7 +418,7 @@ pub(crate) fn answer(
 /// focused slider steps it by 5.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sliders(
-    mut save: ResMut<SaveGame>,
+    mut game: ResMut<Game>,
     mouse: Res<ButtonInput<MouseButton>>,
     (focus, controls): (Res<Focus>, Res<crate::platform::input::Controls>),
     tracks: Query<(Entity, &Slider, &RelativeCursorPosition)>,
@@ -430,8 +433,8 @@ pub(crate) fn sliders(
     for (e, slider, rel) in &tracks {
         let id = *slider as u8;
         let mut value = match slider {
-            Slider::Music => save.music,
-            Slider::Sound => save.sound,
+            Slider::Music => game.save.music,
+            Slider::Sound => game.save.sound,
         };
         if mouse.just_pressed(MouseButton::Left) && rel.cursor_over {
             *dragging = Some(id);
@@ -449,20 +452,20 @@ pub(crate) fn sliders(
             continue;
         }
         match slider {
-            Slider::Music => save.music = value,
+            Slider::Music => game.save.music = value,
             Slider::Sound => {
-                save.sound = value;
-                volume.volume = bevy::audio::Volume::Linear(save.sound / SLIDER_MAX);
+                game.save.sound = value;
+                volume.volume = bevy::audio::Volume::Linear(game.save.sound / SLIDER_MAX);
             }
         }
     }
     if mouse.just_released(MouseButton::Left) || changed {
-        crate::platform::save::write(&save);
+        crate::platform::save::write(&game.save);
     }
     for (thumb, mut node) in &mut thumbs {
         let f = match thumb.0 {
-            Slider::Music => save.music / SLIDER_MAX,
-            Slider::Sound => save.sound / SLIDER_MAX,
+            Slider::Music => game.save.music / SLIDER_MAX,
+            Slider::Sound => game.save.sound / SLIDER_MAX,
         };
         node.left = px(f * (TRACK - THUMB));
     }
@@ -471,7 +474,7 @@ pub(crate) fn sliders(
 /// Display rows: a click on the left half steps back, on the right half forward; on a
 /// focused row left/right do the same.
 pub(crate) fn choices(
-    mut save: ResMut<SaveGame>,
+    mut game: ResMut<Game>,
     mouse: Res<ButtonInput<MouseButton>>,
     (focus, controls): (Res<Focus>, Res<crate::platform::input::Controls>),
     monitors: Query<&bevy::window::Monitor, With<bevy::window::PrimaryMonitor>>,
@@ -489,7 +492,7 @@ pub(crate) fn choices(
             None
         };
         let Some(step) = step else { continue };
-        let d = &mut save.display;
+        let d = &mut game.save.display;
         let cycle = |i: usize, n: usize| (i as i32 + step).rem_euclid(n as i32) as usize;
         match choice {
             Choice::Mode => {
@@ -514,19 +517,19 @@ pub(crate) fn choices(
             Choice::UiSize => d.ui_size = (UI_SIZE_MAX as usize - cycle(UI_SIZE_MAX as usize - d.ui_size.min(UI_SIZE_MAX) as usize, UI_SIZE_MAX as usize + 1)) as u8,
         }
         sfx.play_vol("Toc2", UI_SFX_VOL);
-        crate::platform::save::write(&save);
+        crate::platform::save::write(&game.save);
         return;
     }
 }
 
 pub(crate) fn choice_labels(
-    save: Res<SaveGame>,
+    game: Res<Game>,
     monitors: Query<&bevy::window::Monitor, With<bevy::window::PrimaryMonitor>>,
     rows: Query<(&Choice, &Children)>,
     mut texts: Query<&mut BitmapText>,
 ) {
     use crate::platform::save::DisplayMode;
-    let d = &save.display;
+    let d = &game.save.display;
     let monitor = monitors.single().ok();
     for (choice, children) in &rows {
         let label = match choice {
@@ -639,16 +642,15 @@ pub(crate) fn dialog_keys(
     mut state: ResMut<OptionsState>,
     mut time: ResMut<Time<Virtual>>,
     roots: Query<Entity, With<OptionsRoot>>,
-    save: Res<SaveGame>,
-    mut game: ResMut<GameState>,
+    mut game: ResMut<Game>,
     mut exit: MessageWriter<AppExit>,
 ) {
     if state.dialog.is_none() {
         return;
     }
     if keys.any_just_pressed([KeyCode::KeyJ, KeyCode::KeyT, KeyCode::KeyY]) {
-        answer(true, &mut commands, &mut state, &mut time, &roots, &save, &mut game, &mut exit);
+        answer(true, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit);
     } else if keys.just_pressed(KeyCode::KeyN) {
-        answer(false, &mut commands, &mut state, &mut time, &roots, &save, &mut game, &mut exit);
+        answer(false, &mut commands, &mut state, &mut time, &roots, &mut game, &mut exit);
     }
 }

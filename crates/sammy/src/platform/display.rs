@@ -5,7 +5,8 @@
 use bevy::prelude::*;
 use bevy::window::{Monitor, MonitorSelection, PrimaryMonitor, PrimaryWindow, VideoModeSelection, WindowMode};
 
-use crate::platform::save::{DisplayMode, DisplaySettings, SaveGame};
+use crate::game::Game;
+use crate::platform::save::{DisplayMode, DisplaySettings};
 
 pub struct DisplayPlugin;
 
@@ -53,29 +54,29 @@ pub fn current_size(d: &DisplaySettings, monitor: Option<&Monitor>) -> Option<[u
 }
 
 /// Alt+Enter and F11 toggle between the window and the last fullscreen mode.
-fn hotkeys(keys: Res<ButtonInput<KeyCode>>, mut save: ResMut<SaveGame>, mut last_full: Local<Option<DisplayMode>>) {
+fn hotkeys(keys: Res<ButtonInput<KeyCode>>, mut game: ResMut<Game>, mut last_full: Local<Option<DisplayMode>>) {
     let alt = keys.pressed(KeyCode::AltLeft) || keys.pressed(KeyCode::AltRight);
     if !(keys.just_pressed(KeyCode::F11) || (alt && keys.just_pressed(KeyCode::Enter))) {
         return;
     }
-    save.display.mode = match save.display.mode {
+    game.save.display.mode = match game.save.display.mode {
         DisplayMode::Windowed => last_full.unwrap_or(DisplayMode::Borderless),
         full => {
             *last_full = Some(full);
             DisplayMode::Windowed
         }
     };
-    crate::platform::save::write(&save);
+    crate::platform::save::write(&game.save);
 }
 
-/// Applies `save.display` to the window whenever it changes (and at start).
-fn apply(save: Res<SaveGame>, monitors: Query<&Monitor, With<PrimaryMonitor>>, mut windows: Query<&mut Window, With<PrimaryWindow>>, mut applied: Local<Option<DisplaySettings>>) {
+/// Applies `game.save.display` to the window whenever it changes (and at start).
+fn apply(game: Res<Game>, monitors: Query<&Monitor, With<PrimaryMonitor>>, mut windows: Query<&mut Window, With<PrimaryWindow>>, mut applied: Local<Option<DisplaySettings>>) {
     // Scripted screenshot runs keep the default window.
-    if std::env::var_os("SAMMY_SCREENSHOT").is_some() || *applied == Some(save.display) {
+    if std::env::var_os("SAMMY_SCREENSHOT").is_some() || *applied == Some(game.save.display) {
         return;
     }
     let Ok(mut win) = windows.single_mut() else { return };
-    let d = save.display;
+    let d = game.save.display;
     let monitor = monitors.single().ok();
     win.mode = match d.mode {
         DisplayMode::Windowed => WindowMode::Windowed,
@@ -97,10 +98,10 @@ fn apply(save: Res<SaveGame>, monitors: Query<&Monitor, With<PrimaryMonitor>>, m
 /// Whole multiples of the 640×480 art in physical pixels (sharp pixels): "large" is the
 /// biggest multiple that fits, "medium"/"small" one/two less; windows smaller than
 /// 640×480 get a fractional fit.
-fn ui_scale(save: Res<SaveGame>, windows: Query<&Window, With<PrimaryWindow>>, mut scale: ResMut<UiScale>) {
+fn ui_scale(game: Res<Game>, windows: Query<&Window, With<PrimaryWindow>>, mut scale: ResMut<UiScale>) {
     let Ok(w) = windows.single() else { return };
     let fit = (w.physical_height() as f32 / H).min(w.physical_width() as f32 / W);
-    let s = if fit < 1.0 { fit.max(MIN_FRACTIONAL_SCALE) } else { (fit.floor() - save.display.ui_size as f32).max(1.0) };
+    let s = if fit < 1.0 { fit.max(MIN_FRACTIONAL_SCALE) } else { (fit.floor() - game.save.display.ui_size as f32).max(1.0) };
     let s = s / w.scale_factor();
     if (scale.0 - s).abs() > 1e-4 {
         scale.0 = s;

@@ -17,6 +17,10 @@ use crate::menu::{Bob, Choice, LEVEL_ICON, Look, MenuAction};
 pub const MENU_ARC: f32 = 70.0;
 /// Icons grow ×1.2 while hovered.
 const HOVER_SCALE: f32 = 1.2;
+/// Hover light colours (orange; darker for locked icons) and range.
+const LIGHT_COLOR: [f32; 3] = [255.0, 180.0, 50.0];
+const LIGHT_COLOR_LOCKED: [f32; 3] = [255.0, 100.0, 20.0];
+const LIGHT_RANGE: f32 = 300.0;
 
 /// `InitMainMenu` / `InitMainTitle` entity (interfac.wdl:23-199, :950-1014).
 #[derive(Clone, Debug)]
@@ -62,6 +66,8 @@ pub struct MenuState {
     pub hovered: Option<Id>,
     /// Debug: camera pose (x, y, z, pan, tilt) instead of the view's.
     pub debug_camera: Option<([f32; 3], f32, f32)>,
+    /// The item carrying the hover light.
+    lit: Option<Id>,
 }
 
 pub(super) fn init_item(w: &mut World, id: Id, obj: &Object, title: bool) -> Presentation {
@@ -117,6 +123,19 @@ pub(super) fn step(sim: &mut Sim, dt: Dt) {
     }
     let hovered = sim.menu.hovered;
     let w = &mut sim.world;
+    // Touch: an orange light on the hovered item (darker for locked icons).
+    if sim.menu.lit != hovered {
+        if let Some(old) = sim.menu.lit.take() {
+            w.lights.remove(&old);
+        }
+        if let Some(h) = hovered
+            && let Some(item) = w.menu_items.get(&h)
+        {
+            let color = if item.locked { LIGHT_COLOR_LOCKED } else { LIGHT_COLOR };
+            w.lights.insert(h, super::Light { color, range: LIGHT_RANGE, fade: None });
+        }
+        sim.menu.lit = hovered;
+    }
     for (id, item) in w.menu_items.iter_mut() {
         let Some(b) = w.bodies.get_mut(id) else { continue };
         if !item.styled {

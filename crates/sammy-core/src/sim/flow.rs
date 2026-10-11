@@ -100,3 +100,22 @@ pub(super) fn run(sim: &mut Sim, controls: &Controls, dt: Dt) {
         sim.pending_load = Some(file);
     }
 }
+
+impl Sim {
+    /// Leaves the level for the menu from the options: the game is stored like a lost
+    /// one (no lose screen).
+    pub fn abandon(&mut self) {
+        if let Some(slot) = self.flow.slot {
+            let checkpoint = self.game.checkpoint.then_some(self.game.start).flatten().map(|(p, _)| p);
+            self.save.record_game(slot, self.game.score, checkpoint, false, None);
+            self.emit(Event::Saved);
+        }
+        self.request_load(MENU_FILE);
+    }
+
+    /// `OuiRestartLevel`: no lives left → the lose screen, then the same level again.
+    pub fn give_up(&mut self) {
+        self.game.lives = 0;
+        self.game.lost = true;
+    }
+}

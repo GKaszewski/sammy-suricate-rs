@@ -86,13 +86,24 @@ impl Anim {
             return None;
         }
         self.time += secs * self.fps;
+        if !self.looping {
+            self.time = self.time.clamp(0.0, (self.frames.len() - 1) as f32);
+        }
+        self.sample()
+    }
+
+    /// The two model frames to blend now and the blend factor (`None` for a still
+    /// scene).
+    pub fn sample(&self) -> Option<(usize, usize, f32)> {
         let n = self.frames.len();
+        if n < 2 {
+            return None;
+        }
         let (i, j, f) = if self.looping {
             let t = self.time.rem_euclid(n as f32);
             (t as usize % n, (t as usize + 1) % n, t.fract())
         } else {
-            self.time = self.time.clamp(0.0, (n - 1) as f32);
-            let t = self.time;
+            let t = self.time.clamp(0.0, (n - 1) as f32);
             (t as usize, (t as usize + 1).min(n - 1), t.fract())
         };
         Some((self.frames[i], self.frames[j], f))

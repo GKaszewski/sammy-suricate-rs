@@ -39,25 +39,21 @@ fn screenshot(
     time: Res<Time>,
     mut job: ResMut<ScreenshotJob>,
     mut exit: MessageWriter<AppExit>,
-    player: Query<&crate::gameplay::player::Player>,
-    game: Res<crate::gameplay::state::GameState>,
-    current: Res<crate::flow::CurrentLevel>,
-    enemies: Query<&crate::gameplay::enemies::Enemy>,
-    calls: Res<crate::gameplay::enemies::FriendCalls>,
-    cam: Res<crate::camera::CameraParams>,
+    sim: Res<crate::game::Game>,
 ) {
+    let (game, current, calls, cam) = (&sim.game, &sim.flow, &sim.calls, &sim.camera.params);
     let now = time.elapsed_secs();
     job.log_timer -= time.delta_secs();
     if job.log_timer <= 0.0 {
         job.log_timer = LOG_INTERVAL;
-        if let Ok(p) = player.single() {
+        if let Some((_, p)) = sim.world.player() {
             info!(
                 "t={now:.1} {} {:?} player {:?} pente {:?} state {:?} on {:?} | score {}/{} key {} lives {} hearts {:.0} start {:?} won {}",
                 current.file, current.phase, p.pos.map(|v| v.round()), p.pente.map(|v| v.round()), p.state, p.ground_entity, game.score, game.goal, game.key, game.lives, game.hearts, game.start.map(|(s, _)| s.map(|v| v.round())), game.won
             );
             info!("   calls {:?}", *calls);
             info!("   camera dist {:.0} height {:.0} back {:.0} plus_tilt {:.0} start_type {}", cam.dist, cam.height, cam.back, cam.plus_tilt, cam.start_type);
-            for e in &enemies {
+            for e in sim.world.enemies.values() {
                 let d = (0..3).map(|i| (e.pos[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt();
                 info!("   enemy {} dist {:.0}", e.debug_line(), d);
             }

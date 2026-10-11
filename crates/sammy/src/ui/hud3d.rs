@@ -5,19 +5,20 @@
 
 use bevy::prelude::*;
 
-use crate::gameplay::player::TICKS;
 use crate::camera::MainCamera;
+use crate::game::{Game, GameEvent, GameSystems};
 use crate::render::coords;
-use crate::flow::{CurrentLevel, Phase};
-use crate::gameplay::state::GameState;
+use crate::scene::{Billboard, Loader, NEAR_LAYER};
 use crate::ui::hud::{H, HudVisible, W};
-use crate::level::{Billboard, GameAssets, NEAR_LAYER, SpriteAnim};
+use sammy_core::flow::Phase;
+use sammy_core::sim::Event;
+use sammy_core::time::TICKS_PER_SEC as TICKS;
 
 pub struct Hud3dPlugin;
 
 impl Plugin for Hud3dPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (spawn_hud_models, end_titles, fly_popups.in_set(crate::schedule::GameSet::Flow)))
+        app.add_systems(Update, (spawn_hud_models, end_titles, spawn_popups, fly_popups).after(GameSystems::Tick))
             .add_systems(PostUpdate, place_hud_models.after(TransformSystems::Propagate).before(bevy::camera::visibility::VisibilitySystems::CheckVisibility));
     }
 }
@@ -69,20 +70,14 @@ fn unlit(materials: &mut Assets<StandardMaterial>, base: &Handle<StandardMateria
     materials.add(m)
 }
 
-fn spawn_hud_models(
-    mut commands: Commands,
-    assets: Option<Res<GameAssets>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    existing: Query<(), Or<(With<HudWasp>, With<HudEye>)>>,
-) {
-    let Some(assets) = assets else { return };
+fn spawn_hud_models(mut commands: Commands, mut loader: Loader, existing: Query<(), Or<(With<HudWasp>, With<HudEye>)>>) {
     if !existing.is_empty() {
         return;
     }
-    if let Some(m) = assets.model("panwasp.mdl") {
+    if let Some(m) = loader.model("panwasp.mdl") {
+        let (meshes, materials) = (&mut loader.meshes, &mut loader.materials);
         // Camera space (100,-45,-35): screen ≈ (569, 434) at 640×480.
-        let skins: Vec<_> = (1..=7).map(|k| unlit(&mut materials, &m.skin(k), false)).collect();
+        let skins: Vec<_> = (1..=7).map(|k| unlit(materials, &m.skin(k), false)).collect();
         commands.spawn((
             HudWasp { pan: WASP_PAN_START, kind: 1 },
             CameraSpace { px: Vec2::new(WASP_SCREEN.0 - W, WASP_SCREEN.1), depth: WASP_DEPTH, scale: WASP_SCALE[0], angles: [WASP_PAN_START, 0.0, 0.0] },
@@ -94,9 +89,10 @@ fn spawn_hud_models(
             NEAR_LAYER,
         ));
     }
-    if let Some(m) = assets.model("paneye.mdl") {
+    if let Some(m) = loader.model("paneye.mdl") {
         // Camera space (200,-45,-72): screen ≈ (445, 440); additive (`Flare`).
-        let mat = unlit(&mut materials, &m.skin(1), true);
+        let (meshes, materials) = (&mut loader.meshes, &mut loader.materials);
+        let mat = unlit(materials, &m.skin(1), true);
         commands.spawn((
             HudEye,
             CameraSpace { px: Vec2::new(EYE_SCREEN.0, EYE_SCREEN.1), depth: EYE_DEPTH, scale: 1.0, angles: [0.0; 3] },
@@ -115,7 +111,7 @@ struct HudSkins(Vec<Handle<StandardMaterial>>);
 #[allow(clippy::type_complexity)]
 fn place_hud_models(
     time: Res<Time>,
-    game: Res<GameState>,
+    sim: Res<Game>,
     visible: Res<HudVisible>,
     windows: Query<&Window>,
     ui_scale: Res<UiScale>,
@@ -125,6 +121,7 @@ fn place_hud_models(
         Without<MainCamera>,
     >,
 ) {
+    let game = &sim.game;
     let (Ok(win), Ok((camera, cam_tf, proj))) = (windows.single(), cam.single()) else { return };
     let Projection::Perspective(p) = proj else { return };
     // Mode-6 pixel size in window pixels, as for the 2D HUD (whole-number UI scale).
@@ -180,49 +177,64 @@ const POPUP_SPEED: f32 = 40.0;
 const POPUP_TILT_DEG: f32 = 20.0;
 const POPUP_FRAMES_PER_TICK: f32 = 0.2;
 
-/// `FlyingPCX` (mm1.wdl:1333-1384): a score sprite flying toward the camera and up.
+/// `FlyingPCX` (mm1.wdl:1333-1384): a score sprite flying toward the camera and up,
+/// playing its strip.
 #[derive(Component)]
 pub struct FlyingPopup {
     pos: [f32; 3],
     dir: [f32; 3],
     speed: f32,
     life: f32,
+    frame: f32,
+    frames: u32,
 }
 
-/// Diamond `+50` / `+100` popup at a pickup (`Bonus3_Hit`, mm1.wdl:1252-1275).
-pub fn spawn_popup(commands: &mut Commands, assets: &GameAssets, materials: &mut Assets<StandardMaterial>, at: [f32; 3], cam: [f32; 3], points: i32) {
-    let (file, life) = match points {
-        POPUP_SMALL_POINTS => POPUP_SMALL,
-        POPUP_BIG_POINTS => POPUP_BIG,
-        _ => return,
-    };
-    let Some((mesh, mat, frames)) = assets.sprite(file) else { return };
-    let pos = [at[0], at[1], at[2] + POPUP_LIFT];
-    // Pan toward the camera, tilt +20° (`InvDirCamera`).
-    let d = [cam[0] - pos[0], cam[1] - pos[1]];
-    let pan = d[1].atan2(d[0]);
-    let tilt = POPUP_TILT_DEG.to_radians();
-    let dir = [pan.cos() * tilt.cos(), pan.sin() * tilt.cos(), tilt.sin()];
-    let m = materials.get(&mat).cloned().unwrap_or_default();
-    commands.spawn((
-        FlyingPopup { pos, dir, speed: POPUP_SPEED, life },
-        SpriteAnim { frames, frame: 0.0, fps: POPUP_FRAMES_PER_TICK * TICKS },
-        Billboard,
-        Mesh3d(mesh),
-        MeshMaterial3d(materials.add(m)),
-        Transform::from_translation(coords::pos(pos)),
-        crate::flow::LevelScoped,
-    ));
+/// Diamond `+50` / `+100` popups at pickups (`Bonus3_Hit`, mm1.wdl:1252-1275).
+fn spawn_popups(mut commands: Commands, mut events: MessageReader<GameEvent>, mut loader: Loader, cam: Query<&GlobalTransform, With<MainCamera>>) {
+    let cam = cam.single().map(|g| coords::native(g.translation())).unwrap_or_default();
+    for ev in events.read() {
+        let GameEvent(Event::Popup { at, points }) = ev else { continue };
+        let (file, life) = match *points {
+            POPUP_SMALL_POINTS => POPUP_SMALL,
+            POPUP_BIG_POINTS => POPUP_BIG,
+            _ => continue,
+        };
+        let Some(sprite) = loader.sprite(file) else { continue };
+        let pos = [at[0], at[1], at[2] + POPUP_LIFT];
+        // Pan toward the camera, tilt +20° (`InvDirCamera`).
+        let d = [cam[0] - pos[0], cam[1] - pos[1]];
+        let pan = d[1].atan2(d[0]);
+        let tilt = POPUP_TILT_DEG.to_radians();
+        let dir = [pan.cos() * tilt.cos(), pan.sin() * tilt.cos(), tilt.sin()];
+        let m = loader.materials.get(&sprite.material).cloned().unwrap_or_default();
+        commands.spawn((
+            FlyingPopup { pos, dir, speed: POPUP_SPEED, life, frame: 0.0, frames: sprite.frames },
+            Billboard,
+            Mesh3d(sprite.mesh),
+            MeshMaterial3d(loader.materials.add(m)),
+            Transform::from_translation(coords::pos(pos)),
+        ));
+    }
 }
 
-fn fly_popups(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mut FlyingPopup, &mut Transform)>) {
+fn fly_popups(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut q: Query<(Entity, &mut FlyingPopup, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
+) {
     let t = time.delta_secs() * TICKS;
-    for (e, mut p, mut tf) in &mut q {
-        for i in 0..3 {
-            p.pos[i] += p.dir[i] * p.speed * t;
+    for (e, mut p, mut tf, mat) in &mut q {
+        let (dir, speed) = (p.dir, p.speed);
+        for (c, d) in p.pos.iter_mut().zip(dir) {
+            *c += d * speed * t;
         }
         p.life -= t;
+        p.frame = (p.frame + POPUP_FRAMES_PER_TICK * t).rem_euclid(p.frames as f32);
         tf.translation = coords::pos(p.pos);
+        if let Some(mut m) = materials.get_mut(&mat.0) {
+            m.uv_transform = bevy::math::Affine2::from_translation(Vec2::new(p.frame.floor() / p.frames as f32, 0.0));
+        }
         if p.life <= 0.0 {
             commands.entity(e).despawn();
         }
@@ -257,33 +269,38 @@ struct LoseTitle {
 fn end_titles(
     time: Res<Time>,
     mut commands: Commands,
-    current: Res<CurrentLevel>,
-    assets: Option<Res<GameAssets>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    game: Res<Game>,
+    mut events: MessageReader<GameEvent>,
+    mut loader: Loader,
     mut particles: ResMut<crate::render::particles::Particles>,
     cam: Query<&GlobalTransform, With<MainCamera>>,
-    mut titles: Query<(&mut LoseTitle, &mut Transform)>,
+    mut titles: Query<(Entity, &mut LoseTitle, &mut Transform)>,
 ) {
     let Ok(cam) = cam.single() else { return };
-    let lost = matches!(current.phase, Phase::Lost(_));
+    // A new level takes the title away.
+    if events.read().any(|e| matches!(e.0, Event::Loaded { .. })) {
+        for (e, ..) in &titles {
+            commands.entity(e).despawn();
+        }
+        return;
+    }
+    let lost = matches!(game.flow.phase, Phase::Lost(_));
     if lost && titles.is_empty() {
-        if let Some(m) = assets.as_ref().and_then(|a| a.model("lose.mdl")) {
-            let mat = unlit(&mut materials, &m.skin(1), false);
+        if let Some(m) = loader.model("lose.mdl") {
+            let mat = unlit(&mut loader.materials, &m.skin(1), false);
             commands.spawn((
                 LoseTitle { depth: LOSE_START_DEPTH, speed: LOSE_START_SPEED },
-                Mesh3d(meshes.add(m.build_mesh(0))),
+                Mesh3d(loader.meshes.add(m.build_mesh(0))),
                 MeshMaterial3d(mat),
                 Transform::default(),
                 crate::render::lights::DynamicLight { color: LOSE_LIGHT_COLOR, range: LOSE_LIGHT_RANGE },
                 NEAR_LAYER,
-                crate::flow::LevelScoped,
             ));
         }
         return;
     }
     let t = time.delta_secs() * TICKS;
-    for (mut title, mut tf) in &mut titles {
+    for (_, mut title, mut tf) in &mut titles {
         if title.depth < LOSE_STOP_DEPTH {
             title.depth += title.speed * t;
             title.speed = (title.speed - LOSE_DECEL * t).max(LOSE_MIN_SPEED);
@@ -299,18 +316,4 @@ fn end_titles(
             crate::render::effects::tile_smoke(&mut particles, at);
         }
     }
-}
-
-/// [`spawn_popup`] from a system that only has `Commands`.
-pub fn queue_popup(commands: &mut Commands, at: [f32; 3], points: i32) {
-    commands.queue(move |w: &mut World| {
-        let cam = w.query_filtered::<&GlobalTransform, With<MainCamera>>().iter(w).next().map(|g| coords::native(g.translation()));
-        let Some(cam) = cam else { return };
-        w.resource_scope(|w, assets: Mut<GameAssets>| {
-            w.resource_scope(|w, mut materials: Mut<Assets<StandardMaterial>>| {
-                spawn_popup(&mut w.commands(), &assets, &mut materials, at, cam, points);
-            });
-        });
-        w.flush();
-    });
 }

@@ -11,8 +11,8 @@ use bevy::audio::{AddAudioSource, Decodable, Source, Volume};
 use bevy::prelude::*;
 use rustysynth::{MidiFile, MidiFileSequencer, SoundFont, Synthesizer, SynthesizerSettings};
 
-use crate::flow::{CurrentLevel, EXTRO_SLOT};
-use crate::platform::save::SaveGame;
+use crate::game::Game;
+use sammy_core::levels::EXTRO_SLOT;
 use crate::platform::vfs::GameFiles;
 
 pub struct MusicPlugin;
@@ -207,22 +207,23 @@ fn load_soundfont(music: Res<Music>) {
 /// Song changes at level loads: `PlayCurrentMusique` at game start (mm1.wdl:840), the
 /// intro's looping `musique1` (Intro2.wdl:50), and `Play_Song_Once Musique1,0` on
 /// returning to the menu, a volume-0 play that silences the music (interfac.wdl:382).
-fn level_music(current: Res<CurrentLevel>, mut music: ResMut<Music>, mut last: Local<Option<Option<u32>>>) {
-    if current.loads == music.loads {
+fn level_music(game: Res<Game>, mut music: ResMut<Music>, mut last: Local<Option<Option<u32>>>) {
+    if game.loads == music.loads {
         return;
     }
-    music.loads = current.loads;
-    match current.slot {
+    music.loads = game.loads;
+    match game.flow.slot {
         Some(slot) => music.play_level(slot.min(EXTRO_SLOT)),
         None if last.is_none() => music.play(1, true, FULL_VOLUME),
         None => music.stop(),
     }
-    *last = Some(current.slot);
+    *last = Some(game.flow.slot);
 }
 
 /// Dragging the music slider with no song playing starts `musique4`; closing the
 /// options then restarts `PlayCurrentMusique` (options.wdl:60-63, :218-231).
-fn options_test(save: Res<SaveGame>, options: Res<crate::ui::options::OptionsState>, current: Res<CurrentLevel>, mut music: ResMut<Music>, mut old: Local<Option<f32>>) {
+fn options_test(game: Res<Game>, options: Res<crate::ui::options::OptionsState>, mut music: ResMut<Music>, mut old: Local<Option<f32>>) {
+    let save = &game.save;
     let open = options.mode.is_some();
     if open && old.is_some_and(|v| v != save.music) && music.entity.is_none() && music.pending.is_none() && !music.test {
         music.test = true;
@@ -230,13 +231,13 @@ fn options_test(save: Res<SaveGame>, options: Res<crate::ui::options::OptionsSta
     }
     if !open && music.test {
         music.test = false;
-        let slot = current.slot.unwrap_or(save.last_level);
+        let slot = game.flow.slot.unwrap_or(save.last_level);
         music.play_level(slot);
     }
     *old = open.then_some(save.music);
 }
 
-fn start_song(mut commands: Commands, files: Res<GameFiles>, save: Res<SaveGame>, mut music: ResMut<Music>, mut songs: ResMut<Assets<MidiSong>>) {
+fn start_song(mut commands: Commands, files: Res<GameFiles>, game: Res<Game>, mut music: ResMut<Music>, mut songs: ResMut<Assets<MidiSong>>) {
     let Some((n, looping, vol)) = music.pending else { return };
     if n != 0 && music.font.lock().unwrap().is_none() {
         return; // still loading
@@ -252,7 +253,7 @@ fn start_song(mut commands: Commands, files: Res<GameFiles>, save: Res<SaveGame>
     let Some(midi) = files.read(FILES[n as usize - 1]).ok().and_then(|d| MidiFile::new(&mut d.as_slice()).ok()) else { return };
     music.song_vol = vol;
     let handle = songs.add(MidiSong { font, midi: Arc::new(midi), looping });
-    let v = Volume::Linear(save.music / FULL_VOLUME * vol / FULL_VOLUME);
+    let v = Volume::Linear(game.save.music / FULL_VOLUME * vol / FULL_VOLUME);
     music.entity = Some(commands.spawn((MusicPlayer, AudioPlayer(handle), PlaybackSettings::DESPAWN.with_volume(v))).id());
 }
 
@@ -260,12 +261,12 @@ fn start_song(mut commands: Commands, files: Res<GameFiles>, save: Res<SaveGame>
 struct MusicPlayer;
 
 /// `Midi_Vol = Slider_MusicVol`; forgets songs that ended (`Play_Song_Once`).
-fn apply_volume(save: Res<SaveGame>, mut music: ResMut<Music>, mut sinks: Query<&mut AudioSink, With<MusicPlayer>>, alive: Query<(), With<MusicPlayer>>) {
+fn apply_volume(game: Res<Game>, mut music: ResMut<Music>, mut sinks: Query<&mut AudioSink, With<MusicPlayer>>, alive: Query<(), With<MusicPlayer>>) {
     // Commands from `start_song` are applied before this system (chained).
     if music.entity.is_some_and(|e| !alive.contains(e)) {
         music.entity = None;
     }
-    let v = Volume::Linear(save.music / FULL_VOLUME * music.song_vol / FULL_VOLUME);
+    let v = Volume::Linear(game.save.music / FULL_VOLUME * music.song_vol / FULL_VOLUME);
     for mut sink in &mut sinks {
         sink.set_volume(v);
     }

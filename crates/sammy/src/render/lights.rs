@@ -15,17 +15,12 @@ const POINT_LIGHT_INTENSITY: f32 = 2_000_000.0;
 const POINT_LIGHT_REF_RANGE: f32 = 300.0;
 /// Smallest Bevy point light range (units), keeps off lights valid.
 const MIN_POINT_RANGE: f32 = 0.01;
-/// Full-strength light colour channel of a key light.
-const KEY_FULL: f32 = 250.0;
-/// Orange key light green channel.
-const KEY_ORANGE_G: f32 = 100.0;
 
 pub struct LightsPlugin;
 
 impl Plugin for LightsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, fade_lights)
-            .add_systems(PostUpdate, (sync_point_lights, update_level_lights).after(TransformSystems::Propagate));
+        app.add_systems(PostUpdate, (sync_point_lights, update_level_lights).after(TransformSystems::Propagate));
     }
 }
 
@@ -95,43 +90,6 @@ fn update_level_lights(
     for id in ids {
         if let Some(mut m) = materials.get_mut(id) {
             m.lights = data;
-        }
-    }
-}
-
-/// A light whose range shrinks by `rate` quants per tick until `until`, then turns off
-/// (GemLight, DoorLight, BonusVie/Boost flashes).
-#[derive(Component)]
-pub struct FadingLight {
-    pub rate: f32,
-    pub until: f32,
-}
-
-/// Light colour of a key colour bitmask (`GemLight` / `DoorLight`, gems.wdl:454-477).
-pub fn key_color(key: u32) -> [f32; 3] {
-    match key {
-        1 => [KEY_FULL, 0.0, 0.0],
-        2 => [KEY_FULL, KEY_FULL, 0.0],
-        3 => [KEY_FULL, KEY_ORANGE_G, 0.0],
-        4 => [0.0, 0.0, KEY_FULL],
-        5 => [KEY_FULL, 0.0, KEY_FULL],
-        6 => [0.0, KEY_FULL, 0.0],
-        _ => [KEY_FULL, KEY_FULL, KEY_FULL],
-    }
-}
-
-/// Bundle for a flash: start range, shrink rate per tick, cut-off range.
-pub fn flash(color: [f32; 3], range: f32, rate: f32, until: f32) -> (DynamicLight, FadingLight) {
-    (DynamicLight { color, range }, FadingLight { rate, until })
-}
-
-fn fade_lights(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mut DynamicLight, &FadingLight)>) {
-    let t = time.delta_secs() * crate::gameplay::player::TICKS;
-    for (e, mut l, f) in &mut q {
-        l.range -= f.rate * t;
-        if l.range <= f.until {
-            l.range = 0.0;
-            commands.entity(e).remove::<FadingLight>();
         }
     }
 }

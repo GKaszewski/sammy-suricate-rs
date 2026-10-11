@@ -81,6 +81,8 @@ fn read_controls(
         uturn_hit: hit(&[KeyCode::AltLeft, KeyCode::AltRight]),
         confirm: hit(&[KeyCode::Enter, KeyCode::NumpadEnter]),
         options: hit(&[KeyCode::Escape]),
+        // Right click also backs out (skips the intro, leaves a level grid).
+        back: mouse.just_pressed(MouseButton::Right),
         any: keys.get_just_pressed().next().is_some(),
         pad: c.pad,
         ..default()

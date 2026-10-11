@@ -12,7 +12,7 @@ use bevy::prelude::*;
 
 use crate::camera::MainCamera;
 use crate::render::coords;
-use crate::level::GameAssets;
+use crate::scene::Loader;
 
 pub struct ParticlePlugin;
 
@@ -20,7 +20,16 @@ impl Plugin for ParticlePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Particles>()
             .add_systems(PreUpdate, particle_clock)
-            .add_systems(Update, (crate::render::effects::emit_trails, crate::render::effects::emit_sammy).run_if(|c: Res<crate::flow::CurrentLevel>| c.phase != crate::flow::Phase::Intro))
+            .add_systems(
+                Update,
+                (
+                    crate::render::effects::play_effects,
+                    (crate::render::effects::emit_trails, crate::render::effects::emit_sammy)
+                        .run_if(|g: Res<crate::game::Game>| g.flow.phase != sammy_core::flow::Phase::Intro),
+                )
+                    .chain()
+                    .after(crate::game::GameSystems::Tick),
+            )
             .add_systems(PostUpdate, (update_particles, draw_particles).chain().before(TransformSystems::Propagate));
     }
 }
@@ -158,7 +167,7 @@ impl Particles {
 }
 
 fn particle_clock(time: Res<Time>, mut ps: ResMut<Particles>) {
-    ps.acc += time.delta_secs() * crate::gameplay::player::TICKS;
+    ps.acc += time.delta_secs() * sammy_core::time::TICKS_PER_SEC;
     ps.ticks = (ps.acc.floor() as u32).min(MAX_TICKS_PER_FRAME);
     ps.acc = (ps.acc - ps.ticks as f32).min(1.0);
 }
@@ -180,10 +189,7 @@ struct Batches(HashMap<(Option<&'static str>, bool), (Entity, Handle<Mesh>)>);
 fn draw_particles(
     mut commands: Commands,
     particles: Res<Particles>,
-    assets: Option<Res<GameAssets>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut images: ResMut<Assets<Image>>,
+    mut loader: Loader,
     cam: Query<&GlobalTransform, With<MainCamera>>,
     mut batches: Local<Batches>,
     mut dot: Local<Option<Handle<Image>>>,
@@ -201,7 +207,7 @@ fn draw_particles(
     // Empty the batches that have no particles this frame.
     for (key, (_, mesh)) in &batches.0 {
         if !groups.contains_key(key)
-            && let Some(mut m) = meshes.get_mut(mesh)
+            && let Some(mut m) = loader.meshes.get_mut(mesh)
         {
             m.insert_indices(Indices::U32(Vec::new()));
         }
@@ -233,16 +239,16 @@ fn draw_particles(
             .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, col)
             .with_inserted_indices(Indices::U32(idx));
         if let Some((_, handle)) = batches.0.get(&key) {
-            if let Some(mut m) = meshes.get_mut(handle) {
+            if let Some(mut m) = loader.meshes.get_mut(handle) {
                 *m = mesh;
             }
             continue;
         }
         let texture = match key.0 {
-            Some(file) => assets.as_ref().and_then(|a| a.sprite(file)).and_then(|(_, m, _)| materials.get(&m).and_then(|m| m.base_color_texture.clone())),
-            None => Some(dot.get_or_insert_with(|| images.add(dot_image())).clone()),
+            Some(file) => loader.sprite(file).and_then(|s| loader.materials.get(&s.material).and_then(|m| m.base_color_texture.clone())),
+            None => Some(dot.get_or_insert_with(|| loader.images.add(dot_image())).clone()),
         };
-        let material = materials.add(StandardMaterial {
+        let material = loader.materials.add(StandardMaterial {
             base_color_texture: texture,
             unlit: true,
             alpha_mode: if key.1 { AlphaMode::Add } else { AlphaMode::Blend },
@@ -250,9 +256,9 @@ fn draw_particles(
             cull_mode: None,
             ..default()
         });
-        let handle = meshes.add(mesh);
+        let handle = loader.meshes.add(mesh);
         let e = commands
-            .spawn((ParticleBatch, Mesh3d(handle.clone()), MeshMaterial3d(material), NotShadowCaster, Transform::default(), bevy::camera::visibility::NoFrustumCulling, crate::flow::LevelScoped))
+            .spawn((ParticleBatch, Mesh3d(handle.clone()), MeshMaterial3d(material), NotShadowCaster, Transform::default(), bevy::camera::visibility::NoFrustumCulling))
             .id();
         batches.0.insert(key, (e, handle));
     }
