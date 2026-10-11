@@ -70,7 +70,7 @@ impl LoadedModel {
         let mut img = skin.image.clone();
         match &skin.indices {
             Some(idx) => img.data.chunks_exact_mut(4).zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
-            None => img.data.chunks_exact_mut(4).filter(|px| px[..3] == [0, 0, 0]).for_each(|px| px[3] = 0),
+            None => img.data.chunks_exact_mut(4).filter(|px| crate::image::is_key(px)).for_each(|px| px[3] = 0),
         }
         materials.add(StandardMaterial {
             base_color_texture: Some(images.add(crate::image::to_bevy(&img, true, false))),

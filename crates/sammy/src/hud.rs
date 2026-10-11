@@ -36,7 +36,7 @@ pub fn load_ui_image(files: &GameFiles, images: &mut Assets<Image>, name: &str) 
     let pcx = formats::pcx::parse(&files.read(name).ok()?).ok()?;
     let mut img = pcx.image;
     for px in img.data.chunks_exact_mut(4) {
-        if px[..3] == [0, 0, 0] {
+        if crate::image::is_key(px) {
             px[3] = 0;
         }
     }
@@ -89,7 +89,8 @@ impl DigitFont {
     }
 }
 
-/// `DIGITS x,y,n,font`: n zero-padded cells, low n digits kept [I].
+/// `DIGITS x,y,n,font`: n right-aligned cells without leading zeros (seen in the
+/// original: score "0", goal "540"), low n digits kept.
 #[derive(Component)]
 pub struct Digits {
     pub n: u32,
@@ -119,7 +120,11 @@ fn update_digits<F: bevy::ecs::query::QueryFilter>(digits: &Query<(&Digits, &Chi
         for c in children.iter() {
             let Ok((cell, mut img)) = cells.get_mut(c) else { continue };
             let place = 10u64.pow(d.n - 1 - cell.0);
-            let digit = (d.value.max(0) as u64 / place % 10) as u32;
+            let value = d.value.max(0) as u64;
+            let digit = (value / place % 10) as u32;
+            // Leading zeros are blank; the units cell always shows.
+            let blank = place > value && cell.0 + 1 < d.n;
+            img.color = if blank { Color::NONE } else { Color::WHITE };
             let font = fonts.by_cell(img.image.id());
             if let Some(f) = font {
                 img.rect = Some(f.glyph(digit));

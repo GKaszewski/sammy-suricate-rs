@@ -142,7 +142,7 @@ fn setup(mut commands: Commands, files: Res<GameFiles>, mut images: ResMut<Asset
                     .filter(|&x| {
                         (0..cell.y as u32).any(|y| {
                             let i = (((gy + y) * pcx.image.width + gx + x) * 4) as usize;
-                            pcx.image.data.get(i..i + 3).is_some_and(|p| p != [0, 0, 0])
+                            pcx.image.data.get(i..i + 3).is_some_and(|p| !crate::image::is_key(p))
                         })
                     })
                     .collect();

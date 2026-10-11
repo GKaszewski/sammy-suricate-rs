@@ -384,7 +384,7 @@ impl Spawner<'_, '_, '_> {
             }
         } else {
             for px in img.data.chunks_exact_mut(4) {
-                if px[..3] == [0, 0, 0] {
+                if crate::image::is_key(px) {
                     px[3] = 0;
                 }
             }
