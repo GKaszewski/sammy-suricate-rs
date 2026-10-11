@@ -6,9 +6,9 @@
 use bevy::prelude::*;
 use crate::camera::MainCamera;
 use crate::game::Game;
-use crate::platform::vfs::GameFiles;
 use crate::render::coords;
 use crate::scene::{Loader, NEAR_LAYER};
+use sammy_present::intro::LogoArt;
 
 mod components;
 mod systems;

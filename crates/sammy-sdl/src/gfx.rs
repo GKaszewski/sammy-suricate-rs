@@ -127,7 +127,7 @@ impl Program {
 }
 
 /// A GPU texture and its size.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Texture {
     pub tex: glow::Texture,
     pub width: u32,

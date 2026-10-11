@@ -210,6 +210,15 @@ fn run() -> anyhow::Result<()> {
             scene.draw(&gfx, &sim, cam, &draw);
             trace("scene drawn");
         }
+        // The intro: black fog over the view, the logo in front of it.
+        let (logo, fog) = last_cam.as_ref().map_or((None, 0.0), |c| sammy_present::intro::overlay(&sim, c.pos.into(), c.axes.x_axis.into()));
+        if fog > 0.0 {
+            painter.begin(&gfx);
+            painter.rect(&gfx, [0.0, 0.0, painter.size[0], painter.size[1]], [0.0, 0.0, 0.0, fog]);
+        }
+        if let Some(cam) = &last_cam {
+            scene.draw_logo(&gfx, &files, cam, logo.as_ref());
+        }
         painter.begin(&gfx);
         if sim.flow.phase != sammy_core::flow::Phase::Menu && draw.contains("hud") {
             hud.draw(&gfx, &painter, &sim.game);

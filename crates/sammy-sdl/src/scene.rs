@@ -98,6 +98,8 @@ pub struct Scene {
     prefabs: HashMap<String, Option<Parts>>,
     sprites: HashMap<String, Option<Rc<SpriteAsset>>>,
     views: HashMap<Id, (u32, View)>,
+    /// The intro logo being shown: its id, mesh and texture.
+    logo: Option<(u8, Mesh, Texture)>,
 }
 
 /// The camera of a frame.
@@ -418,6 +420,63 @@ impl Scene {
     }
 }
 
+impl Scene {
+    /// The intro's logo in front of everything (`None` drops it).
+    pub fn draw_logo(&mut self, gfx: &Gfx, files: &GameFiles, cam: &Camera, logo: Option<&sammy_present::intro::Logo>) {
+        use sammy_present::intro::LogoArt;
+        let Some(l) = logo else {
+            if let Some((_, mesh, tex)) = self.logo.take() {
+                mesh.delete(&gfx.gl);
+                if tex != gfx.white {
+                    gfx.delete_texture(tex);
+                }
+            }
+            return;
+        };
+        if self.logo.as_ref().is_none_or(|(id, ..)| *id != l.id) {
+            self.draw_logo(gfx, files, cam, None);
+            self.logo = match l.art {
+                LogoArt::Image(file) => files.read(file).ok().and_then(|d| formats::tga::parse(&d)).map(|img| {
+                    let (w, h) = (img.width as f32 / 2.0, img.height as f32 / 2.0);
+                    (l.id, quad(gfx, w, h, 1.0), gfx.texture(&img, false, true))
+                }),
+                LogoArt::Model(file) => self.model(gfx, files, file).map(|a| {
+                    // Its own copy of the first skin: the logo is deleted with it.
+                    let tex = a.mdl.skins.first().map_or(gfx.white, |s| gfx.texture(&s.image, false, true));
+                    (l.id, Mesh::new(&gfx.gl, Layout::Model, &a.vertices((0, 0, 0.0)), &a.vb.indices, false), tex)
+                }),
+            };
+        }
+        let Some((_, mesh, tex)) = &self.logo else { return };
+        let gl = &gfx.gl;
+        unsafe {
+            gl.enable(glow::DEPTH_TEST);
+            gl.depth_mask(true);
+            gl.clear(glow::DEPTH_BUFFER_BIT);
+            gl.disable(glow::CULL_FACE);
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        }
+        // Both kinds face the camera (the quad faces -X, the axes turn X to forward).
+        let m = Mat4::from_scale_rotation_translation(Vec3::splat(l.scale), Quat::from_mat3(&cam.axes), Vec3::from(l.pos));
+        let shade = Shade { color: [1.0, 1.0, 1.0, l.alpha], unlit: true, cutoff: 0.01, ..Default::default() };
+        gfx.draw_model(mesh, &cam.view_proj, &m, *tex, &shade, &[[0.0; 4]; MAX_LIGHTS * 2]);
+        unsafe { gl.disable(glow::BLEND) };
+    }
+}
+
+/// An upright `2w × 2h` quad facing -X, showing `u1` of its texture's width.
+fn quad(gfx: &Gfx, w: f32, h: f32, u1: f32) -> Mesh {
+    #[rustfmt::skip]
+    let v = [
+        0.0, w, -h,  -1.0, 0.0, 0.0,  0.0, 1.0,
+        0.0, -w, -h, -1.0, 0.0, 0.0,  u1, 1.0,
+        0.0, -w, h,  -1.0, 0.0, 0.0,  u1, 0.0,
+        0.0, w, h,   -1.0, 0.0, 0.0,  0.0, 0.0,
+    ];
+    Mesh::new(&gfx.gl, Layout::Model, &v, &[0, 1, 2, 0, 2, 3], false)
+}
+
 /// How a sprite is turned this frame.
 fn sprite_rotation(b: &Body, facing: SpriteFacing, cam: &Camera) -> Quat {
     match facing {
@@ -482,14 +541,6 @@ fn load_sprite(gfx: &Gfx, files: &GameFiles, file: &str) -> Option<Rc<SpriteAsse
         None => img.data.chunks_exact_mut(4).filter(|px| formats::image::is_color_key(px)).for_each(|px| px[3] = 0),
     }
     let (w, h) = (img.width as f32 / frames as f32 / 2.0, img.height as f32 / 2.0);
-    let u1 = 1.0 / frames as f32;
-    #[rustfmt::skip]
-    let v = [
-        0.0, w, -h,  -1.0, 0.0, 0.0,  0.0, 1.0,
-        0.0, -w, -h, -1.0, 0.0, 0.0,  u1, 1.0,
-        0.0, -w, h,  -1.0, 0.0, 0.0,  u1, 0.0,
-        0.0, w, h,   -1.0, 0.0, 0.0,  0.0, 0.0,
-    ];
-    let mesh = Mesh::new(&gfx.gl, Layout::Model, &v, &[0, 1, 2, 0, 2, 3], false);
+    let mesh = quad(gfx, w, h, 1.0 / frames as f32);
     Some(Rc::new(SpriteAsset { mesh, tex: gfx.texture(&img, false, true), frames, bounds: (Vec3::new(-1.0, -w, -h), Vec3::new(1.0, w, h)) }))
 }
