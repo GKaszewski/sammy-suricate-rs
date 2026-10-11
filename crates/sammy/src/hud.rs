@@ -3,7 +3,6 @@
 //! uniformly to the window height and anchored to the same screen edges.
 
 use bevy::prelude::*;
-use bevy::ui::UiScale;
 
 use crate::actions::player::TICKS;
 use crate::game::{GameState, MASTER_KEY};
@@ -13,7 +12,7 @@ pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<HudVisible>().add_systems(Startup, setup).add_systems(Update, (scale_ui, update).chain());
+        app.init_resource::<HudVisible>().add_systems(Startup, setup).add_systems(Update, update);
     }
 }
 
@@ -166,15 +165,6 @@ struct BoostPart;
 struct BoostBar;
 #[derive(Component)]
 struct Ammo;
-
-fn scale_ui(windows: Query<&Window>, mut scale: ResMut<UiScale>) {
-    if let Ok(w) = windows.single() {
-        let s = (w.height() / H).min(w.width() / W).max(0.25);
-        if (scale.0 - s).abs() > 1e-3 {
-            scale.0 = s;
-        }
-    }
-}
 
 fn setup(mut commands: Commands, files: Res<GameFiles>, mut images: ResMut<Assets<Image>>) {
     let mut img = |name: &str| load_ui_image(&files, &mut images, name).map(|(h, _)| h).unwrap_or_default();

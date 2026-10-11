@@ -226,7 +226,7 @@ fn start(
 #[allow(clippy::too_many_arguments)]
 fn tick(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<crate::input::Controls>,
     mouse: Res<ButtonInput<MouseButton>>,
     world: crate::collision::CollisionWorld,
     mut intro: ResMut<Intro>,
@@ -235,7 +235,7 @@ fn tick(
     nodes: Query<(&PathNode,)>,
 ) {
     let nodes: Vec<_> = nodes.iter().collect();
-    let skip = keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter) || keys.just_pressed(KeyCode::Escape) || mouse.just_pressed(MouseButton::Right);
+    let skip = controls.confirm || controls.options || controls.accept || controls.back || mouse.just_pressed(MouseButton::Right);
     if intro.active && !intro.gliding && skip {
         intro.gliding = true;
     }

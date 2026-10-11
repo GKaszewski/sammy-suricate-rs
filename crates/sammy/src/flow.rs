@@ -231,13 +231,10 @@ fn load_pending(
     info!("loaded level {file} (slot {slot:?})");
 }
 
-fn any_key(keys: &ButtonInput<KeyCode>) -> bool {
-    keys.get_just_pressed().next().is_some()
-}
 
 fn run_flow(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<crate::input::Controls>,
     game: Res<GameState>,
     mut save: ResMut<crate::save::SaveGame>,
     follow: Query<&FollowState>,
@@ -250,7 +247,7 @@ fn run_flow(
             current.intro_ticks += t;
             let converged = follow.iter().any(|f| f.converged);
             // Ends when the camera converges, after 128 ticks, or on Enter/Esc (mm1.wdl:744-813).
-            let skip = keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter, KeyCode::Escape]);
+            let skip = controls.confirm || controls.options || controls.accept;
             if (converged && current.intro_ticks > 8.0) || current.intro_ticks >= 128.0 || skip {
                 Phase::Playing
             } else {
@@ -273,7 +270,7 @@ fn run_flow(
         }
         // Win: Sammy dances until a key (`AnimGagnee` blocks, mm1.wdl:947); lose: 320 ticks or a key.
         Phase::Won(ticks) | Phase::Lost(ticks)
-            if (ticks > 16.0 && any_key(&keys)) || (matches!(current.phase, Phase::Lost(_)) && ticks >= 320.0) =>
+            if (ticks > 16.0 && controls.any) || (matches!(current.phase, Phase::Lost(_)) && ticks >= 320.0) =>
         {
             let won = matches!(current.phase, Phase::Won(_));
             pending.0 = match current.slot {

@@ -103,6 +103,7 @@ fn place_hud_models(
     game: Res<GameState>,
     visible: Res<HudVisible>,
     windows: Query<&Window>,
+    ui_scale: Res<UiScale>,
     cam: Query<(&Camera, &GlobalTransform, &Projection), With<MainCamera>>,
     mut q: Query<
         (&mut CameraSpace, &mut Transform, &mut GlobalTransform, &mut Visibility, Option<&mut HudWasp>, Option<&HudSkins>, &mut MeshMaterial3d<StandardMaterial>, Has<HudEye>),
@@ -111,10 +112,11 @@ fn place_hud_models(
 ) {
     let (Ok(win), Ok((camera, cam_tf, proj))) = (windows.single(), cam.single()) else { return };
     let Projection::Perspective(p) = proj else { return };
-    let s = (win.height() / H).min(win.width() / W);
-    // Same size relative to the window height as at 4:3 with the original 60° arc.
+    // Mode-6 pixel size in window pixels, as for the 2D HUD (whole-number UI scale).
+    let s = ui_scale.0;
+    // Same size relative to the 2D HUD as at 4:3 with the original 60° arc.
     let vfov_43 = 2.0 * ((30f32).to_radians().tan() / (4.0 / 3.0)).atan();
-    let size_k = (p.fov / 2.0).tan() / (vfov_43 / 2.0).tan();
+    let size_k = (p.fov / 2.0).tan() / (vfov_43 / 2.0).tan() * s / (win.height() / H);
     for (mut cs, mut tf, mut gtf, mut vis, wasp, skins, mut mat, eye) in &mut q {
         let shown = visible.0
             && match (&wasp, eye) {

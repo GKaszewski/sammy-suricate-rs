@@ -297,7 +297,7 @@ pub fn slide_move_n(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 
 
 pub fn move_player(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<crate::input::Controls>,
     jump: Res<JumpParams>,
     current: Res<crate::flow::CurrentLevel>,
     world: CollisionWorld,
@@ -327,14 +327,11 @@ pub fn move_player(
         }
 
         // Intention: x = right(+)/left(-), y = forward(+)/back(-) (Key_Force).
-        let axis = |pos: KeyCode, neg: KeyCode| keys.pressed(pos) as i32 as f32 - keys.pressed(neg) as i32 as f32;
-        let mut ix = axis(KeyCode::ArrowRight, KeyCode::ArrowLeft);
-        let mut iy = axis(KeyCode::ArrowUp, KeyCode::ArrowDown);
+        let (mut ix, mut iy) = (controls.turn, controls.forward);
         if std::env::var_os("SAMMY_AUTOWALK").is_some() {
             iy = 1.0; // debug: hold forward
         }
-        let mut ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
-        let mut ctrl_hit = keys.just_pressed(KeyCode::ControlLeft) || keys.just_pressed(KeyCode::ControlRight);
+        let (mut ctrl, mut ctrl_hit) = (controls.jump, controls.jump_hit);
         if !input || p.state == State::Dead {
             (ix, iy, ctrl, ctrl_hit) = (0.0, 0.0, false, false);
         }
@@ -355,7 +352,7 @@ pub fn move_player(
 
         // Boost (HandleBoostPlayer): the engine doubles Key_Force under Shift; with charge
         // the script keeps turning ×0.75 (net ×1.5) and forward ×2, else halves it back.
-        let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        let shift = controls.boost;
         p.boosting = false;
         if shift && input && game.boost < BOOST_MAX && p.state != State::Dead {
             game.boost = (game.boost + t).min(BOOST_MAX); // LessBoost: ConsoBoost 1/tick
@@ -365,7 +362,7 @@ pub fn move_player(
         }
 
         // U-turn (RetourneSammy): Alt in a normal state, pan eases toward +180.
-        let alt = keys.just_pressed(KeyCode::AltLeft) || keys.just_pressed(KeyCode::AltRight);
+        let alt = controls.uturn_hit;
         if alt && input && p.grounded && matches!(p.state, State::Stand | State::Walk | State::Turn) {
             p.state = State::UTurn;
             p.uturn = Some((p.pan + 180.0, false));

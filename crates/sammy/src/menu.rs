@@ -217,6 +217,7 @@ fn place_camera(
 fn pick(
     mut state: ResMut<MenuState>,
     mouse: Res<ButtonInput<MouseButton>>,
+    controls: Res<crate::input::Controls>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cam: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     mut items: Query<(Entity, &mut MenuItem, &Visibility, &GlobalTransform, Option<&Aabb>, Option<&Children>)>,
@@ -246,7 +247,16 @@ fn pick(
             }
         }
     }
-    let now = best.map(|(e, _)| e);
+    let mut now = best.map(|(e, _)| e);
+    // A pad press only activates an item that was already focused.
+    let before = state.hovered;
+    if controls.pad && !state.modal {
+        now = pad_focus(&controls, state.hovered, camera, cam_tf, &items);
+        // B backs out of a level grid.
+        if controls.back && state.view != 0 {
+            choices.write(MenuChoice(20));
+        }
+    }
     if now != state.hovered {
         // Release: light off. Touch: `Toc2` at 25 and an orange light (darker for locked icons).
         if let Some(old) = state.hovered {
@@ -276,7 +286,7 @@ fn pick(
             item.sparkle[1] += 15.0;
         }
     }
-    if mouse.just_pressed(MouseButton::Left)
+    if (mouse.just_pressed(MouseButton::Left) || (controls.pad && controls.accept && before == state.hovered))
         && !state.modal
         && let Some(h) = state.hovered
         && let Ok((_, item, ..)) = items.get(h)
@@ -289,6 +299,48 @@ fn pick(
 }
 
 /// Slab test of a world ray against a transformed box; returns the distance.
+/// Gamepad focus over the menu items on screen: the D-pad / stick moves to the nearest
+/// item with another code in that direction; the first press picks the one nearest the
+/// screen centre.
+#[allow(clippy::type_complexity)]
+fn pad_focus(
+    controls: &crate::input::Controls,
+    current: Option<Entity>,
+    camera: &Camera,
+    cam_tf: &GlobalTransform,
+    items: &Query<(Entity, &mut MenuItem, &Visibility, &GlobalTransform, Option<&Aabb>, Option<&Children>)>,
+) -> Option<Entity> {
+    let size = camera.logical_viewport_size()?;
+    let on_screen: Vec<(Entity, u32, Vec2)> = items
+        .iter()
+        .filter(|(_, item, vis, ..)| item.code != 0 && **vis != Visibility::Hidden)
+        .filter_map(|(e, item, _, gt, ..)| {
+            let p = camera.world_to_viewport(cam_tf, gt.translation()).ok()?;
+            (p.x >= 0.0 && p.y >= 0.0 && p.x <= size.x && p.y <= size.y).then_some((e, item.code, p))
+        })
+        .collect();
+    let cur = current.and_then(|c| on_screen.iter().find(|i| i.0 == c));
+    let Some(&(_, code, at)) = cur else {
+        if controls.nav.is_some() || controls.accept {
+            return on_screen.iter().min_by(|a, b| a.2.distance(size / 2.0).total_cmp(&b.2.distance(size / 2.0))).map(|i| i.0);
+        }
+        return None;
+    };
+    let Some(d) = controls.nav else { return current };
+    let dir = Vec2::new(d.x as f32, -d.y as f32);
+    on_screen
+        .iter()
+        .filter(|i| i.1 != code)
+        .filter_map(|i| {
+            let v = i.2 - at;
+            let along = v.dot(dir);
+            (along > 1.0).then(|| (i.0, along + 2.0 * (v - dir * along).length()))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|i| i.0)
+        .or(current)
+}
+
 fn ray_obb(ray: Ray3d, gt: &GlobalTransform, aabb: &Aabb) -> Option<f32> {
     let inv = gt.affine().inverse();
     let o = inv.transform_point3(ray.origin);
@@ -437,6 +489,7 @@ fn show_cursor(
     current: Res<CurrentLevel>,
     state: Res<MenuState>,
     intro: Res<crate::intro::Intro>,
+    controls: Res<crate::input::Controls>,
     ui_scale: Res<UiScale>,
     mut windows: Query<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
     mut cursor: Query<(&mut Node, &mut Visibility), With<Cursor>>,
@@ -447,7 +500,7 @@ fn show_cursor(
         opts.visible = !on;
     }
     let Ok((mut n, mut v)) = cursor.single_mut() else { return };
-    match win.cursor_position().filter(|_| on) {
+    match win.cursor_position().filter(|_| on && !controls.pad) {
         Some(c) => {
             let c = c / ui_scale.0;
             (n.left, n.top) = (px(c.x - 8.0), px(c.y - 8.0));

@@ -19,7 +19,8 @@ impl Plugin for OptionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<OptionsRequest>()
             .init_resource::<OptionsState>()
-            .add_systems(Update, (open_on_esc, open_close, build_tab, buttons, sliders, dialog_keys).chain());
+            .init_resource::<Focus>()
+            .add_systems(Update, (open_on_esc, open_close, build_tab, focus_nav, buttons, sliders, choices, choice_labels, dialog_keys, focus_frame).chain());
     }
 }
 
@@ -86,8 +87,6 @@ enum Action {
     Restart,
     PrevPage,
     NextPage,
-    Keyboard,
-    Joypad,
     Yes,
     No,
 }
@@ -97,7 +96,7 @@ enum Action {
 struct ButtonImages {
     normal: Handle<Image>,
     hover: Handle<Image>,
-    /// Shown lit regardless of hover (selected tab, current input device).
+    /// Shown lit regardless of hover (selected tab).
     lit: bool,
 }
 
@@ -105,8 +104,22 @@ struct ButtonImages {
 enum Slider {
     Music,
     Sound,
-    Video,
 }
+
+/// Port display settings, drawn as `<  value  >` rows in the old video slider's place.
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+enum Choice {
+    Mode,
+    Size,
+    UiSize,
+}
+
+/// Gamepad / keyboard focus inside the overlay (shown while the pad is in use).
+#[derive(Resource, Default)]
+struct Focus(Option<Entity>);
+
+#[derive(Component)]
+struct FocusFrame;
 
 #[derive(Component)]
 struct SliderThumb(Slider);
@@ -115,14 +128,14 @@ const TRACK: f32 = 227.0;
 const THUMB: f32 = 32.0;
 
 fn open_on_esc(
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<crate::input::Controls>,
     current: Res<CurrentLevel>,
     state: Res<OptionsState>,
     mut req: ResMut<OptionsRequest>,
     intro: Res<crate::intro::Intro>,
 ) {
     // Esc skips the intro instead (and its release is awaited, Intro2.wdl:209).
-    if !keys.just_pressed(KeyCode::Escape) || state.open() || intro.active {
+    if !controls.options || state.open() || intro.active {
         return;
     }
     req.open = match current.phase {
@@ -149,6 +162,7 @@ fn open_close(
     mut menu: ResMut<crate::menu::MenuState>,
     mut time: ResMut<Time<Virtual>>,
     keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<crate::input::Controls>,
     files: Res<GameFiles>,
     mut images: ResMut<Assets<Image>>,
     roots: Query<Entity, With<OptionsRoot>>,
@@ -159,6 +173,10 @@ fn open_close(
         state.mode = Some(mode);
         state.dirty = true;
         state.help_page = state.help_page.max(1);
+        // Debug: SAMMY_OPTIONS=audio opens on the audio/video tab.
+        if std::env::var("SAMMY_OPTIONS").is_ok_and(|v| v == "audio") {
+            state.tab = Tab::Audio;
+        }
         if mode != OptionsMode::Menu {
             time.pause(); // `Freeze_mode = 1`
         }
@@ -206,7 +224,8 @@ fn open_close(
         state.dialog = Some(Question::Quit);
     }
     // Esc / Enter close the overlay (`Fin_MenuOptions`); Esc cancels a dialog first.
-    let esc = keys.just_pressed(KeyCode::Escape) || keys.just_pressed(KeyCode::Enter);
+    // Pad: Start closes too, B backs out.
+    let esc = keys.just_pressed(KeyCode::Escape) || keys.just_pressed(KeyCode::Enter) || controls.options || controls.back;
     if esc && state.dialog.is_some() {
         state.dialog = None;
     } else if esc && state.mode.is_some() && roots.iter().next().is_some() && !state.dirty {
@@ -252,7 +271,6 @@ fn close(commands: &mut Commands, state: &mut OptionsState, time: &mut Time<Virt
 fn build_tab(
     mut commands: Commands,
     mut state: ResMut<OptionsState>,
-    save: Res<SaveGame>,
     files: Res<GameFiles>,
     mut images: ResMut<Assets<Image>>,
     strings: Option<Res<WdlStrings>>,
@@ -274,22 +292,29 @@ fn build_tab(
     let text = |name: &str| strings.as_ref().map(|s| s.get(name).to_vec()).unwrap_or_default();
     let tab = state.tab;
     let page = state.help_page;
-    let (thumb, volmus, keyb, pad, prev, next) =
-        (im("butvol1.pcx"), im("volmus.pcx"), (im("butkey1.pcx"), im("butkey2.pcx")), (im("butpad1.pcx"), im("butpad2.pcx")), (im("flechga1.pcx"), im("flechga2.pcx")), (im("flechdr1.pcx"), im("flechdr2.pcx")));
+    let (thumb, volmus, prev, next) = (im("butvol1.pcx"), im("volmus.pcx"), (im("flechga1.pcx"), im("flechga2.pcx")), (im("flechdr1.pcx"), im("flechdr2.pcx")));
     let picture = (page != 2).then(|| im(&format!("help0{page}.pcx")));
-    let (team, hbarvide) = (im("lateam.pcx"), im("hbarvide.pcx"));
+    let team = im("lateam.pcx");
     commands.entity(root).with_children(|c| match tab {
         Tab::Audio => {
-            c.spawn((at(347.0, 17.0, 266.0, 296.0), ImageNode::new(volmus)));
-            for (slider, y) in [(Slider::Music, 60.0), (Slider::Sound, 161.0), (Slider::Video, 264.0)] {
+            // The music/sound art and the "Rozdzielczość grafiki" heading; the old
+            // resolution slider below it is replaced by the display rows.
+            c.spawn((at(347.0, 17.0, 266.0, 249.0), ImageNode { image: volmus, rect: Some(Rect::new(0.0, 0.0, 266.0, 249.0)), ..default() }));
+            for (slider, y) in [(Slider::Music, 60.0), (Slider::Sound, 161.0)] {
                 c.spawn((at(365.0, y, TRACK, 29.0), RelativeCursorPosition::default(), slider)).with_children(|t| {
                     t.spawn((at(0.0, 0.0, THUMB, 29.0), ImageNode::new(thumb.clone()), SliderThumb(slider)));
                 });
             }
-            // Resolution label: 84-px window over the six-label strip.
-            c.spawn((at(444.0, 300.0, 84.0, 20.0), ImageNode { image: hbarvide, rect: Some(Rect::new(0.0, 0.0, 84.0, 20.0)), ..default() }, SliderThumb(Slider::Video)));
-            c.spawn((at(400.0, 340.0, 64.0, 64.0), RelativeCursorPosition::default(), ImageNode::new(keyb.0.clone()), ButtonImages { normal: keyb.0, hover: keyb.1, lit: !save.joypad }, Action::Keyboard));
-            c.spawn((at(495.0, 340.0, 64.0, 64.0), RelativeCursorPosition::default(), ImageNode::new(pad.0.clone()), ButtonImages { normal: pad.0, hover: pad.1, lit: save.joypad }, Action::Joypad));
+            for (choice, y) in [(Choice::Mode, 272.0), (Choice::Size, 302.0), (Choice::UiSize, 346.0)] {
+                c.spawn((
+                    Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..at(352.0, y, 256.0, 24.0) },
+                    RelativeCursorPosition::default(),
+                    choice,
+                ))
+                .with_children(|r| {
+                    r.spawn((Node { position_type: PositionType::Relative, ..default() }, BitmapText::new(FontKind::Help, Vec::<u8>::new()).narrow()));
+                });
+            }
         }
         Tab::Help => {
             c.spawn((Node { position_type: PositionType::Absolute, left: px(334.0), top: px(20.0), ..default() }, BitmapText::new(FontKind::Help, text(&format!("Help{page}_Str"))).narrow()));
@@ -315,7 +340,8 @@ fn buttons(
     mut commands: Commands,
     mut state: ResMut<OptionsState>,
     mouse: Res<ButtonInput<MouseButton>>,
-    mut q: Query<(&RelativeCursorPosition, &Action, &ButtonImages, &mut ImageNode)>,
+    mut q: Query<(Entity, &RelativeCursorPosition, &Action, &ButtonImages, &mut ImageNode)>,
+    (focus, controls): (Res<Focus>, Res<crate::input::Controls>),
     mut sfx: crate::audio::Sfx,
     mut time: ResMut<Time<Virtual>>,
     roots: Query<Entity, With<OptionsRoot>>,
@@ -323,12 +349,13 @@ fn buttons(
 ) {
     // Hover shows the "2" image (the selected tab / device stays lit).
     let mut fired = None;
-    for (rel, action, imgs, mut node) in &mut q {
-        let want = if rel.cursor_over || imgs.lit { &imgs.hover } else { &imgs.normal };
+    for (e, rel, action, imgs, mut node) in &mut q {
+        let focused = focus.0 == Some(e) && controls.pad;
+        let want = if rel.cursor_over || imgs.lit || focused { &imgs.hover } else { &imgs.normal };
         if node.image != *want {
             node.image = want.clone();
         }
-        if rel.cursor_over && mouse.just_pressed(MouseButton::Left) {
+        if (rel.cursor_over && mouse.just_pressed(MouseButton::Left)) || (focus.0 == Some(e) && controls.accept) {
             fired = Some(*action);
         }
     }
@@ -346,11 +373,6 @@ fn buttons(
         Action::PrevPage | Action::NextPage => {
             sfx.play_vol("Ding1", 50.0);
             state.help_page = if action == Action::PrevPage { state.help_page.saturating_sub(1).max(1) } else { (state.help_page + 1).min(7) };
-            state.dirty = true;
-        }
-        Action::Keyboard | Action::Joypad => {
-            save.joypad = action == Action::Joypad;
-            crate::save::write(&save);
             state.dirty = true;
         }
         Action::Resume => {
@@ -412,71 +434,224 @@ fn answer(
     }
 }
 
-/// Slider dragging (`HSLIDER`, track 227 px with a 32-px thumb).
+/// Slider dragging (`HSLIDER`, track 227 px with a 32-px thumb); left/right on a
+/// focused slider steps it by 5.
 #[allow(clippy::too_many_arguments)]
 fn sliders(
     mut save: ResMut<SaveGame>,
     mouse: Res<ButtonInput<MouseButton>>,
-    tracks: Query<(&Slider, &RelativeCursorPosition)>,
-    mut thumbs: Query<(&SliderThumb, &mut Node, Option<&mut ImageNode>)>,
-    mut windows: Query<&mut Window>,
+    (focus, controls): (Res<Focus>, Res<crate::input::Controls>),
+    tracks: Query<(Entity, &Slider, &RelativeCursorPosition)>,
+    mut thumbs: Query<(&SliderThumb, &mut Node)>,
     mut volume: ResMut<GlobalVolume>,
-    mut video: Local<f32>,
     mut dragging: Local<Option<u8>>,
 ) {
-    if *video == 0.0 {
-        *video = 3.0;
-    }
     if !mouse.pressed(MouseButton::Left) {
         *dragging = None;
     }
-    for (slider, rel) in &tracks {
+    let mut changed = false;
+    for (e, slider, rel) in &tracks {
         let id = *slider as u8;
+        let mut value = match slider {
+            Slider::Music => save.music,
+            Slider::Sound => save.sound,
+        };
         if mouse.just_pressed(MouseButton::Left) && rel.cursor_over {
             *dragging = Some(id);
         }
-        if *dragging != Some(id) {
+        if *dragging == Some(id)
+            && let Some(p) = rel.normalized
+        {
+            value = ((p.x + 0.5).clamp(0.0, 1.0) * 100.0).round();
+        } else if focus.0 == Some(e)
+            && let Some(d) = controls.nav.filter(|d| d.x != 0)
+        {
+            value = (value + 5.0 * d.x as f32).clamp(0.0, 100.0);
+            changed = true;
+        } else {
             continue;
         }
-        let Some(p) = rel.normalized else { continue };
-        let f = (p.x + 0.5).clamp(0.0, 1.0);
         match slider {
-            Slider::Music => save.music = (f * 100.0).round(),
+            Slider::Music => save.music = value,
             Slider::Sound => {
-                save.sound = (f * 100.0).round();
+                save.sound = value;
                 volume.volume = bevy::audio::Volume::Linear(save.sound / 100.0);
-            }
-            Slider::Video => {
-                // 1..5 → 512×384 .. 1280×960 (applied at once; the original waited for close).
-                let v = (1.0 + f * 4.0).round();
-                if v != *video {
-                    *video = v;
-                    let (w, h) = [(512, 384), (640, 480), (800, 600), (1024, 768), (1280, 960)][v as usize - 1];
-                    if let Ok(mut win) = windows.single_mut() {
-                        win.resolution.set(w as f32, h as f32);
-                    }
-                }
             }
         }
     }
-    if mouse.just_released(MouseButton::Left) {
+    if mouse.just_released(MouseButton::Left) || changed {
         crate::save::write(&save);
     }
-    for (thumb, mut node, img) in &mut thumbs {
+    for (thumb, mut node) in &mut thumbs {
         let f = match thumb.0 {
             Slider::Music => save.music / 100.0,
             Slider::Sound => save.sound / 100.0,
-            Slider::Video => (*video - 1.0) / 4.0,
         };
-        match img {
-            // The resolution label window over `hbarvide.pcx` (six 84-px labels, shift 83).
-            Some(mut i) if node.width == px(84.0) => {
-                let x = (*video) * 83.0;
-                i.rect = Some(Rect::new(x, 0.0, x + 84.0, 20.0));
+        node.left = px(f * (TRACK - THUMB));
+    }
+}
+
+/// Display rows: a click on the left half steps back, on the right half forward; on a
+/// focused row left/right do the same.
+fn choices(
+    mut save: ResMut<SaveGame>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    (focus, controls): (Res<Focus>, Res<crate::input::Controls>),
+    monitors: Query<&bevy::window::Monitor, With<bevy::window::PrimaryMonitor>>,
+    rows: Query<(Entity, &Choice, &RelativeCursorPosition)>,
+    mut sfx: crate::audio::Sfx,
+) {
+    use crate::save::DisplayMode;
+    let monitor = monitors.single().ok();
+    for (e, choice, rel) in &rows {
+        let step = if rel.cursor_over && mouse.just_pressed(MouseButton::Left) {
+            rel.normalized.map(|p| if p.x < 0.0 { -1 } else { 1 })
+        } else if focus.0 == Some(e) {
+            controls.nav.filter(|d| d.x != 0).map(|d| d.x).or(controls.accept.then_some(1))
+        } else {
+            None
+        };
+        let Some(step) = step else { continue };
+        let d = &mut save.display;
+        let cycle = |i: usize, n: usize| (i as i32 + step).rem_euclid(n as i32) as usize;
+        match choice {
+            Choice::Mode => {
+                let modes = [DisplayMode::Windowed, DisplayMode::Borderless, DisplayMode::Fullscreen];
+                let i = modes.iter().position(|m| *m == d.mode).unwrap_or(0);
+                d.mode = modes[cycle(i, 3)];
             }
-            _ => node.left = px(f * (TRACK - THUMB)),
+            Choice::Size => {
+                let list = crate::display::sizes(d.mode, monitor);
+                if list.is_empty() {
+                    continue;
+                }
+                let cur = crate::display::current_size(d, monitor).unwrap_or(list[0]);
+                let i = list.iter().position(|s| *s == cur).unwrap_or(0);
+                let next = list[cycle(i, list.len())];
+                match d.mode {
+                    DisplayMode::Windowed => d.window = next,
+                    DisplayMode::Fullscreen => d.fullscreen = Some(next),
+                    DisplayMode::Borderless => {}
+                }
+            }
+            Choice::UiSize => d.ui_size = (2 - cycle(2 - d.ui_size.min(2) as usize, 3)) as u8,
+        }
+        sfx.play_vol("Toc2", 50.0);
+        crate::save::write(&save);
+        return;
+    }
+}
+
+fn choice_labels(
+    save: Res<SaveGame>,
+    monitors: Query<&bevy::window::Monitor, With<bevy::window::PrimaryMonitor>>,
+    rows: Query<(&Choice, &Children)>,
+    mut texts: Query<&mut BitmapText>,
+) {
+    use crate::save::DisplayMode;
+    let d = &save.display;
+    let monitor = monitors.single().ok();
+    for (choice, children) in &rows {
+        let label = match choice {
+            Choice::Mode => format!("<  Tryb: {}  >", match d.mode {
+                DisplayMode::Windowed => "okno",
+                DisplayMode::Borderless => "bez ramki",
+                DisplayMode::Fullscreen => "pełny ekran",
+            }),
+            Choice::Size => match (d.mode, crate::display::current_size(d, monitor)) {
+                (DisplayMode::Borderless, Some([w, h])) => format!("Pulpit {w} x {h}"),
+                (_, Some([w, h])) => format!("<  {w} x {h}  >"),
+                _ => String::new(),
+            },
+            Choice::UiSize => format!("<  Interfejs: {}  >", ["duży", "średni", "mały"][d.ui_size.min(2) as usize]),
+        };
+        let bytes = crate::ui_text::cp1250(&label);
+        for c in children.iter() {
+            if let Ok(mut t) = texts.get_mut(c)
+                && t.bytes != bytes
+            {
+                t.bytes = bytes.clone();
+            }
         }
     }
+}
+
+/// Moves the focus with the D-pad / stick / arrows: to the nearest focusable in that
+/// direction (dialog buttons only while a dialog is up). Sliders and display rows use
+/// left/right themselves while focused.
+#[allow(clippy::type_complexity)]
+fn focus_nav(
+    state: Res<OptionsState>,
+    controls: Res<crate::input::Controls>,
+    mut focus: ResMut<Focus>,
+    items: Query<(Entity, &ComputedNode, &bevy::ui::UiGlobalTransform, &InheritedVisibility, Option<&Action>, Has<Slider>, Has<Choice>), Or<(With<Action>, With<Slider>, With<Choice>)>>,
+) {
+    if !state.open() {
+        focus.0 = None;
+        return;
+    }
+    let dialog = state.dialog.is_some();
+    let list: Vec<(Entity, Vec2, bool)> = items
+        .iter()
+        .filter(|(_, n, _, v, a, ..)| v.get() && n.size().x > 0.0 && dialog == matches!(a, Some(Action::Yes | Action::No)))
+        .map(|(e, _, t, _, _, slider, choice)| (e, t.translation, slider || choice))
+        .collect();
+    let current = focus.0.and_then(|f| list.iter().find(|i| i.0 == f));
+    let Some(&(_, at, horizontal)) = current else {
+        // Nothing focused yet: the first pad press picks the top-left item (or "Yes").
+        if controls.pad && (controls.nav.is_some() || controls.accept) {
+            focus.0 = list.iter().min_by(|a, b| (a.1.y + a.1.x * 0.5).total_cmp(&(b.1.y + b.1.x * 0.5))).map(|i| i.0);
+        }
+        return;
+    };
+    let Some(d) = controls.nav else { return };
+    if horizontal && d.x != 0 {
+        return;
+    }
+    // Screen y grows downwards.
+    let dir = Vec2::new(d.x as f32, -d.y as f32);
+    focus.0 = list
+        .iter()
+        .filter(|i| i.0 != focus.0.unwrap())
+        .filter_map(|i| {
+            let v = i.1 - at;
+            let along = v.dot(dir);
+            (along > 1.0).then(|| (i.0, along + 2.0 * (v - dir * along).length()))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|i| i.0)
+        .or(focus.0);
+}
+
+/// A frame around the focused item while the pad is in use.
+fn focus_frame(
+    mut commands: Commands,
+    focus: Res<Focus>,
+    controls: Res<crate::input::Controls>,
+    items: Query<(&ComputedNode, &bevy::ui::UiGlobalTransform)>,
+    mut frame: Query<(&mut Node, &mut Visibility), With<FocusFrame>>,
+) {
+    let target = focus.0.filter(|_| controls.pad).and_then(|e| items.get(e).ok());
+    let Ok((mut node, mut vis)) = frame.single_mut() else {
+        commands.spawn((
+            FocusFrame,
+            Node { position_type: PositionType::Absolute, border: UiRect::all(px(2.0)), ..default() },
+            BorderColor::all(Color::srgb(1.0, 0.85, 0.2)),
+            BackgroundColor(Color::srgba(1.0, 0.85, 0.2, 0.15)),
+            GlobalZIndex(70),
+            Visibility::Hidden,
+        ));
+        return;
+    };
+    let Some((n, t)) = target else {
+        *vis = Visibility::Hidden;
+        return;
+    };
+    let k = n.inverse_scale_factor();
+    let size = n.size() * k + Vec2::splat(6.0);
+    let c = t.translation * k;
+    (node.left, node.top, node.width, node.height) = (px(c.x - size.x / 2.0), px(c.y - size.y / 2.0), px(size.x), px(size.y));
+    *vis = Visibility::Inherited;
 }
 
 /// Yes/No keys: J/T/Y = yes, N = no (options.wdl:687-702, port choice).

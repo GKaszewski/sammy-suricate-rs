@@ -185,7 +185,7 @@ pub fn collect_ammo(
 #[allow(clippy::too_many_arguments)]
 pub fn fire(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<crate::input::Controls>,
     current: Res<crate::flow::CurrentLevel>,
     mut commands: Commands,
     mut game: ResMut<GameState>,
@@ -199,7 +199,7 @@ pub fn fire(
     let kind = game.ammo_type.clamp(1, 7);
 
     // Debug: SAMMY_AUTOFIRE=1 fires whenever possible.
-    let trigger = keys.just_pressed(KeyCode::Space) || std::env::var_os("SAMMY_AUTOFIRE").is_some();
+    let trigger = controls.fire_hit || std::env::var_os("SAMMY_AUTOFIRE").is_some();
     if trigger && crate::flow::playing(&current) && matches!(p.state, State::Stand | State::Walk | State::Turn) {
         if game.ammo <= 0 {
             sfx.play("Error1");

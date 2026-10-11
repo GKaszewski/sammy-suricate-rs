@@ -55,7 +55,7 @@ pub fn init_title(obj: &mut Object, entity: &mut EntityCommands) {
 
 pub fn update_titles(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<crate::input::Controls>,
     scanners: Res<super::extro::Scanners>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut q: Query<(&mut Title, &mut Visibility, &MeshMaterial3d<StandardMaterial>)>,
@@ -64,7 +64,7 @@ pub fn update_titles(
     for (mut title, mut vis, mat) in &mut q {
         // Any id-25 scanner triggers a title (Intro2.wdl:547-556), not only Sammy.
         let near = scanners.nearest(title.center).is_some_and(|(_, d)| d <= title.range);
-        let enter = keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter);
+        let enter = controls.confirm;
         title.phase = match title.phase {
             Phase::Waiting if near => Phase::FadeIn,
             Phase::FadeIn | Phase::Near | Phase::Linger(_) if enter => Phase::FadeOut,
