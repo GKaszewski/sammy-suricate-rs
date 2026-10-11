@@ -154,6 +154,8 @@ fn load_pending(
         *f = FollowState::default();
     }
     let slot = slot_for(&file);
+    // `sun_angle`: pan 135 / tilt 85 in levels (mm1.wdl:618-620), pan 90 in the extro (Extro.wdl:81).
+    commands.insert_resource(if slot == Some(EXTRO_SLOT) { crate::shadow::SunAngle(90.0, 85.0) } else { crate::shadow::SunAngle::default() });
     *current = CurrentLevel { slot, file: file.clone(), phase: Phase::Intro, intro_ticks: 0.0 };
     let mut spawner = Spawner {
         commands: &mut commands,

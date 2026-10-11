@@ -98,9 +98,10 @@ pub fn spawn_shadows(
         // Lion shadow: shadlio2.pcx at 1.2 × the lion's scale.
         spawn(e, "shadlio2.pcx", 1.2 * enemy.scale(), 1.2 * enemy.scale());
     }
+    // Sammy's blob sprite (ombblob2.pcx) is only shown below 40 fps (player.wdl:197-207);
+    // he casts the engine model shadow instead (crate::shadow).
     for e in &player {
-        // Sammy's blob shadow: ombblob2.pcx, scale 0.8 × 1.2.
-        spawn(e, "ombblob2.pcx", 0.8, 1.2);
+        commands.entity(e).insert((HasShadow, crate::shadow::CastsShadow));
     }
 }
 

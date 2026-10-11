@@ -10,6 +10,11 @@ pub fn pos([x, y, z]: [f32; 3]) -> Vec3 {
     Vec3::new(-y, z, -x) / QUANTS_PER_UNIT
 }
 
+/// Inverse of [`pos`]: Bevy position back to native Acknex quants.
+pub fn native(v: Vec3) -> [f32; 3] {
+    [-v.z * QUANTS_PER_UNIT, -v.x * QUANTS_PER_UNIT, v.y * QUANTS_PER_UNIT]
+}
+
 pub fn dir([x, y, z]: [f32; 3]) -> Vec3 {
     Vec3::new(-y, z, -x)
 }

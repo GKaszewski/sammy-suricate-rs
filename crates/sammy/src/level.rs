@@ -253,6 +253,9 @@ impl Spawner<'_, '_, '_> {
                 let index = (f.floor().max(1.0) as usize - 1).min(model.mdl.frames.len().saturating_sub(1));
                 let mesh = self.meshes.add(model.build_mesh(index));
                 self.commands.entity(id).insert((base, Mesh3d(mesh), MeshMaterial3d(material)));
+                if obj.flags & formats::wmb::entity_flags::SHADOW != 0 {
+                    self.commands.entity(id).insert(crate::shadow::CastsShadow);
+                }
                 if init.solid_box && let Some(fr) = model.mdl.frames.get(index) {
                     let sc = obj.scale.map(f32::abs);
                     let center = std::array::from_fn(|i| obj.origin[i] + (fr.bbox_min[i] + fr.bbox_max[i]) * 0.5 * sc[i]);
