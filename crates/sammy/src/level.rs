@@ -104,7 +104,10 @@ impl Spawner<'_, '_, '_> {
             .filter(|_| std::env::var_os("SAMMY_NOLM").is_none())
             .map(|lm| self.images.add(crate::image::to_bevy(lm, false, false)));
         let mut mats = HashMap::new();
-        for (mesh, texture, lit) in self.batch_meshes(&wmb, &level, lightmap.is_some()) {
+        // Port: the menu's level-grid rooms are boxed in `black` walls that frame the 4:3
+        // view; they are dropped so the extended back walls show on wide screens.
+        let skip: &[&str] = if name.eq_ignore_ascii_case(crate::menu::MENU_FILE) { &["black"] } else { &[] };
+        for (mesh, texture, lit) in self.batch_meshes(&wmb, &level, lightmap.is_some(), skip) {
             let material = mats
                 .entry((texture.clone(), lit))
                 .or_insert_with(|| self.level_materials.add(LevelMaterial::new(texture, lit.then(|| lightmap.clone()).flatten())))
@@ -147,13 +150,13 @@ impl Spawner<'_, '_, '_> {
     }
 
     /// Builds one Bevy mesh per texture batch: (mesh, texture, has lightmap UVs).
-    fn batch_meshes(&mut self, wmb: &Wmb, level: &LevelMesh, use_lightmap: bool) -> Vec<(Handle<Mesh>, Option<Handle<Image>>, bool)> {
+    fn batch_meshes(&mut self, wmb: &Wmb, level: &LevelMesh, use_lightmap: bool, skip: &[&str]) -> Vec<(Handle<Mesh>, Option<Handle<Image>>, bool)> {
         let textures: Vec<Handle<Image>> =
             wmb.textures.iter().map(|t| self.images.add(crate::image::to_bevy(&t.image, true, true))).collect();
         let mut out = Vec::new();
         for batch in level.models.iter().flat_map(|m| &m.batches) {
             let tex_name = batch.texture.map_or("", |t| wmb.textures[t].name.as_str());
-            if std::env::var_os("SAMMY_NODUMMY").is_some() && tex_name.to_lowercase().contains("dummy") {
+            if skip.iter().any(|s| tex_name.eq_ignore_ascii_case(s)) || (std::env::var_os("SAMMY_NODUMMY").is_some() && tex_name.to_lowercase().contains("dummy")) {
                 continue;
             }
             let lit = batch.lit && use_lightmap;
@@ -175,7 +178,7 @@ impl Spawner<'_, '_, '_> {
     fn prefab_meshes(&mut self, wmb: &Wmb) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
         let level = wmb.build_mesh();
         let mut mats: HashMap<Option<AssetId<Image>>, Handle<StandardMaterial>> = HashMap::new();
-        self.batch_meshes(wmb, &level, false)
+        self.batch_meshes(wmb, &level, false, &[])
             .into_iter()
             .map(|(mesh, tex, _)| {
                 let material = mats

@@ -28,7 +28,7 @@ impl Plugin for MenuPlugin {
             .add_systems(Startup, setup_overlay)
             .add_systems(Update, (debug_start, style_items, animate_items, pick, act, overlay).chain().run_if(in_menu))
             .add_systems(PostUpdate, place_camera.run_if(in_menu).before(TransformSystems::Propagate))
-            .add_systems(Update, (show_cursor, hide_hud));
+            .add_systems(Update, (show_cursor, hide_hud, extend_grid_walls));
     }
 }
 
@@ -299,6 +299,61 @@ fn pick(
 }
 
 /// Slab test of a world ray against a transformed box; returns the distance.
+/// Port: the level-grid rooms are built only about 4:3 wide, so wide screens saw the
+/// void beside them. Each room's back wall (the farthest face looking back at its camera
+/// marker) is continued sideways and vertically by a quad just behind it, with the same
+/// texture and texture alignment.
+fn extend_grid_walls(
+    mut commands: Commands,
+    level: Option<Res<crate::actions::player::LevelCollision>>,
+    markers: Query<&MenuMarker, Added<MenuMarker>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let Some(level) = level else { return };
+    let w = &level.0;
+    for m in &markers {
+        let [mx, my, mz] = m.pos;
+        let faces: Vec<(usize, [f32; 3], [f32; 3])> = (0..w.faces.len())
+            .filter(|&f| w.face_visible(f) && w.face_normal(f)[1] < -0.99)
+            .map(|f| {
+                let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+                for v in w.face_vertices(f) {
+                    for i in 0..3 {
+                        lo[i] = lo[i].min(v[i]);
+                        hi[i] = hi[i].max(v[i]);
+                    }
+                }
+                (f, lo, hi)
+            })
+            .filter(|(_, lo, hi)| lo[1] > my && lo[1] < my + 1500.0 && hi[0] > mx - 700.0 && lo[0] < mx + 700.0 && hi[2] > mz - 600.0 && lo[2] < mz + 600.0)
+            .collect();
+        let Some(wall_y) = faces.iter().map(|f| f.1[1]).reduce(f32::max) else { continue };
+        let wall: Vec<_> = faces.iter().filter(|f| (f.1[1] - wall_y).abs() < 1.0).collect();
+        let Some(&&(face, ..)) = wall.first() else { continue };
+        let (Some(tex), ti) = (w.face_texture(face), &w.texinfos[w.faces[face].texinfo as usize]) else { continue };
+        let (lo_x, hi_x) = wall.iter().fold((f32::MAX, f32::MIN), |a, f| (a.0.min(f.1[0]), a.1.max(f.2[0])));
+        let (lo_z, hi_z) = wall.iter().fold((f32::MAX, f32::MIN), |a, f| (a.0.min(f.1[2]), a.1.max(f.2[2])));
+        let t = &w.textures[tex];
+        let (tw, th) = (t.width as f32, t.height as f32);
+        let y = wall_y + 2.0;
+        // Vertically only a little: the rooms lie under the menu desert.
+        let corners = [[lo_x - 8000.0, y, lo_z - 1200.0], [hi_x + 8000.0, y, lo_z - 1200.0], [hi_x + 8000.0, y, hi_z + 1200.0], [lo_x - 8000.0, y, hi_z + 1200.0]];
+        let mut mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::default());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, corners.iter().map(|&p| coords::pos(p).to_array()).collect::<Vec<_>>());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![coords::pos([0.0, -1.0, 0.0]).normalize().to_array(); 4]);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, corners.iter().map(|&p| { let st = ti.st(p); [st[0] / tw, st[1] / th] }).collect::<Vec<_>>());
+        mesh.insert_indices(bevy::mesh::Indices::U32(vec![0, 1, 2, 0, 2, 3]));
+        let image = images.add(crate::image::to_bevy(&t.image, true, true));
+        // Unlit, dimmed to roughly the wall's baked light [I].
+        let mat = materials.add(StandardMaterial { base_color_texture: Some(image), base_color: Color::srgb(WALL_LIGHT, WALL_LIGHT, WALL_LIGHT), unlit: true, cull_mode: None, ..default() });
+        commands.spawn((Mesh3d(meshes.add(mesh)), MeshMaterial3d(mat), Transform::default(), crate::flow::LevelScoped));
+    }
+}
+
+const WALL_LIGHT: f32 = 0.8;
+
 /// Gamepad focus over the menu items on screen: the D-pad / stick moves to the nearest
 /// item with another code in that direction; the first press picks the one nearest the
 /// screen centre.
