@@ -8,6 +8,7 @@
 
 pub mod angle;
 pub mod anim;
+pub mod camera;
 pub mod collision;
 pub mod doors;
 pub mod enemies;
