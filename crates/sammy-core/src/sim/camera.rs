@@ -6,6 +6,7 @@ use crate::camera::{CameraParams, CameraPose, CameraRuntime, FollowState, Subjec
 use crate::flow::Phase;
 use crate::id::Id;
 use crate::time::TICKS_PER_SEC;
+use crate::angle::Angles;
 
 /// The camera's state and this frame's pose.
 #[derive(Clone, Debug, Default)]
@@ -24,7 +25,7 @@ pub fn pan_tilt(pose: &CameraPose) -> ([f32; 3], f32, f32) {
             let d = [target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]];
             (pos, d[1].atan2(d[0]).to_degrees(), d[2].atan2(d[0].hypot(d[1])).to_degrees())
         }
-        CameraPose::Angles { pos, angles } => (pos, angles[0], angles[1]),
+        CameraPose::Angles { pos, angles } => (pos, angles.pan.0, angles.tilt.0),
     }
 }
 
@@ -80,7 +81,7 @@ pub(super) fn sky(sim: &mut Sim, dt: Dt) {
         }
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = [cam[0], cam[1], cam[2] + s.dz];
-            b.angles = s.angles;
+            b.angles = Angles::from_array(s.angles);
         }
     }
 }

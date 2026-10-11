@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::percent::Percent;
+use crate::angle::Angles;
 
 /// Where an entity is and how it shows (native coordinates, degrees).
 #[derive(Clone, Debug)]
@@ -9,7 +10,7 @@ pub struct Body {
     pub name: String,
     pub pos: [f32; 3],
     /// Pan, tilt, roll.
-    pub angles: [f32; 3],
+    pub angles: Angles,
     /// Native axes (X forward, Y left, Z up).
     pub scale: [f32; 3],
     pub hidden: bool,
@@ -19,7 +20,7 @@ pub struct Body {
 
 impl Body {
     pub fn new(name: impl Into<String>, pos: [f32; 3]) -> Self {
-        Self { name: name.into(), pos, angles: [0.0; 3], scale: [1.0; 3], hidden: false, alpha: OPAQUE }
+        Self { name: name.into(), pos, angles: Angles::ZERO, scale: [1.0; 3], hidden: false, alpha: OPAQUE }
     }
 
     /// Uniform scale.

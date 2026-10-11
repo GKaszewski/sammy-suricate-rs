@@ -21,7 +21,8 @@ pub fn dir([x, y, z]: [f32; 3]) -> Vec3 {
 
 /// Acknex euler angles in degrees: pan (around Z, CCW from above), tilt (pitch up),
 /// roll. Applied pan, then tilt, then roll.
-pub fn rotation([pan, tilt, roll]: [f32; 3]) -> Quat {
+pub fn rotation(angles: impl Into<sammy_core::angle::Angles>) -> Quat {
+    let [pan, tilt, roll] = angles.into().to_array();
     // In Bevy space: Acknex Z (up) = +Y, Acknex Y (left) = -X, Acknex X (fwd) = -Z.
     Quat::from_rotation_y(pan.to_radians())
         * Quat::from_rotation_x(tilt.to_radians())

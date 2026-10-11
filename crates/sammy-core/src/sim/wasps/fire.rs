@@ -1,12 +1,13 @@
 //! Firing wasps and spawning their bodies.
 
 use super::*;
+use crate::angle::Angles;
 
 /// A `wasp1.mdl` entity of `kind` (skin) playing "walk" at `wing` percent per tick.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn spawn_wasp_body(sim: &mut Sim, name: &str, pos: [f32; 3], angles: [f32; 3], scale: f32, kind: u32, overlay: bool, wing: f32) -> Id {
     let mut body = Body::new(name, pos).scaled(scale);
-    body.angles = angles;
+    body.angles = Angles::from_array(angles);
     let id = sim.world.spawn_body(body);
     sim.world.looks.insert(id, Look::new(Visual::Model { file: WASP_MODEL.into(), skin: kind, overlay, frame: None }));
     if let Some(model) = sim.assets.model(WASP_MODEL) {

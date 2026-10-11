@@ -20,7 +20,7 @@ impl Camera {
         let (pos, target) = match *pose {
             CameraPose::LookAt { pos, target } => (Vec3::from(pos), Vec3::from(target)),
             CameraPose::Angles { pos, angles } => {
-                let (p, t) = (angles[0].to_radians(), angles[1].to_radians());
+                let (p, t) = (angles.pan.radians(), angles.tilt.radians());
                 let pos = Vec3::from(pos);
                 (pos, pos + Vec3::new(t.cos() * p.cos(), t.cos() * p.sin(), t.sin()))
             }
@@ -46,7 +46,8 @@ impl Camera {
 }
 
 /// A4 euler angles (pan about Z, tilt nose-up, roll) as a rotation in native axes.
-pub fn rotation([pan, tilt, roll]: [f32; 3]) -> Quat {
+pub fn rotation(angles: impl Into<sammy_core::angle::Angles>) -> Quat {
+    let [pan, tilt, roll] = angles.into().to_array();
     Quat::from_rotation_z(pan.to_radians()) * Quat::from_rotation_y(-tilt.to_radians()) * Quat::from_rotation_x(roll.to_radians())
 }
 

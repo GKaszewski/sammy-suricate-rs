@@ -26,11 +26,7 @@ mod pickup;
 
 pub use self::{corpse::*, door::*, escapee::*, fire::*, flight::*, hive::*, kinds::*, pickup::*};
 
-fn forward(pan: f32, tilt: f32) -> [f32; 3] {
-    let (sp, cp) = pan.to_radians().sin_cos();
-    let (st, ct) = tilt.to_radians().sin_cos();
-    [cp * ct, sp * ct, st]
-}
+use crate::angle::forward;
 
 #[cfg(test)]
 mod tests;

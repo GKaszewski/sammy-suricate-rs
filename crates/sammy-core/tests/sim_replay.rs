@@ -59,7 +59,7 @@ fn digest(sim: &Sim) -> String {
         .values()
         .map(|b| {
             let [x, y, z] = b.pos.map(|v| r(v / 32.0));
-            let [p, t, ro] = b.angles.map(r);
+            let [p, t, ro] = b.angles.to_array().map(r);
             format!("{} {x} {y} {z} {p} {t} {ro} {} {}", b.name, b.hidden, r(b.scale[0]))
         })
         .collect();

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::angle::Angles;
 
 /// `InitAmmo1`: the type's skin and size; the overlay look unless Flag3 (flare).
 pub(in crate::sim) fn init_ammo(w: &mut World, id: Id, obj: &mut Object) -> Presentation {
@@ -21,7 +22,7 @@ pub(in crate::sim) fn spin_pickups(sim: &mut Sim, dt: Dt) {
     for (id, a) in w.spinning.iter_mut() {
         a[0] += PICKUP_SPIN * dt.t;
         if let Some(b) = w.bodies.get_mut(id) {
-            b.angles = *a;
+            b.angles = Angles::from_array(*a);
         }
     }
 }

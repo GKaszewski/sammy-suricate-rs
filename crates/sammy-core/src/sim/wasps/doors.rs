@@ -1,6 +1,7 @@
 //! Weak doors hit by wasps, and their planks.
 
 use super::*;
+use crate::angle::Angles;
 
 /// `ExplodeDoorWeak`: HP 3/2/1 morph to doorwk2/3/4; otherwise the door breaks into planks.
 pub(in crate::sim) fn weak_doors(sim: &mut Sim) {
@@ -25,7 +26,7 @@ pub(in crate::sim) fn weak_doors(sim: &mut Sim) {
                     }
                     let plank = Plank::burst(origin, &mut sim.rng);
                     let mut body = Body::new("plank", plank.pos);
-                    body.angles = plank.angles;
+                    body.angles = Angles::from_array(plank.angles);
                     let pid = sim.world.spawn_body(body);
                     sim.world.looks.insert(pid, Look::new(Visual::Model { file: file.into(), skin: 1, overlay: false, frame: Some(0) }));
                     sim.world.planks.insert(pid, plank);
@@ -46,7 +47,7 @@ pub(in crate::sim) fn planks(sim: &mut Sim, dt: Dt) {
         }
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = p.pos;
-            b.angles = p.angles;
+            b.angles = Angles::from_array(p.angles);
         }
         if done {
             gone.push(*id);

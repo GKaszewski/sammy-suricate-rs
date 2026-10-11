@@ -13,6 +13,7 @@ use crate::intro::MENU_ORIGIN;
 use crate::level::Presentation;
 use crate::menu::{Bob, Choice, LEVEL_ICON, Look, MenuAction};
 use crate::percent::Percent;
+use crate::angle::Angles;
 
 /// Camera `arc` in the menu (degrees).
 pub const MENU_ARC: f32 = 70.0;
@@ -157,7 +158,7 @@ pub(super) fn step(sim: &mut Sim, dt: Dt) {
         if item.bob.moves() && item.code != 0 {
             b.pos = item.bob.step(dt.t);
             if !item.sprite {
-                b.angles = item.bob.angles;
+                b.angles = Angles::from_array(item.bob.angles);
             }
         }
         let k = if hovered == Some(*id) && item.is_icon() && !item.locked { HOVER_SCALE } else { 1.0 };
@@ -180,5 +181,5 @@ pub(super) fn place_camera(sim: &mut Sim) {
     if let Some(c) = sim.menu.debug_camera {
         (pos, pan, tilt) = c;
     }
-    sim.camera.pose = Some(CameraPose::Angles { pos, angles: [pan, tilt, 0.0] });
+    sim.camera.pose = Some(CameraPose::Angles { pos, angles: Angles::from_array([pan, tilt, 0.0]) });
 }

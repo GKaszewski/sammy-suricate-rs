@@ -50,7 +50,7 @@ pub enum CameraPose {
     /// Looking at a point (type 3).
     LookAt { pos: [f32; 3], target: [f32; 3] },
     /// Pan and tilt (type 2).
-    Angles { pos: [f32; 3], angles: [f32; 3] },
+    Angles { pos: [f32; 3], angles: crate::angle::Angles },
 }
 
 /// The camera's subject this frame: `pov_Syn` for type 3, Sammy for type 2.

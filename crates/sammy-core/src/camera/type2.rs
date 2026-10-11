@@ -1,6 +1,7 @@
 //! The type-2 camera (`HandleCamera`).
 
 use super::*;
+use crate::angle::Angles;
 
 /// Camera type 2 (`HandleCamera`, camera.wdl:13-136) with `SetPosCamera` placement.
 #[allow(clippy::too_many_arguments)]
@@ -56,5 +57,5 @@ pub(super) fn follow_type2(params: &CameraParams, level: Option<&Wmb>, p: Subjec
     let pan = d[1].atan2(d[0]).to_degrees();
     let want_tilt = d[2].atan2((d[0] * d[0] + d[1] * d[1]).sqrt()).to_degrees();
     st.tilt += angle_diff(want_tilt - st.tilt) * (0.25 * t).min(1.0);
-    CameraPose::Angles { pos, angles: [pan, st.tilt, 0.0] }
+    CameraPose::Angles { pos, angles: Angles::from_array([pan, st.tilt, 0.0]) }
 }

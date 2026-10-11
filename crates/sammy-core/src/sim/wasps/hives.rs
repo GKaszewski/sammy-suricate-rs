@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::angle::Angles;
 
 pub(in crate::sim) fn hives(sim: &mut Sim, dt: Dt) {
     if !sim.playing() {
@@ -39,7 +40,7 @@ pub(in crate::sim) fn hive_wasps(sim: &mut Sim, dt: Dt) {
         events.extend(sounds.drain(..).map(Event::Sound));
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = hw.pos;
-            b.angles = [hw.pan, hw.tilt, 0.0];
+            b.angles = Angles::from_array([hw.pan, hw.tilt, 0.0]);
         }
         if let Some((pickup, lifetime)) = done {
             settled.push((*id, pickup, lifetime, [hw.pan, PICKUP_TILT, 0.0]));

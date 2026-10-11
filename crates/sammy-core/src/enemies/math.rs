@@ -16,11 +16,7 @@ pub(super) fn to_angle(v: [f32; 3]) -> (f32, f32, f32) {
     (v[1].atan2(v[0]).to_degrees(), v[2].atan2(h).to_degrees(), (h * h + v[2] * v[2]).sqrt())
 }
 
-pub(super) fn forward(pan: f32, tilt: f32) -> [f32; 3] {
-    let (sp, cp) = pan.to_radians().sin_cos();
-    let (st, ct) = tilt.to_radians().sin_cos();
-    [cp * ct, sp * ct, st]
-}
+pub(super) use crate::angle::forward;
 
 /// Scan cone test (§2.5): within `range`, ±h/2 of `pan`, ±v/2 of `tilt`.
 pub(super) fn in_cone(from: [f32; 3], pan: f32, tilt: f32, h: f32, v: f32, range: f32, p: [f32; 3]) -> bool {

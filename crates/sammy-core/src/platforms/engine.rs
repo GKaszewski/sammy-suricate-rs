@@ -31,11 +31,6 @@ pub struct Engine {
     pub delta: [f32; 3],
 }
 
-pub(super) fn forward([pan, tilt, _]: [f32; 3]) -> [f32; 3] {
-    let (sp, cp) = pan.to_radians().sin_cos();
-    let (st, ct) = tilt.to_radians().sin_cos();
-    [cp * ct, sp * ct, st]
-}
 
 impl Engine {
     pub fn from_object(obj: &Object) -> Self {
@@ -72,7 +67,7 @@ impl Engine {
             EngineState::Paused(left) if left - t > 0.0 => EngineState::Paused(left - t),
             EngineState::Paused(_) => EngineState::Moving,
             EngineState::Moving => {
-                let dir = forward(self.angles);
+                let dir = crate::angle::forward(self.angles[0], self.angles[1]);
                 let target = [0, 1, 2].map(|i| self.pos[i] + dir[i] * speed * t);
                 let tr = trace(self.pos, target);
                 if tr.start_solid {

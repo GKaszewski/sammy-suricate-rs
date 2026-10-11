@@ -12,6 +12,7 @@ use crate::intro::{END_KEY, FRICTION, FRICTION_AT, GLIDE_FOG_CLEAR, Logo, MENU_O
 use crate::player::BLOB_HAUT;
 use crate::time::TICKS_PER_SEC;
 use crate::time::Ticks;
+use crate::angle::Angles;
 
 /// Intro fog is a percentage; the fog starts fully black.
 const FULL_PERCENT: f32 = 100.0;
@@ -130,7 +131,7 @@ pub(super) fn tick(sim: &mut Sim, controls: &Controls, dt: Dt) {
         }
         if let Some(b) = sim.world.bodies.get_mut(&id) {
             b.pos = pos;
-            b.angles = [pan, 0.0, 0.0];
+            b.angles = Angles::from_array([pan, 0.0, 0.0]);
         }
         if let Some(a) = sim.world.animators.get_mut(&id) {
             a.anim.set_speed_pct(speed, TICKS_PER_SEC);
@@ -152,7 +153,7 @@ pub(super) fn glide(sim: &mut Sim, dt: Dt) {
         intro.gliding = false;
         intro.fog = 0.0;
     }
-    sim.camera.pose = Some(CameraPose::Angles { pos, angles: [pan, tilt, 0.0] });
+    sim.camera.pose = Some(CameraPose::Angles { pos, angles: Angles::from_array([pan, tilt, 0.0]) });
 }
 
 impl IntroState {

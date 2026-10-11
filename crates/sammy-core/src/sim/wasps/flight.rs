@@ -1,6 +1,7 @@
 //! Wasps in flight, escaping and dying.
 
 use super::*;
+use crate::angle::Angles;
 
 /// Escaping wasps spiral upward and vanish.
 pub(in crate::sim) fn escapees(sim: &mut Sim, dt: Dt) {
@@ -12,7 +13,7 @@ pub(in crate::sim) fn escapees(sim: &mut Sim, dt: Dt) {
         }
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = e.pos;
-            b.angles = [e.pan, e.tilt, 0.0];
+            b.angles = Angles::from_array([e.pan, e.tilt, 0.0]);
         }
     }
     for id in gone {
@@ -58,7 +59,7 @@ pub(in crate::sim) fn fly(sim: &mut Sim, dt: Dt) {
                 b.hidden = false;
             }
             b.pos = wasp.pos;
-            b.angles = [wasp.pan, wasp.tilt, 0.0];
+            b.angles = Angles::from_array([wasp.pan, wasp.tilt, 0.0]);
         }
         if let WaspStep::Burst { hit } = step {
             events.push(Event::Sound(crate::wasps::burst_sound(rng)));

@@ -7,6 +7,7 @@ use crate::enemies::{Impact, Out, Shared, World};
 use crate::id::Id;
 use crate::player::{SCALE, State};
 use crate::percent::Percent;
+use crate::angle::Angles;
 
 /// Wasp homing and fear tagging.
 pub(super) fn home_wasps(sim: &mut Sim, dt: Dt) {
@@ -129,7 +130,7 @@ pub(super) fn place(sim: &mut Sim) {
         b.alpha = Percent(e.alpha);
         if let Some((pos, angles)) = e.pose(a) {
             b.pos = pos;
-            b.angles = angles;
+            b.angles = Angles::from_array(angles);
         }
     }
 }

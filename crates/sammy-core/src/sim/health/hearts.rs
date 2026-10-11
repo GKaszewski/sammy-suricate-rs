@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::angle::Angles;
 
 /// Small hearts that ducked away (health was full) shrink, wait and grow back.
 pub(in crate::sim) fn animate_hearts(sim: &mut Sim, dt: Dt) {
@@ -40,7 +41,7 @@ pub(in crate::sim) fn spin(sim: &mut Sim, dt: Dt) {
             continue;
         }
         if let Some(b) = w.bodies.get_mut(id) {
-            b.angles[0] += BIG_HEART_SPIN * t;
+            b.angles.pan.0 += BIG_HEART_SPIN * t;
         }
     }
     for (id, c) in w.checkpoints.iter_mut() {
@@ -52,7 +53,7 @@ pub(in crate::sim) fn spin(sim: &mut Sim, dt: Dt) {
                 *a += s * t;
             }
             if let Some(b) = w.bodies.get_mut(id) {
-                b.angles = c.angles;
+                b.angles = Angles::from_array(c.angles);
             }
         }
     }

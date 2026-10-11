@@ -1,6 +1,7 @@
 //! The Eye of Truth and the chase warning light.
 
 use super::*;
+use crate::angle::Angles;
 
 pub(in crate::sim) fn init_eye(w: &mut World, id: Id, obj: &Object) {
     let eye = EyePickup::from_object(obj);
@@ -52,7 +53,7 @@ pub(in crate::sim) fn run_eye(sim: &mut Sim, dt: Dt) {
         }
         let Some(b) = w.bodies.get_mut(id) else { continue };
         if eye.item.spin(t) {
-            b.angles = eye.item.angles;
+            b.angles = Angles::from_array(eye.item.angles);
         }
         let reach = playing && !dead && in_scan(sammy, radius, b.pos);
         match eye.item.step(game, reach, t) {
