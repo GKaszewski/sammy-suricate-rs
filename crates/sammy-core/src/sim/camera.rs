@@ -61,6 +61,11 @@ pub(super) fn follow(sim: &mut Sim, dt: Dt) {
     if let Some(pose) = crate::camera::follow(&mut c.follow, &c.params, &mut c.runtime, sim.level.as_deref(), subject, sammy, sweep, dt.t, dt.secs) {
         c.pose = Some(pose);
     }
+    if let (Some([dist, z, angle]), Some(s)) = (sim.debug.portrait, sammy) {
+        let a = (s.pan + angle).to_radians();
+        let target = [s.pos[0], s.pos[1], s.pos[2] + z];
+        sim.camera.pose = Some(CameraPose::LookAt { pos: [target[0] + a.cos() * dist, target[1] + a.sin() * dist, target[2]], target });
+    }
 }
 
 /// Sky domes stay centred on the camera at their height offset, spinning.

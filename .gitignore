@@ -5,3 +5,4 @@
 *.gltf
 .claude/*.lock
 crates/*/tests/golden/*.actual.txt
+crates/sammy-sdl/vita/package

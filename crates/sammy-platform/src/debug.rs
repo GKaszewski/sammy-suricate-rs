@@ -53,6 +53,8 @@ pub fn options() -> DebugOptions {
         skip_actions: var("SAMMY_SKIP").map(|v| v.split(',').map(|a| a.trim().to_lowercase()).collect()).unwrap_or_default(),
         // SAMMY_GIVE_UP=<secs> gives up the level (lose screen) after that much play.
         give_up_after: num("SAMMY_GIVE_UP"),
+        // SAMMY_PORTRAIT=distance,height,angle looks at Sammy's face.
+        portrait: var("SAMMY_PORTRAIT").and_then(|v| v.split(',').map(|x| x.trim().parse().ok()).collect::<Option<Vec<f32>>>()).and_then(|n| n.try_into().ok()),
         no_intro: ["SAMMY_MENU_VIEW", "SAMMY_MENU_CAM", "SAMMY_OPTIONS", "SAMMY_MENU_CHOICE", "SAMMY_NOINTRO"].iter().any(|v| var(v).is_some()),
     }
 }

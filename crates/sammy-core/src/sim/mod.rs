@@ -72,6 +72,9 @@ pub struct DebugOptions {
     pub no_intro: bool,
     /// Give up the level after this many seconds of play (counts down).
     pub give_up_after: Option<f32>,
+    /// A portrait camera on Sammy: (distance, height above his origin, angle from his
+    /// facing in degrees), looking at that height.
+    pub portrait: Option<[f32; 3]>,
 }
 
 /// The game.
