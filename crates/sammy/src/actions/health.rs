@@ -34,6 +34,20 @@ pub struct BigHeart {
     lives: i32,
 }
 
+/// Boost pickup (`InitBoost`, mm1.wdl:4315-4464).
+#[derive(Component)]
+pub struct BoostPickup {
+    amount: f32,
+    scale: Vec3,
+    /// Boost was full: hidden for this many ticks, then grows back.
+    away: Option<f32>,
+}
+
+pub fn init_boost(obj: &Object, entity: &mut EntityCommands) {
+    let amount = if obj.skills[1] == 0.0 { 1.0 } else { obj.skills[1] };
+    entity.insert((BoostPickup { amount, scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs(), away: None }, PickupPos(obj.origin)));
+}
+
 #[derive(Component)]
 pub struct Checkpoint {
     home: [f32; 3],
@@ -266,6 +280,7 @@ fn respawn(
 
 #[allow(clippy::type_complexity)]
 pub fn collect_health(
+    time: Res<Time>,
     mut commands: Commands,
     mut game: ResMut<GameState>,
     mut sfx: Sfx,
@@ -273,6 +288,7 @@ pub fn collect_health(
     mut hearts: Query<(Entity, &PickupPos, &mut SmallHeart), (Without<Shrinking>, Without<SnapToGround>)>,
     big: Query<(Entity, &PickupPos, &BigHeart), Without<Shrinking>>,
     checkpoints: Query<(Entity, &PickupPos, &Checkpoint), (Without<Shrinking>, Without<Collected>)>,
+    mut boosts: Query<(Entity, &PickupPos, &mut BoostPickup, &mut Transform, &mut Visibility), Without<Shrinking>>,
 ) {
     let Ok(p) = player.single() else { return };
     if p.state == State::Dead {
@@ -297,8 +313,38 @@ pub fn collect_health(
         if game.lives < MAX_LIVES && near(&pos.0) {
             game.lives = (game.lives + b.lives).min(MAX_LIVES);
             sfx.play("Getlife_son");
-            commands.entity(e).insert(Shrinking);
+            commands.entity(e).insert((Shrinking, crate::lights::flash([50.0, 250.0, 10.0], 300.0, 40.0, 64.0)));
         }
+    }
+    for (e, pos, mut b, mut tf, mut vis) in &mut boosts {
+        if let Some(left) = b.away {
+            // Ducked away because boost was full: shrink, hide 64 ticks, grow back.
+            let t = time.delta_secs() * TICKS;
+            let left = left - t;
+            if left > 64.0 {
+                tf.scale *= 0.9f32.powf(t);
+            } else {
+                *vis = Visibility::Hidden;
+            }
+            if left <= 0.0 {
+                *vis = Visibility::Inherited;
+                tf.scale = b.scale;
+                b.away = None;
+            } else {
+                b.away = Some(left);
+            }
+            continue;
+        }
+        if !near(&pos.0) {
+            continue;
+        }
+        if game.boost <= 0.0 {
+            b.away = Some(64.0 + 40.0);
+            continue;
+        }
+        game.boost = (game.boost - b.amount).max(0.0);
+        sfx.play("chimes2");
+        commands.entity(e).insert((Shrinking, crate::lights::flash([150.0, 50.0, 100.0], 200.0, 10.0, 64.0)));
     }
     for (e, pos, c) in &checkpoints {
         if near(&pos.0) {

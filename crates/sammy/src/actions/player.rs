@@ -33,6 +33,17 @@ const ANIM_JUMP: f32 = 14.0;
 const ANIM_FIN_JUMP: f32 = 14.0;
 const ANIM_FIN_JUMP_FAST: f32 = 18.0;
 
+/// `widthbarBoost`: WindowBoost runs 0 (full) .. 150 (empty).
+pub const BOOST_MAX: f32 = 150.0;
+// Slopes (`handlePente`, per-level values from InitLvl.wdl).
+const SLOPE_ANGLE_MIN: f32 = 0.92;
+const FORCE_PENTE: f32 = 100.0;
+const ACC_PENTE: f32 = 1.5;
+const AMORTI_PENTE_END: f32 = 0.3;
+const BIG_SLOPE: f32 = 10.0;
+const MEDIUM_SLOPE: f32 = 2.0;
+const SPEED_ROTATION_PENTE: f32 = 0.05;
+
 /// Collision geometry of the current level.
 #[derive(Resource, Clone)]
 pub struct LevelCollision(pub Arc<Wmb>);
@@ -48,11 +59,13 @@ pub struct JumpParams {
     pub gravity: f32,
     /// `AccGravite`: deceleration when falling off a ledge.
     pub acc_gravity: f32,
+    /// `BounceOnEnnemy` (InitGame7 Skill1, default 0): stomping a lion re-jumps × this.
+    pub bounce_on_enemy: f32,
 }
 
 impl Default for JumpParams {
     fn default() -> Self {
-        Self { jump_speed: 30.0, jump_fric: 3.0, gravity: -2.0, acc_gravity: 1.5 }
+        Self { jump_speed: 30.0, jump_fric: 3.0, gravity: -2.0, acc_gravity: 1.5, bounce_on_enemy: 0.0 }
     }
 }
 
@@ -86,6 +99,8 @@ pub enum State {
     /// Throwing a wasp: "TirA" wind-up, then "TirB" follow-through (`PlayerEtat == 2`).
     FireA,
     FireB,
+    /// Quick 180° turn (`RetourneSammy`, `PlayerEtat == 6`).
+    UTurn,
 }
 
 #[derive(Component)]
@@ -110,6 +125,17 @@ pub struct Player {
     pub vel: [f32; 3],
     /// Floor height below Sammy (`BlobHautSol`), for his shadow.
     pub floor: f32,
+    /// `PlayerPenteX/Y/Z`: slide velocity on slopes (quants/tick).
+    pub pente: [f32; 3],
+    /// Lean on slopes (visual tilt/roll, degrees).
+    tilt: f32,
+    roll: f32,
+    /// U-turn target pan and whether the first (×0.25) step was taken.
+    uturn: Option<(f32, bool)>,
+    /// Landing after a fall faster than 70/tick (`ForceChute < -70`).
+    hard_landing: bool,
+    /// Shift-boosting this frame (used by platforms: ×3 while riding).
+    pub boosting: bool,
     pub state: State,
     snapped: bool,
 }
@@ -152,6 +178,12 @@ pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
         knock: [0.0; 3],
         vel: [0.0; 3],
         floor: pos[2],
+        pente: [0.0; 3],
+        tilt: 0.0,
+        roll: 0.0,
+        uturn: None,
+        hard_landing: false,
+        boosting: false,
         state: State::Stand,
         snapped: false,
     });
@@ -159,10 +191,10 @@ pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
 
 /// Height of the floor below `p` (sonar from z+8, `playerClimb`) and the brush it
 /// belongs to, or None over the void.
-fn floor_below(world: &CollisionWorld, p: [f32; 3]) -> Option<(f32, Option<Entity>)> {
+fn floor_below(world: &CollisionWorld, p: [f32; 3]) -> Option<(f32, Option<Entity>, [f32; 3])> {
     let start = [p[0], p[1], p[2] + 8.0];
     let hit = world.trace(1, start, [p[0], p[1], p[2] - 2000.0], None);
-    (hit.trace.hit() && !hit.trace.start_solid).then(|| (hit.trace.end[2] - HULL1_HALF, hit.entity))
+    (hit.trace.hit() && !hit.trace.start_solid).then(|| (hit.trace.end[2] - HULL1_HALF, hit.entity, hit.trace.normal))
 }
 
 /// Sammy touched an entity while moving (EVENT_ENTITY on Sammy / EVENT_IMPACT on it).
@@ -204,6 +236,9 @@ pub fn move_player(
     jump: Res<JumpParams>,
     current: Res<crate::flow::CurrentLevel>,
     world: CollisionWorld,
+    mut game: ResMut<crate::game::GameState>,
+    mut sfx: crate::audio::Sfx,
+    enemies: Query<(), With<super::enemy::Enemy>>,
     mut touched_msgs: MessageWriter<PlayerTouched>,
     mut q: Query<(Entity, &mut Player, &mut Transform, Option<&mut ModelAnimator>)>,
 ) {
@@ -217,7 +252,7 @@ pub fn move_player(
     for (me, mut p, mut tf, mut anim) in &mut q {
         let start_pos = p.pos;
         if !p.snapped {
-            if let Some((f, _)) = floor_below(&world, p.pos) {
+            if let Some((f, ..)) = floor_below(&world, p.pos) {
                 p.pos[2] = f + BLOB_HAUT;
             }
             p.snapped = true;
@@ -250,26 +285,117 @@ pub fn move_player(
             continue;
         }
 
-        // 1. Turning: 10°/tick standing, 7 moving, half in the air.
-        let mut rate = if iy != 0.0 { 7.0 } else { 10.0 };
+        // Boost (HandleBoostPlayer): the engine doubles Key_Force under Shift; with charge
+        // the script keeps turning ×0.75 (net ×1.5) and forward ×2, else halves it back.
+        let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        p.boosting = false;
+        if shift && input && game.boost < BOOST_MAX && p.state != State::Dead {
+            game.boost = (game.boost + t).min(BOOST_MAX); // LessBoost: ConsoBoost 1/tick
+            ix *= 1.5;
+            iy *= 2.0;
+            p.boosting = true;
+        }
+
+        // U-turn (RetourneSammy): Alt in a normal state, pan eases toward +180.
+        let alt = keys.just_pressed(KeyCode::AltLeft) || keys.just_pressed(KeyCode::AltRight);
+        if alt && input && p.grounded && matches!(p.state, State::Stand | State::Walk | State::Turn) {
+            p.state = State::UTurn;
+            p.uturn = Some((p.pan + 180.0, false));
+            sfx.play("Blouit_son");
+            if let Some(a) = anim.as_deref_mut() {
+                a.play("turn", true, 0.0);
+                a.set_speed_pct(28.0, TICKS);
+            }
+        }
+        if let (State::UTurn, Some((dest, started))) = (p.state, p.uturn) {
+            let wrap = |a: f32| (a + 180.0).rem_euclid(360.0) - 180.0;
+            let step = wrap((dest - p.pan) * if started { 0.4 } else { 0.25 });
+            if step > 2.0 {
+                p.pan += step * t;
+                p.uturn = Some((dest, true));
+            } else {
+                p.uturn = None;
+                p.state = State::Stand;
+            }
+        }
+
+        // Turning and moving only in the normal and jump states (etat 1 / 4).
+        let can_move = matches!(p.state, State::Stand | State::Walk | State::Turn | State::Air | State::Land);
+        if !can_move {
+            ix = 0.0;
+            iy = 0.0;
+        }
+        // 1. Turning: 10°/tick standing, 7 moving (×0.6 boosting), half in the air.
+        let mut rate = if iy != 0.0 { if p.boosting { 0.6 * 7.0 } else { 7.0 } } else { 10.0 };
         if !p.grounded {
             rate *= 0.5;
         }
-        p.pan -= ix * rate * t;
+        let mut angle_force = ix * rate * t;
 
-        // 2. Forward speed; air control is 75%. No walking during the wind-up.
-        let v = if p.state == State::JumpStart {
-            0.0
-        } else if p.grounded {
-            iy * p.speed * t
-        } else {
-            iy * p.speed * 0.75 * t
-        };
+        // 2. Forward speed; air control is 75%.
+        let mut v = if p.grounded { iy * p.speed * t } else { iy * p.speed * 0.75 * t };
+        let mut strafe = 0.0;
+        // Slope steering: big slopes strafe and turn downhill, medium slopes damp turning.
+        let big = p.pente[0].abs() > BIG_SLOPE || p.pente[1].abs() > BIG_SLOPE;
+        let medium = p.pente[0].abs() > MEDIUM_SLOPE || p.pente[1].abs() > MEDIUM_SLOPE;
+        let slope_pan = p.pente[1].atan2(p.pente[0]).to_degrees();
+        if big {
+            v *= 0.75;
+            strafe = -ix * p.speed * 0.75 * t;
+            angle_force = 0.0;
+            let wrap = (slope_pan - p.pan + 180.0).rem_euclid(360.0) - 180.0;
+            p.pan += wrap * SPEED_ROTATION_PENTE * t;
+        } else if medium {
+            v *= 0.9;
+            strafe = -ix * p.speed * 0.5 * t;
+            angle_force *= 0.25;
+        }
+        p.pan -= angle_force;
         let (s, c) = p.pan.to_radians().sin_cos();
-        let (pos, touched) = slide_move(&world, p.pos, [c * v, s * v, 0.0], Some(me));
+        let (pos, touched) = slide_move(&world, p.pos, [c * v - s * strafe, s * v + c * strafe, 0.0], Some(me));
         p.pos = pos;
         if let Some(e) = touched {
             touched_msgs.write(PlayerTouched(e));
+        }
+
+        // handlePente: on floors steeper than ~23° Sammy slides downhill and leans.
+        if let Some((f, _, n)) = floor_below(&world, p.pos)
+            && n[2] > 0.0
+            && n[2] <= SLOPE_ANGLE_MIN
+            && p.pos[2] - f <= BLOB_HAUT + 32.0
+        {
+            let force = [n[0] * FORCE_PENTE, n[1] * FORCE_PENTE, -20.0];
+            let v2 = 1.0 - n[2];
+            for i in 0..3 {
+                p.pente[i] += ACC_PENTE * force[i].signum() * v2;
+                if p.pente[i].abs() > force[i].abs() {
+                    p.pente[i] = force[i];
+                }
+            }
+            // Lean into the slope (local normal → tilt/roll), only for real slides.
+            if p.pente[0].abs() > 4.0 || p.pente[1].abs() > 4.0 {
+                let (sp, cp) = (-p.pan).to_radians().sin_cos();
+                let local = [n[0] * cp - n[1] * sp, n[0] * sp + n[1] * cp];
+                let want_tilt = -local[0].asin().to_degrees();
+                let want_roll = -local[1].asin().to_degrees();
+                if p.tilt.abs() < 12.0 {
+                    p.tilt += 0.1 * (want_tilt - p.tilt) * t;
+                }
+                if p.roll.abs() < 6.0 {
+                    p.roll += 0.1 * (want_roll - p.roll) * t;
+                }
+            }
+            let d = p.pente.map(|x| x * t);
+            p.pos = slide_move(&world, p.pos, d, Some(me)).0;
+        } else {
+            p.tilt -= 0.6 * p.tilt * t.min(1.0);
+            p.roll -= 0.6 * p.roll * t.min(1.0);
+            let k = (1.0 - AMORTI_PENTE_END * t).max(0.0);
+            p.pente = p.pente.map(|x| if x.abs() < 0.01 { 0.0 } else { x * k });
+            if p.pente != [0.0; 3] {
+                let d = p.pente.map(|x| x * t);
+                p.pos = slide_move(&world, p.pos, [d[0], d[1], 0.0], Some(me)).0;
+            }
         }
         // Knockback (`BounceForce1`), separate move, decaying by AmortiBouncePlayer
         // 10 × 80/(fps+1) ≈ 15.7 per tick at the reference 50 fps.
@@ -283,7 +409,9 @@ pub fn move_player(
         // 3. Jump (PlayerJump): only from the ground in a normal state. Moving jumps take
         //    off at once; standing jumps play the "sautA" wind-up first.
         let mut take_off = false;
-        if ctrl_hit && p.grounded && matches!(p.state, State::Stand | State::Walk | State::Turn) {
+        // No jumping off a big slope unless facing within 45° of downhill.
+        let slope_ok = !big || ((slope_pan - p.pan + 180.0).rem_euclid(360.0) - 180.0).abs() <= 45.0;
+        if ctrl_hit && slope_ok && p.grounded && matches!(p.state, State::Stand | State::Walk | State::Turn) {
             if iy != 0.0 {
                 take_off = true;
                 if let Some(a) = anim.as_deref_mut() {
@@ -312,12 +440,12 @@ pub fn move_player(
 
         // 4. Vertical motion: snap to the floor when grounded, else ballistic.
         let floor = floor_below(&world, p.pos);
-        if let Some((f, _)) = floor {
+        if let Some((f, ..)) = floor {
             p.floor = f;
         }
         if p.grounded {
             match floor {
-                Some((f, e)) if p.pos[2] - BLOB_HAUT - f <= 1.0 => {
+                Some((f, e, _)) if p.pos[2] - BLOB_HAUT - f <= 1.0 => {
                     p.pos[2] = f + BLOB_HAUT;
                     p.ground_entity = e;
                 }
@@ -333,7 +461,15 @@ pub fn move_player(
         if !p.grounded && p.vz != 0.0 {
             p.vz -= p.fric * t;
             let target = [p.pos[0], p.pos[1], p.pos[2] + p.vz * t];
-            let tr = world.trace(HULL, p.pos, target, Some(me)).trace;
+            let hit = world.trace(HULL, p.pos, target, Some(me));
+            let tr = hit.trace;
+            // Stomp (Player_Bong :584-618): landing on a lion's head re-jumps.
+            if p.vz < 0.0 && tr.hit() && jump.bounce_on_enemy != 0.0 && hit.entity.is_some_and(|e| enemies.contains(e)) {
+                p.vz = jump.bounce_on_enemy * jump.jump_speed;
+                p.fric = jump.jump_fric;
+                p.knock = p.knock.map(|k| k * 2.0);
+                sfx.play("Blouit_son");
+            }
             if tr.start_solid {
                 // Stuck inside geometry (e.g. a closing door): never sink through it.
                 p.vz = 0.0;
@@ -345,7 +481,7 @@ pub fn move_player(
                 p.pos = tr.end;
             }
             let floor = floor_below(&world, p.pos);
-            let floor_z = floor.map(|(f, _)| f);
+            let floor_z = floor.map(|(f, ..)| f);
             // A real fall (more than 64 below the normal height) shows the jump animation.
             if !matches!(p.state, State::Air | State::Dead) && floor_z.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
                 p.state = State::Air;
@@ -353,10 +489,11 @@ pub fn move_player(
                     a.play("sautB", false, 50.0);
                 }
             }
-            if let Some((f, e)) = floor
+            if let Some((f, e, _)) = floor
                 && p.vz <= 0.0
                 && p.pos[2] <= f + BLOB_HAUT
             {
+                p.hard_landing = p.vz < -70.0;
                 p.pos[2] = f + BLOB_HAUT;
                 p.ground_entity = e;
                 p.grounded = true;
@@ -407,7 +544,15 @@ pub fn move_player(
             match p.state {
                 State::Air => a.set_speed_pct(ANIM_JUMP, TICKS),
                 State::Land => {
-                    let pct = if iy != 0.0 || ctrl { ANIM_FIN_JUMP_FAST * 2.0 } else if ix != 0.0 { ANIM_FIN_JUMP_FAST } else { ANIM_FIN_JUMP };
+                    let pct = if p.hard_landing {
+                        ANIM_FIN_JUMP * 0.5 // hard landing: slow recovery
+                    } else if iy != 0.0 || ctrl {
+                        ANIM_FIN_JUMP_FAST * 2.0
+                    } else if ix != 0.0 {
+                        ANIM_FIN_JUMP_FAST
+                    } else {
+                        ANIM_FIN_JUMP
+                    };
                     a.set_speed_pct(pct, TICKS);
                 }
                 _ => {}
@@ -418,6 +563,6 @@ pub fn move_player(
             p.vel = [0, 1, 2].map(|i| (p.pos[i] - start_pos[i]) / t);
         }
         tf.translation = coords::pos(p.pos);
-        tf.rotation = coords::rotation([p.pan, 0.0, 0.0]);
+        tf.rotation = coords::rotation([p.pan, p.tilt, p.roll]);
     }
 }

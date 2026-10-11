@@ -130,10 +130,25 @@ fn wrap(a: f32) -> f32 {
     (a + 180.0).rem_euclid(360.0) - 180.0
 }
 
-pub fn run_engines(time: Res<Time>, level: Option<Res<LevelCollision>>, mut engines: Query<&mut Engine>) {
+pub fn run_engines(
+    time: Res<Time>,
+    level: Option<Res<LevelCollision>>,
+    player: Query<&Player>,
+    platforms: Query<&Platform>,
+    mut engines: Query<(Entity, &mut Engine)>,
+) {
     let Some(level) = level else { return };
     let t = time.delta_secs() * TICKS;
-    for mut e in &mut engines {
+    // Shift-boost while riding: the carrying engine runs ×3 (InitEnginePlatForm :2478-2491).
+    let boosted = player
+        .single()
+        .ok()
+        .filter(|p| p.boosting && p.grounded)
+        .and_then(|p| p.ground_entity)
+        .and_then(|g| platforms.get(g).ok())
+        .and_then(|pl| pl.engine);
+    for (id, mut e) in &mut engines {
+        let speed = if boosted == Some(id) { e.speed * 3.0 } else { e.speed };
         e.delta = [0.0; 3];
         if !e.unlocked {
             continue;
@@ -143,7 +158,7 @@ pub fn run_engines(time: Res<Time>, level: Option<Res<LevelCollision>>, mut engi
             EngineState::Paused(_) => EngineState::Moving,
             EngineState::Moving => {
                 let dir = forward(e.angles);
-                let target = [0, 1, 2].map(|i| e.pos[i] + dir[i] * e.speed * t);
+                let target = [0, 1, 2].map(|i| e.pos[i] + dir[i] * speed * t);
                 let tr = level.0.trace(0, 0, e.pos, target); // tiny sprite: point collision
                 if tr.start_solid {
                     EngineState::Moving

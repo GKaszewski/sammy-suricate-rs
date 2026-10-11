@@ -91,14 +91,15 @@ impl Door {
 
 pub fn run_doors(
     time: Res<Time>,
+    mut commands: Commands,
     mut game: ResMut<GameState>,
     mut sfx: Sfx,
     player: Query<&Player>,
-    mut doors: Query<(&mut Door, &mut Brush, &mut Transform)>,
+    mut doors: Query<(Entity, &mut Door, &mut Brush, &mut Transform)>,
 ) {
     let Ok(p) = player.single() else { return };
     let t = time.delta_secs() * TICKS;
-    for (mut door, mut brush, mut tf) in &mut doors {
+    for (ent, mut door, mut brush, mut tf) in &mut doors {
         let o = brush.origin;
         let horiz = ((o[0] - p.pos[0]).powi(2) + (o[1] - p.pos[1]).powi(2)).sqrt();
         let dist = (horiz.powi(2) + (o[2] - p.pos[2]).powi(2)).sqrt();
@@ -120,6 +121,10 @@ pub fn run_doors(
             }
             DoorState::Down if in_reach && accepts => {
                 sfx.play("DoorOpen_son");
+                // DoorLight: the door glows in its colour (600 → 100 at -50/tick).
+                if (1..=6).contains(&door.color) {
+                    commands.entity(ent).insert(crate::lights::flash(crate::lights::key_color(door.color), 600.0, 50.0, 100.0));
+                }
                 if door.permanent() && game.key != MASTER_KEY {
                     // Permanent doors "catch" the gem: the key is spent (AnimGemKey).
                     game.key = 0;

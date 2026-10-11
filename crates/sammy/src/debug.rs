@@ -45,8 +45,8 @@ fn screenshot(
         job.log_timer = 1.0;
         if let Ok(p) = player.single() {
             info!(
-                "t={now:.1} {} {:?} player {:?} state {:?} on {:?} | score {}/{} key {} lives {} hearts {:.0} start {:?} won {}",
-                current.file, current.phase, p.pos.map(|v| v.round()), p.state, p.ground_entity, game.score, game.goal, game.key, game.lives, game.hearts, game.start.map(|(s, _)| s.map(|v| v.round())), game.won
+                "t={now:.1} {} {:?} player {:?} pente {:?} state {:?} on {:?} | score {}/{} key {} lives {} hearts {:.0} start {:?} won {}",
+                current.file, current.phase, p.pos.map(|v| v.round()), p.pente.map(|v| v.round()), p.state, p.ground_entity, game.score, game.goal, game.key, game.lives, game.hearts, game.start.map(|(s, _)| s.map(|v| v.round())), game.won
             );
             info!("   calls {:?}", *calls);
             for e in &enemies {

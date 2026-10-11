@@ -175,7 +175,10 @@ pub fn collect_ammo(
         game.ammo += a.amount;
         sfx.play("clog3");
         sfx.play("TakeWasp_son");
-        commands.entity(e).insert(Shrinking);
+        // GemLight in the type colour (orange, yellow, blue, green, magenta, red, white).
+        let color = [[250.0, 100.0, 0.0], [250.0, 250.0, 0.0], [0.0, 0.0, 250.0], [0.0, 250.0, 0.0], [250.0, 0.0, 250.0], [250.0, 0.0, 0.0], [150.0, 150.0, 150.0]]
+            [(a.kind.clamp(1, 7) - 1) as usize];
+        commands.entity(e).insert((Shrinking, crate::lights::flash(color, 300.0, 15.0, 100.0)));
     }
 }
 

@@ -164,7 +164,7 @@ pub fn collect(
         if !near(&pos.0) {
             continue;
         }
-        commands.entity(e).insert(Shrinking);
+        commands.entity(e).insert((Shrinking, crate::lights::flash(crate::lights::key_color(gem.color), 300.0, 15.0, 100.0)));
         if let Some(mut lk) = level_key {
             lk.home.get_or_insert(pos.0);
         }

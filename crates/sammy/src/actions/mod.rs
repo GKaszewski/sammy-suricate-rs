@@ -178,6 +178,9 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             entity.commands().queue(move |w: &mut World| {
                 w.resource_mut::<enemy::LionGlobals>().apply_game7(&sk);
                 w.resource_mut::<GameState>().apply_init_game7(&o);
+                if sk[0] != 0.0 {
+                    w.resource_mut::<player::JumpParams>().bounce_on_enemy = sk[0];
+                }
             });
         }
         "initcamera2" => {
@@ -227,6 +230,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initteleport" => {
             platform::init_teleport(obj, entity);
             ActionInit::default()
+        }
+        "initboost" => {
+            health::init_boost(obj, entity);
+            ActionInit { anim: Some(("stand", 10.0)), ..default() }
         }
         "initeyeoftruth" => {
             fx::init_eye(obj, entity);

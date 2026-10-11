@@ -46,6 +46,8 @@ pub struct GameState {
     pub eye_duration: f32,
     /// `EnnemyMustDisplayRange` (1; InitGame7 Skill7).
     pub display_range: f32,
+    /// `WindowBoost`: 0 = full, 150 = empty (starts empty).
+    pub boost: f32,
     /// `NbrAmmo1`, `WaspCurrentType`, `WaspCurrentPoison`.
     pub ammo: i32,
     pub ammo_type: u32,
@@ -67,6 +69,7 @@ impl Default for GameState {
             hearts: MAX_HEARTS,
             start: None,
             eye_ticks: 0.0,
+            boost: crate::actions::player::BOOST_MAX,
             eye_duration: 256.0,
             display_range: 1.0,
             ammo: 0,
