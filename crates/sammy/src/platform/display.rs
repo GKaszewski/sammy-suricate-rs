@@ -16,7 +16,6 @@ impl Plugin for DisplayPlugin {
     }
 }
 
-
 /// The options screen's display choices on this monitor.
 pub fn display_info(d: &DisplaySettings, monitor: Option<&Monitor>) -> sammy_present::options::DisplayInfo {
     let desktop = monitor.map(|m| [m.physical_width, m.physical_height]);

@@ -4,7 +4,6 @@
 
 use formats::wmb::Object;
 
-use crate::sim::world::{Light, World};
 use super::{Effect, Event, Sim, Space};
 use crate::collision::{Hull, Space as _};
 use crate::gems::{GemGravity, HEIGHT_GEM, Surprise};
@@ -13,6 +12,7 @@ use crate::keys::{KeyOutcome, MASTER_KEY, light_color, take_key};
 use crate::pickups::{KeySpec, NARROW_FLOOR_OFFSET, SHRINK_GONE, SHRINK_PER_TICK, SNAP_START, in_scan};
 use crate::player::State;
 use crate::points::Points;
+use crate::sim::world::{Light, World};
 
 mod collect;
 mod keys;

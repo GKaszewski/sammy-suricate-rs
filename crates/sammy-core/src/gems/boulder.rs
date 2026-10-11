@@ -1,8 +1,8 @@
 //! Boulders that launch gems when hit.
 
 use super::*;
-use crate::time::Ticks;
 use crate::keys::KeyColor;
+use crate::time::Ticks;
 
 /// A gem to launch (`EjectNewKey`).
 #[derive(Clone, Copy, PartialEq, Debug)]

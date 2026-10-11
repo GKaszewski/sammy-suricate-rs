@@ -10,8 +10,8 @@ use formats::wmb::Object;
 use crate::anim::Anim;
 use crate::game::{GameState, MAX_HEARTS, MAX_LIVES};
 use crate::gems::{Fate, Launch};
-use crate::time::TICKS_PER_SEC;
 use crate::time::Ticks;
+use crate::time::TICKS_PER_SEC;
 
 mod death;
 mod hazards;

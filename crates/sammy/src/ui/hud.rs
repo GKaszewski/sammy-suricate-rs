@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use sammy_present::hud::{DIGIT_GLYPHS, Hud, IMAGES};
 use sammy_core::time::Secs;
+use sammy_present::hud::{DIGIT_GLYPHS, Hud, IMAGES};
 
 use crate::game::Game;
 use crate::platform::vfs::GameFiles;

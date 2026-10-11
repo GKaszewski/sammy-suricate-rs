@@ -9,7 +9,6 @@
 
 use formats::wmb::Object;
 
-use crate::sim::world::{Light, World};
 use super::{Dt, Effect, Event, Sim};
 use crate::eye::{EXTRA_HEIGHT, EyePickup, EyeStage};
 use crate::health::{BIG_HEART_SPIN, BOOST_AWAY_SHRINK, BOOST_HIDDEN, DeathEvent, Dying, HEART_AWAY_SHRINK, HEART_HIDDEN_BELOW, HEART_REGROW, SmallHeart, Victim};
@@ -17,6 +16,7 @@ use crate::id::Id;
 use crate::pickups::in_scan;
 use crate::platforms::CAMERA_SNAP;
 use crate::player::State;
+use crate::sim::world::{Light, World};
 use crate::space::Quants;
 
 mod collect;

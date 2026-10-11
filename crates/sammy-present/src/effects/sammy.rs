@@ -1,7 +1,8 @@
 //! Effects around Sammy: dust, hit stars, boosts, teleports and respawns.
 
-use super::*;
 use sammy_core::space::Pos;
+
+use super::*;
 
 // ---------------------------------------------------------------- Sammy
 

@@ -1,9 +1,9 @@
 //! What the simulation asks the frontend to present: sounds, particle effects, popups,
 //! saves. Drained once per frame with [`super::Sim::drain_events`].
 
-use crate::space::Pos;
 use crate::keys::KeyColor;
 use crate::points::Points;
+use crate::space::Pos;
 
 /// A particle effect at a native position (docs/particles.md).
 #[derive(Clone, Copy, Debug, PartialEq)]

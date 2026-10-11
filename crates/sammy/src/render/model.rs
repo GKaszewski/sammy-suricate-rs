@@ -9,8 +9,9 @@ use bevy::prelude::*;
 use formats::mdl::{Mdl, VertexBuffer};
 use sammy_core::anim::{Anim, Scenes};
 
-use crate::render::coords;
 use sammy_core::time::Secs;
+
+use crate::render::coords;
 
 pub struct ModelPlugin;
 

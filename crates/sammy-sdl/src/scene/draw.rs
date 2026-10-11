@@ -1,7 +1,8 @@
 //! Drawing the world in passes: sky, level, entities, shadows, translucent, near.
 
-use super::*;
 use sammy_core::percent::Percent;
+
+use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Pass {

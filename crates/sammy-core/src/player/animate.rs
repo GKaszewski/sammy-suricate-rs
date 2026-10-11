@@ -2,9 +2,9 @@
 
 use super::intent::Intent;
 use super::{Player, State};
+use crate::angle::Degrees;
 use crate::anim::Anim;
 use crate::time::TICKS_PER_SEC;
-use crate::angle::Degrees;
 
 // Animation speeds in % of the scene per tick (mm1.wdl:39-85, anims.wdl).
 const ANIM_STAND: f32 = 2.0;

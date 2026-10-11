@@ -1,6 +1,6 @@
 use super::*;
-use crate::keys::KeyColor;
 use crate::game::Lives;
+use crate::keys::KeyColor;
 use crate::space::Placement;
 
 fn run(kind: DeathKind, game: &mut GameState) -> Vec<DeathEvent> {

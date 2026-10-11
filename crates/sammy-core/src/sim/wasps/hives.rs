@@ -1,9 +1,9 @@
 //! Hives and their wasps.
 
 use super::*;
-use crate::time::Ticks;
 use crate::angle::Angles;
 use crate::space::Pos;
+use crate::time::Ticks;
 
 pub(in crate::sim) fn hives(sim: &mut Sim, dt: Dt) {
     if !sim.playing() {

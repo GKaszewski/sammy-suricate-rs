@@ -1,10 +1,11 @@
 //! Global game state (the WDL globals of skills.wdl that the actions share).
 
 use formats::wmb::Object;
+
+use crate::keys::KeyColor;
 use crate::points::Points;
 use crate::space::Placement;
 use crate::time::Ticks;
-use crate::keys::KeyColor;
 
 pub use crate::keys::MASTER_KEY;
 /// `WindowHeartsOrg`: full health.

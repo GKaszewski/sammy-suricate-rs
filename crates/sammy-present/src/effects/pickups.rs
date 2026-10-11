@@ -1,7 +1,8 @@
 //! Pickup effects: hearts, the Eye of Truth and menu sparkles.
 
-use super::*;
 use sammy_core::space::Pos;
+
+use super::*;
 
 // ---------------------------------------------------------------- pickups
 

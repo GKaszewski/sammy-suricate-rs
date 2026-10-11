@@ -1,7 +1,8 @@
 //! The 2D overlay: version text, tooltips, the cursor and the hidden HUD.
 
-use super::*;
 use sammy_present::menu::{CURSOR_HOTSPOT, CURSOR_SIZE, VERSION_POS, VERSION_TEXT};
+
+use super::*;
 
 /// UI stacking: version text, tooltips, cursor.
 const Z_VERSION: i32 = 20;

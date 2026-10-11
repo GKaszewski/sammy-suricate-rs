@@ -1,8 +1,8 @@
 //! The gem flying into a permanent door.
 
 use super::*;
-use crate::time::Ticks;
 use crate::keys::KeyColor;
+use crate::time::Ticks;
 
 /// Gem flying from Sammy into a permanent door (`AnimGemKey`, gems.wdl:1043-1233):
 /// phase 1 at [`SPEED_GEM_KEY`] for ≤80 ticks, phase 2 closes 70 % of the gap per tick

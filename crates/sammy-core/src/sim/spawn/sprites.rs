@@ -1,9 +1,8 @@
 //! Sprites placed after the level is loaded.
 
 use super::*;
-use crate::space::Pos;
 use crate::keys::KeyColor;
-
+use crate::space::Pos;
 
 /// Sprites snapped onto the floor below their editor origin (once the level is there).
 pub(in crate::sim) fn snap_sprites(sim: &mut Sim) {

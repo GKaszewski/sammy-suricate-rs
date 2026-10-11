@@ -6,9 +6,9 @@ use formats::wmb::Object;
 
 use crate::anim::Anim;
 use crate::id::Id;
-use crate::time::TICKS_PER_SEC;
 use crate::levels::LevelSlot;
 use crate::time::Ticks;
+use crate::time::TICKS_PER_SEC;
 
 /// `IdPlayer` (Sammy's Skill1 in scans).
 pub const ID_PLAYER: f32 = 3333.0;

@@ -1,8 +1,8 @@
 //! Hearts and boosts ducking away, growing back and spinning.
 
 use super::*;
-use crate::time::Ticks;
 use crate::angle::Angles;
+use crate::time::Ticks;
 
 /// Small hearts that ducked away (health was full) shrink, wait and grow back.
 pub(in crate::sim) fn animate_hearts(sim: &mut Sim, dt: Dt) {

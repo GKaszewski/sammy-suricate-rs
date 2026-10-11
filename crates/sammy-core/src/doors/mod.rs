@@ -4,8 +4,8 @@
 use formats::wmb::Object;
 
 use crate::game::GameState;
-use crate::time::Ticks;
 use crate::keys::KeyColor;
+use crate::time::Ticks;
 
 mod exit;
 mod step;

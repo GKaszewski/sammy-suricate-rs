@@ -1,5 +1,6 @@
-use super::*;
 use sammy_core::points::Points;
+
+use super::*;
 
 #[test]
 fn digits_are_right_aligned_without_leading_zeros() {

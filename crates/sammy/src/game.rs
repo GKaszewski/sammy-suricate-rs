@@ -5,10 +5,11 @@
 use bevy::prelude::*;
 use sammy_core::sim::{Event, Sim};
 
+use sammy_core::time::Secs;
+
 use crate::platform::audio::Sfx;
 use crate::platform::input::Controls;
 use crate::platform::vfs::GameFiles;
-use sammy_core::time::Secs;
 
 /// The game.
 #[derive(Resource, Deref, DerefMut)]

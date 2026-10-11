@@ -1,8 +1,8 @@
 //! Hearts, boosts and checkpoints.
 
 use super::*;
-use crate::time::Ticks;
 use crate::space::Placement;
+use crate::time::Ticks;
 
 /// A small heart (health).
 #[derive(Clone, Debug)]

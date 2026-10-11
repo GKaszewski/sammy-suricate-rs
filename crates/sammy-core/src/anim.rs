@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use formats::mdl::Mdl;
+
 use crate::time::Secs;
 
 /// A model's scenes: name → frame indices (from the MDL frame names).

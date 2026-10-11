@@ -2,12 +2,12 @@
 //! clock, their collision boxes, and Sammy's box (so they can touch him).
 
 use super::{Dt, Effect, Event, Sim, Space};
+use crate::angle::Angles;
 use crate::collision::BoxCollider;
 use crate::enemies::{Impact, Out, Shared, World};
 use crate::id::Id;
-use crate::player::{SCALE, State};
 use crate::percent::Percent;
-use crate::angle::Angles;
+use crate::player::{SCALE, State};
 use crate::space::Pos;
 
 /// Wasp homing and fear tagging.

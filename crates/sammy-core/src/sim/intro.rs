@@ -4,16 +4,16 @@
 //! key ends it: the camera glides to the menu pose.
 
 use super::{Dt, Sim};
+use crate::angle::Angles;
 use crate::camera::CameraPose;
 use crate::collision::{Hull, Space as _};
 use crate::flow::Phase;
 use crate::input::Controls;
 use crate::intro::{END_KEY, FRICTION, FRICTION_AT, GLIDE_FOG_CLEAR, Logo, MENU_ORIGIN, PLUS_TILT};
 use crate::player::BLOB_HAUT;
-use crate::time::TICKS_PER_SEC;
-use crate::time::Ticks;
-use crate::angle::Angles;
 use crate::space::Pos;
+use crate::time::Ticks;
+use crate::time::TICKS_PER_SEC;
 
 /// Intro fog is a percentage; the fog starts fully black.
 const FULL_PERCENT: f32 = 100.0;

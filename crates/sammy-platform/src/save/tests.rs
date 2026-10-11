@@ -1,5 +1,6 @@
-use super::*;
 use sammy_core::levels::LevelSlot;
+
+use super::*;
 
 /// The original game's saves on this machine (if any) import as playable levels.
 #[test]

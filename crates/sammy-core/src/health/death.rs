@@ -1,10 +1,10 @@
 //! Dying on hazards and respawning.
 
 use super::*;
-use crate::time::Ticks;
-use crate::keys::KeyColor;
 use crate::game::Lives;
+use crate::keys::KeyColor;
 use crate::space::Placement;
+use crate::time::Ticks;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Stage {

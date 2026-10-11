@@ -5,10 +5,11 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
+use sammy_core::sim::Event;
+
 use super::assets::batch_meshes;
 use crate::game::{Game, GameEvent};
 use crate::render::material::LevelMaterial;
-use sammy_core::sim::Event;
 
 /// Root of the level geometry.
 #[derive(Component)]

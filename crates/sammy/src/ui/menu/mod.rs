@@ -6,6 +6,12 @@
 use bevy::camera::primitives::Aabb;
 use bevy::prelude::*;
 use bevy::window::{CursorOptions, PrimaryWindow};
+use sammy_core::flow::Phase;
+use sammy_core::id::Id;
+pub use sammy_core::levels::MENU_FILE;
+use sammy_core::sim::Event;
+pub use sammy_core::sim::MENU_ARC;
+
 use crate::camera::MainCamera;
 use crate::game::{Game, GameEvent, GameSystems};
 use crate::platform::audio::Sfx;
@@ -14,11 +20,6 @@ use crate::render::coords;
 use crate::scene::Mirrored;
 use crate::ui::hud::load_ui_image;
 use crate::ui::text::{BitmapText, FontKind, Strings};
-use sammy_core::flow::Phase;
-use sammy_core::id::Id;
-use sammy_core::sim::Event;
-pub use sammy_core::levels::MENU_FILE;
-pub use sammy_core::sim::MENU_ARC;
 
 mod choice;
 mod components;

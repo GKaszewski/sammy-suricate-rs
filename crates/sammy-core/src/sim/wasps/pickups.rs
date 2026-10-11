@@ -1,8 +1,8 @@
 //! Ammo pickups: spawning, spinning, taking and expiring.
 
 use super::*;
-use crate::time::Ticks;
 use crate::angle::Angles;
+use crate::time::Ticks;
 
 /// `InitAmmo1`: the type's skin and size; the overlay look unless Flag3 (flare).
 pub(in crate::sim) fn init_ammo(w: &mut World, id: Id, obj: &mut Object) -> Presentation {

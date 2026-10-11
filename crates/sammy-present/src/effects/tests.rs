@@ -1,6 +1,7 @@
-use super::*;
-use sammy_core::space::Pos;
 use sammy_core::keys::KeyColor;
+use sammy_core::space::Pos;
+
+use super::*;
 
 /// A named emitter under test.
 type Emitter = (&'static str, Box<dyn Fn(&mut Particles)>);

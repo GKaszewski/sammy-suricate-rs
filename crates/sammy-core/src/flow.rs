@@ -2,10 +2,10 @@
 //! the win / lose screens with their progression.
 
 use crate::game::GameState;
+use crate::levels::LevelSlot;
 use crate::levels::{EXTRO_SLOT, LAST_OF_WORLD, MENU_FILE, file_for, next_slot};
 use crate::save::{LevelState, SaveGame};
 use crate::time::Ticks;
-use crate::levels::LevelSlot;
 
 /// `PartieEncours` / `PartieGagnee` reduced to the phases the port needs.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]

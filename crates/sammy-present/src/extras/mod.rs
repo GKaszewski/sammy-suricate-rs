@@ -8,8 +8,9 @@
 use sammy_core::flow::Phase;
 use sammy_core::sim::{Event, Sim};
 
-use crate::particles::Particles;
 use sammy_core::points::Points;
+
+use crate::particles::Particles;
 
 mod advance;
 mod draw;

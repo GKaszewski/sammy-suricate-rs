@@ -1,7 +1,8 @@
 //! Picking menu items: the mouse ray against their boxes, and the pad focus.
 
-use super::*;
 use sammy_present::menu::{CHOICE_BACK, CLICK_VOL, MOUSE_RANGE, TOUCH_VOL};
+
+use super::*;
 
 /// Ray-box test: rays this parallel to a slab are treated as parallel, and boxes are
 /// at least this thick (half extent).

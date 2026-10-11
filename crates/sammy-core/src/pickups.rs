@@ -3,6 +3,7 @@
 //! `BlobZoneScan`).
 
 use formats::wmb::Object;
+
 use crate::keys::KeyColor;
 use crate::points::Points;
 use crate::space::Quants;

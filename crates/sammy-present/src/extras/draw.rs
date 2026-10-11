@@ -1,7 +1,8 @@
 //! What to draw this frame: world items and HUD models.
 
-use super::*;
 use sammy_core::time::Ticks;
+
+use super::*;
 
 impl Extras {
 

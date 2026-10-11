@@ -2,11 +2,11 @@
 
 use super::{Frame, Player, State};
 use crate::angle::ang;
+use crate::angle::Degrees;
 use crate::anim::Anim;
 use crate::collision::Space;
 use crate::game::{BOOST_MAX, GameState};
 use crate::time::TICKS_PER_SEC;
-use crate::angle::Degrees;
 
 /// Boost: the engine doubles `Key_Force`; the script keeps turning ×0.75 (net ×1.5).
 const BOOST_TURN_FORCE: f32 = 1.5;

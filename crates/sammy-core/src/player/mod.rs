@@ -36,9 +36,9 @@ mod walk;
 pub use self::state::{State, Touch};
 pub use self::tuning::PlayerTuning;
 use self::intent::Intent;
-use crate::time::Ticks;
-use crate::space::Quants;
 use crate::angle::Degrees;
+use crate::space::Quants;
+use crate::time::Ticks;
 
 #[derive(Clone, Debug)]
 pub struct Player {

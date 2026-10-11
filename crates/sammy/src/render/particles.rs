@@ -12,11 +12,12 @@ use sammy_core::player::State;
 use sammy_present::effects;
 use sammy_present::particles::BatchKey;
 
+use sammy_core::time::Secs;
+
 use crate::camera::MainCamera;
 use crate::game::{Game, GameEvent};
 use crate::render::coords;
 use crate::scene::Loader;
-use sammy_core::time::Secs;
 
 pub struct ParticlePlugin;
 

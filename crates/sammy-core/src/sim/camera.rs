@@ -2,12 +2,12 @@
 //! and the sky domes that hang on it. Its pose is what the frontend renders from.
 
 use super::{Dt, Sim};
+use crate::angle::Angles;
 use crate::camera::{CameraParams, CameraPose, CameraRuntime, FollowState, Subject};
 use crate::flow::Phase;
 use crate::id::Id;
-use crate::time::TICKS_PER_SEC;
-use crate::angle::Angles;
 use crate::space::Pos;
+use crate::time::TICKS_PER_SEC;
 
 /// The camera's state and this frame's pose.
 #[derive(Clone, Debug, Default)]

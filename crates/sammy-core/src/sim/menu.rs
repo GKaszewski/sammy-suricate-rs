@@ -6,6 +6,7 @@ use formats::wmb::Object;
 
 use super::world::World;
 use super::{Dt, Event, Sim};
+use crate::angle::Angles;
 use crate::camera::CameraPose;
 use crate::flow::Phase;
 use crate::id::Id;
@@ -13,7 +14,6 @@ use crate::intro::MENU_ORIGIN;
 use crate::level::Presentation;
 use crate::menu::{Bob, Choice, LEVEL_ICON, Look, MenuAction};
 use crate::percent::Percent;
-use crate::angle::Angles;
 use crate::space::Pos;
 use crate::space::Quants;
 

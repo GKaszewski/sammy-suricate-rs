@@ -1,7 +1,8 @@
 //! Keeping mirrored entities in step: transforms, visibility, lights, animation.
 
-use super::*;
 use sammy_core::percent::Percent;
+
+use super::*;
 
 /// Transforms, visibility, lights and animation of every mirrored entity.
 pub(in crate::scene) fn update(

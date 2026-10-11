@@ -7,15 +7,15 @@ use crate::enemies::LionGlobals;
 use crate::extro::Pov;
 use crate::flow::{FlowInput, LevelFlow, Phase};
 use crate::game::GameState;
+use crate::game::Lives;
 use crate::input::Controls;
+use crate::keys::KeyColor;
+use crate::levels::LevelSlot;
 use crate::levels::{EXTRO_SLOT, MENU_FILE, slot_for};
 use crate::physics::JumpParams;
 use crate::player::PlayerTuning;
-use crate::levels::LevelSlot;
-use crate::keys::KeyColor;
-use crate::time::Ticks;
-use crate::game::Lives;
 use crate::space::Placement;
+use crate::time::Ticks;
 
 /// Level 10 hard-codes 4 lives (Loads.wdl:80).
 const FIXED_LIVES_SLOT: LevelSlot = LevelSlot(10);

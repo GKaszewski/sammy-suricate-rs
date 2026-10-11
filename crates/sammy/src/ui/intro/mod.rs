@@ -4,11 +4,12 @@
 //! ([`sammy_core::sim::IntroState`]).
 
 use bevy::prelude::*;
+use sammy_present::intro::LogoArt;
+
 use crate::camera::MainCamera;
 use crate::game::Game;
 use crate::render::coords;
 use crate::scene::{Loader, NEAR_LAYER};
-use sammy_present::intro::LogoArt;
 
 mod components;
 mod systems;

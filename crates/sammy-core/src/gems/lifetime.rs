@@ -1,8 +1,8 @@
 //! Runtime gems' lifetime, gravity and surprise colours.
 
 use super::*;
-use crate::time::Ticks;
 use crate::keys::KeyColor;
+use crate::time::Ticks;
 
 /// Remaining lifetime (Skill9) of a runtime gem; counts down once it rests.
 #[derive(Clone, Debug)]

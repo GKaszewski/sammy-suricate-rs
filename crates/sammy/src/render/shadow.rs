@@ -3,7 +3,6 @@
 //! SHADOW flag. The animated mesh is flattened onto the floor below the owner along
 //! `sun_angle` ([`sammy_present::extras::Extras::sun`]). The exact A4 projection and darkness are [U]; 50 % black is used.
 
-use sammy_core::collision::Hull;
 use bevy::asset::embedded_asset;
 use bevy::light::NotShadowCaster;
 use bevy::mesh::MeshVertexBufferLayoutRef;
@@ -11,6 +10,7 @@ use bevy::pbr::{MaterialPipeline, MaterialPipelineKey};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, CompareFunction, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError};
 use bevy::shader::ShaderRef;
+use sammy_core::collision::Hull;
 
 use crate::game::{Game, GameSystems};
 use crate::render::coords;

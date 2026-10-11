@@ -3,6 +3,7 @@
 //! out, and can be dismissed with Enter. One-shot.
 
 use formats::wmb::Object;
+
 use crate::time::Ticks;
 
 #[derive(Clone, Copy, PartialEq, Debug)]

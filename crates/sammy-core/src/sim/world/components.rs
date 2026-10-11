@@ -1,8 +1,8 @@
 //! What an entity looks like: its body, model or sprite, animation and light.
 
 use super::*;
-use crate::percent::Percent;
 use crate::angle::Angles;
+use crate::percent::Percent;
 use crate::space::Pos;
 use crate::space::Quants;
 

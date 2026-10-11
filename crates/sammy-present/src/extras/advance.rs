@@ -1,7 +1,8 @@
 //! Events and the frame's advance: call rings, popups, the lose title, the sun.
 
-use super::*;
 use sammy_core::space::Pos;
+
+use super::*;
 
 impl Extras {
     /// Takes a game event (call rings and popups start, a new level clears).

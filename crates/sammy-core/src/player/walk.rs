@@ -2,8 +2,8 @@
 
 use super::intent::Intent;
 use super::{Frame, HULL, Player, StepOut, Touch};
-use crate::collision::{Space, slide_move};
 use crate::angle::Degrees;
+use crate::collision::{Space, slide_move};
 
 /// Slopes: medium ones damp turning, big ones (tuning) strafe and steer downhill.
 const MEDIUM_SLOPE: f32 = 2.0;

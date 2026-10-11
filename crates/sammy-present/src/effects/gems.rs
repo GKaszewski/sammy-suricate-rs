@@ -1,8 +1,9 @@
 //! Gem effects: trails, bursts, catches and mixes.
 
-use super::*;
-use sammy_core::space::Pos;
 use sammy_core::keys::KeyColor;
+use sammy_core::space::Pos;
+
+use super::*;
 
 // ---------------------------------------------------------------- gem colours
 

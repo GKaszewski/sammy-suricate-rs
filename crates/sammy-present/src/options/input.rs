@@ -1,7 +1,8 @@
 //! The frame's input: hover, clicks, sliders, rows and focus moves.
 
-use super::*;
 use sammy_core::percent::Percent;
+
+use super::*;
 
 impl Options {
     /// One frame: hover, clicks, sliders, rows, focus moves, close / cancel. Settings

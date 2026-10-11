@@ -1,7 +1,8 @@
 //! The frame's game controls from keys, mouse and pads.
 
-use super::*;
 use sammy_core::time::Secs;
+
+use super::*;
 
 impl Input {
 

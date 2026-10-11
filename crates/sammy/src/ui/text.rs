@@ -6,8 +6,8 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::ui::hud::load_ui_image;
 use crate::platform::vfs::GameFiles;
+use crate::ui::hud::load_ui_image;
 
 pub struct UiTextPlugin;
 

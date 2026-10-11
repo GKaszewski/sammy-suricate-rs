@@ -3,10 +3,10 @@
 use formats::wmb::Object;
 
 use super::{Dt, Event, Sim, Space};
+use crate::angle::Angles;
 use crate::id::Id;
 use crate::input::Controls;
 use crate::player::{Frame, Player, SCALE, StepOut, Touch};
-use crate::angle::Angles;
 use crate::space::Pos;
 
 pub(super) fn init(sim: &mut Sim, id: Id, obj: &mut Object) {

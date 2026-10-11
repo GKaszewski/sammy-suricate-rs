@@ -18,8 +18,8 @@ use bevy::prelude::*;
 use bevy::render::view::Tonemapping;
 
 use camera::{CameraPlugin, FlyCamera, MainCamera, SkyCamera};
-use render::model::{LoadedModel, ModelAnimator, ModelPlugin};
 use platform::vfs::GameFiles;
+use render::model::{LoadedModel, ModelAnimator, ModelPlugin};
 
 #[derive(Resource, Clone, Default)]
 pub struct Args {

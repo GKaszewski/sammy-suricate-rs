@@ -1,8 +1,8 @@
 //! Platform engines: movement along their path.
 
 use super::*;
-use crate::time::Ticks;
 use crate::keys::KeyColor;
+use crate::time::Ticks;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EngineState {
@@ -31,7 +31,6 @@ pub struct Engine {
     /// Motion this frame.
     pub delta: [f32; 3],
 }
-
 
 impl Engine {
     pub fn from_object(obj: &Object) -> Self {

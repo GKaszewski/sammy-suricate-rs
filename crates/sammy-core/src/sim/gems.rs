@@ -8,10 +8,10 @@ use super::{Dt, Effect, Event, Sim, Space};
 use crate::collision::{Hull, Space as _};
 use crate::gems::{FlyingGem, GemGravity, GemLifetime, HEIGHT_GEM, Launch, Rest};
 use crate::id::Id;
-use crate::player::Player;
-use crate::time::{TICKS_PER_SEC, Ticks};
-use crate::space::Pos;
 use crate::keys::KeyColor;
+use crate::player::Player;
+use crate::space::Pos;
+use crate::time::{TICKS_PER_SEC, Ticks};
 
 /// Gem sprite animation speed (frames per second), backwards for door gems.
 pub(super) const GEM_FPS: f32 = 48.0;

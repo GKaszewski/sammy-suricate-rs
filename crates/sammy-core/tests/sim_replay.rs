@@ -11,9 +11,9 @@ use std::path::Path;
 
 use sammy_core::input::Controls;
 use sammy_core::levels::{LEVELS, LevelSlot, MENU_FILE, file_for};
-use sammy_core::time::Secs;
 use sammy_core::save::{LevelState, SaveGame};
 use sammy_core::sim::Sim;
+use sammy_core::time::Secs;
 
 mod common;
 use common::files;
@@ -242,7 +242,6 @@ fn compare_with_engine_port() {
         }
     }
 }
-
 
 /// Lions hurt Sammy: standing still next to a lion of level 4 (the first lion level),
 /// he gets swiped and loses health.

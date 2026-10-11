@@ -1,7 +1,8 @@
 //! Wasp effects: trails, bursts and hives.
 
-use super::*;
 use sammy_core::space::Pos;
+
+use super::*;
 
 // ---------------------------------------------------------------- wasps
 

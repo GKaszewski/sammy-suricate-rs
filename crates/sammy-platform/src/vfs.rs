@@ -6,7 +6,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-
 /// Files every copy of the game has (checked before using a folder).
 const REQUIRED: &[&str] = &["sons.wdl", sammy_core::levels::MENU_FILE];
 

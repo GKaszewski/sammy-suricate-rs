@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::percent::Percent;
-use crate::space::Pos;
 use crate::space::Placement;
+use crate::space::Pos;
 
 /// Hazards under Sammy's feet and running out of health start a death.
 pub(in crate::sim) fn detect_deaths(sim: &mut Sim, dt: Dt) {

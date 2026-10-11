@@ -11,11 +11,11 @@ mod features;
 mod sprites;
 
 pub(super) use self::sprites::{gem_sprite, snap_sprites};
+use crate::angle::Angles;
 use crate::collision::{BoxCollider, Brush, Hull};
 use crate::id::Id;
 use crate::level::{Presentation, is_passable};
 use crate::percent::Percent;
-use crate::angle::Angles;
 use crate::space::Pos;
 
 /// Frame rate a model animator starts with (the A4 default); speeds are then set in

@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use formats::wmb::Wmb;
 
-use super::World;
 use super::world::Table;
+use super::World;
 use crate::collision::{BoxCollider, Brush, Hit, Hull};
 use crate::id::Id;
 

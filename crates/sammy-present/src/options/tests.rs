@@ -1,5 +1,6 @@
-use super::*;
 use sammy_core::percent::Percent;
+
+use super::*;
 
 #[test]
 fn pad_walks_the_overlay_and_quits_through_the_dialog() {
