@@ -14,6 +14,7 @@ use crate::coords;
 use crate::flow::{CurrentLevel, Phase};
 use crate::hud::load_ui_image;
 use crate::save::{LevelState, SaveGame};
+use sammy_core::menu::{Choice, Look, MenuAction};
 use crate::ui_text::{BitmapText, FontKind, WdlStrings};
 use crate::vfs::GameFiles;
 
@@ -42,17 +43,8 @@ pub struct MenuItem {
     /// Skill1 = `ChoixMenu` code (0 decor, 1 Play, 2-4 worlds, 5 Options, 6 Quit, 20 Back,
     /// 50 Bonus, 100+N level icon).
     pub code: u32,
-    org: [f32; 3],
-    angles: [f32; 3],
-    /// Skill2-4 spin per tick, Skill7 hover amplitude (int) / damping (frac).
-    spin: [f32; 3],
-    hover: f32,
-    damping: f32,
-    z: f32,
-    target: f32,
-    dir: f32,
-    /// `InitMainTitle` flips at 8 quants instead of 4.
-    title: bool,
+    /// Bob and spin ([`sammy_core::menu::Bob`]).
+    bob: sammy_core::menu::Bob,
     sprite: bool,
     alpha: f32,
     scale: Vec3,
@@ -72,21 +64,12 @@ pub struct MenuMarker {
 }
 
 pub fn init_item(obj: &Object, title: bool, entity: &mut EntityCommands) -> ActionInit {
-    let s = &obj.skills;
     let sprite = obj.file.to_lowercase().ends_with(".pcx");
     entity.insert(MenuItem {
-        code: s[0] as u32,
-        org: obj.origin,
-        angles: obj.angles,
-        spin: [s[1], s[2], s[3]],
-        hover: s[6].trunc(),
-        damping: s[6] - s[6].trunc(),
-        z: obj.origin[2],
-        target: obj.origin[2] + s[6].trunc(),
-        dir: 1.0,
-        title,
+        code: obj.skill(1) as u32,
+        bob: sammy_core::menu::Bob::from_object(obj, title),
         sprite,
-        alpha: if obj.flags & (1 << 2) != 0 { 80.0 } else { 100.0 },
+        alpha: sammy_core::menu::base_alpha(obj),
         scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs(),
         styled: false,
         locked: false,
@@ -129,27 +112,18 @@ fn style_items(
             continue;
         }
         item.styled = true;
-        let hidden = match item.code {
-            1 => save.games_started == 0, // Play: hidden until the first level start ever
-            50 => save.bonus_state == 0 || (save.bonus_state == 1 && !save.extro_seen),
-            c if c > 100 => {
-                let n = c - 100;
-                let in_world = matches!(n, 1..=12 | 17..=28 | 33..=44);
-                save.state(n) == LevelState::Absent && !in_world
+        let (alpha, dark) = match sammy_core::menu::look(Choice::from_code(item.code), item.alpha, &save) {
+            Look::Hidden => {
+                *vis = Visibility::Hidden;
+                item.code = 0;
+                continue;
             }
-            _ => false,
+            Look::Shown { alpha } => (alpha, false),
+            Look::Locked { alpha, dark } => {
+                item.locked = true;
+                (alpha, dark)
+            }
         };
-        if hidden {
-            *vis = Visibility::Hidden;
-            item.code = 0;
-            continue;
-        }
-        let (mut alpha, mut dark) = (item.alpha, false);
-        if item.code > 100 && !save.playable(item.code - 100) {
-            item.locked = true;
-            alpha = 50.0;
-            dark = save.state(item.code - 100) != LevelState::Locked;
-        }
         if let Some(mut mat) = mat
             && (alpha < 100.0 || dark)
         {
@@ -165,19 +139,11 @@ fn style_items(
 fn animate_items(time: Res<Time>, state: Res<MenuState>, mut q: Query<(Entity, &mut MenuItem, &mut Transform)>) {
     let t = time.delta_secs() * TICKS;
     for (e, mut item, mut tf) in &mut q {
-        if item.hover != 0.0 && item.code != 0 {
-            item.z += (item.target - item.z) * item.damping * t;
-            for i in 0..3 {
-                item.angles[i] += item.spin[i] * t;
-            }
-            let threshold = if item.title { 8.0 } else { 4.0 };
-            if (item.z - item.target).abs() < threshold {
-                item.dir = -item.dir;
-                item.target = item.org[2] + item.hover * item.dir;
-            }
-            tf.translation = coords::pos([item.org[0], item.org[1], item.z]);
+        if item.bob.moves() && item.code != 0 {
+            let pos = item.bob.step(t);
+            tf.translation = coords::pos(pos);
             if !item.sprite {
-                tf.rotation = coords::rotation(item.angles);
+                tf.rotation = coords::rotation(item.bob.angles);
             }
         }
         // Icons grow ×1.2 while hovered.
@@ -429,17 +395,15 @@ fn act(
     mut options: ResMut<crate::options::OptionsRequest>,
 ) {
     for MenuChoice(code) in choices.read().copied() {
-        match code {
-            1 => {
-                let last = save.last_level;
-                start_level(&mut save, &mut pending, last);
+        match sammy_core::menu::act(Choice::from_code(code), &mut save) {
+            MenuAction::StartLevel(file) => {
+                crate::save::write(&save);
+                pending.0 = Some(file.to_owned());
             }
-            2 | 3 | 4 | 50 => state.view = code,
-            20 => state.view = 0,
-            5 => options.open = Some(crate::options::OptionsMode::Menu),
-            6 => options.quit = true,
-            c if c > 100 => start_level(&mut save, &mut pending, c - 100),
-            _ => {}
+            MenuAction::ShowView(v) => state.view = v.code(),
+            MenuAction::OpenOptions => options.open = Some(crate::options::OptionsMode::Menu),
+            MenuAction::Quit => options.quit = true,
+            MenuAction::Nothing => {}
         }
     }
 }
@@ -463,13 +427,6 @@ fn debug_start(mut state: ResMut<MenuState>, mut req: ResMut<crate::options::Opt
     }
 }
 
-pub fn start_level(save: &mut SaveGame, pending: &mut crate::flow::PendingLoad, slot: u32) {
-    let Some(file) = crate::flow::file_for(slot) else { return };
-    save.games_started += 1;
-    save.last_level = slot;
-    crate::save::write(save);
-    pending.0 = Some(file.to_owned());
-}
 
 // ---------------------------------------------------------------- overlay
 

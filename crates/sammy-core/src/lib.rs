@@ -25,6 +25,7 @@ pub mod intro;
 pub mod keys;
 pub mod level;
 pub mod levels;
+pub mod menu;
 pub mod physics;
 pub mod pickups;
 pub mod platforms;
