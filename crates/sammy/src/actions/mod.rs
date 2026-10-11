@@ -18,7 +18,6 @@ use bevy::prelude::*;
 use formats::wmb::Object;
 
 use crate::camera::CameraParams;
-use crate::schedule::GameSet;
 use crate::game::GameState;
 
 
@@ -26,111 +25,22 @@ pub struct ActionsPlugin;
 
 impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<player::JumpParams>()
-            .init_resource::<player::PlayerTuning>()
-            .init_resource::<GameState>()
+        app.init_resource::<GameState>()
             .init_resource::<crate::game::Rng>()
-            .init_resource::<pickups::GemSprites>()
             .add_message::<crate::game::ResetScan>()
-            .add_message::<wasp::WaspHit>()
-            .add_message::<player::PlayerTouched>()
-            .init_resource::<enemy::LionGlobals>()
-            .init_resource::<enemy::AiClock>()
-            .init_resource::<enemy::FriendCalls>()
-            .add_message::<enemy::WarningAttack>()
-            .add_systems(
-                Update,
-                (platform::link_platforms, platform::run_engines.run_if(is_playing), platform::follow_engines, platform::ride_platforms)
-                    .chain()
-                    .in_set(GameSet::Platforms),
-            )
-            .add_systems(Update, door::run_doors.run_if(is_playing).in_set(GameSet::Doors))
-            .add_systems(Update, player::move_player.in_set(GameSet::Player))
-            .add_systems(
-                Update,
-                (
-                    platform::enter_teleports.run_if(is_playing),
-                    health::detect_deaths.run_if(is_playing),
-                    health::collect_health.run_if(is_playing),
-                    door::run_exits.run_if(is_playing),
-                    pickups::shrink,
-                    door::run_door_gems,
-                    gems::surprise_gems,
-                    gems::gem_gravity,
-                    gems::gem_lifetimes,
-                    gems::fly_gems,
-                    pickups::collect.run_if(is_playing),
-                    pickups::snap_pickups,
-                )
-                    .chain_ignore_deferred()
-                    .in_set(GameSet::Pickups),
-            )
-            .add_systems(Update, platform::run_teleports.in_set(GameSet::Teleports))
-            .add_systems(
-                Update,
-                (
-                    wasp::collect_ammo.run_if(is_playing),
-                    wasp::fire,
-                    wasp::spin_pickups,
-                    enemy::home_wasps,
-                    wasp::fly_wasps,
-                    wasp::update_weak_doors,
-                    wasp::fly_planks,
-                    wasp::run_hives.run_if(is_playing),
-                    gems::run_boulders.run_if(is_playing),
-                    wasp::fly_hive_wasps,
-                    wasp::expire_pickups,
-                )
-                    .chain()
-                    .in_set(GameSet::Wasps),
-            )
-            .add_systems(
-                Update,
-                (
-                    enemy::add_player_collider,
-                    enemy::sync_player_collider,
-                    enemy::advance_clock,
-                    enemy::tick_enemies,
-                    extro::run_triggers,
-                    enemy::bump_clock,
-                    enemy::add_enemy_colliders,
-                    enemy::run_start_triggers,
-                    enemy::sync_enemy_colliders,
-                    enemy::fade_enemies,
-                    enemy::place_enemies,
-                )
-                    .chain()
-                    .in_set(GameSet::Enemies),
-            )
-            .add_systems(
-                Update,
-                (
-                    enemy::reset_calls,
-                    fx::warning_light,
-                    fx::spawn_shadows,
-                    fx::place_shadows,
-                    fx::run_eye,
-                    fx::spawn_rings,
-                    fx::update_rings,
-                    fx::run_call_rings,
-                )
-                    .chain()
-                    .in_set(GameSet::Effects),
-            )
-            .add_systems(
-                Update,
-                (health::spin_pickups, health::animate_hearts, health::reset_checkpoints, pickups::reset_keys, health::run_death)
-                    .chain_ignore_deferred()
-                    .in_set(GameSet::Health),
-            )
-            .add_systems(Update, title::update_titles.in_set(GameSet::Titles))
-            .add_systems(Update, decor::snap_sprites.in_set(crate::schedule::FrameSet::Flow))
-            .init_resource::<extro::Pov>()
-            .init_resource::<extro::Scanners>()
-            .init_resource::<extro::TriggerClock>()
-            .add_systems(PreUpdate, (extro::update_pov, extro::trigger_clock))
-            .add_systems(Update, extro::scripted_anims.in_set(crate::schedule::FrameSet::Animate).after(crate::model::animate_models))
-            .add_systems(Update, extro::fade_out.in_set(crate::schedule::FrameSet::Flow))
+            .add_plugins((
+                platform::PlatformsPlugin,
+                door::DoorsPlugin,
+                player::PlayerPlugin,
+                pickups::PickupsPlugin,
+                health::HealthPlugin,
+                wasp::WaspsPlugin,
+                enemy::EnemiesPlugin,
+                extro::ExtroPlugin,
+                fx::EffectsPlugin,
+                title::TitlesPlugin,
+            ))
+            .add_systems(Update, decor::snap_sprites.in_set(crate::schedule::GameSet::Flow))
             .add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
     }
 }
@@ -138,7 +48,8 @@ impl Plugin for ActionsPlugin {
 pub use sammy_core::level::Presentation as ActionInit;
 pub use sammy_core::level::{is_marker, is_passable};
 
-fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
+/// Run condition: the level is being played (`PartieEncours == 1`).
+pub fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
     crate::flow::playing(&current)
 }
 

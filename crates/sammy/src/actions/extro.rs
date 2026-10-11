@@ -11,6 +11,25 @@ use crate::camera::{CameraParams, FollowState};
 use crate::collision::{entity, id};
 
 pub use sammy_core::extro::RANGE_SCAN_25;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// The extro's camera target, scanners and scripted triggers.
+pub struct ExtroPlugin;
+
+impl Plugin for ExtroPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Pov>()
+            .init_resource::<Scanners>()
+            .init_resource::<TriggerClock>()
+            .add_systems(PreUpdate, (update_pov, trigger_clock))
+            .add_systems(Update, run_triggers.in_set(GameSet::ExtroTriggers))
+            .add_systems(Update, scripted_anims.in_set(GameSet::ScriptedAnims))
+            .add_systems(Update, fade_out.in_set(GameSet::Flow));
+    }
+}
+
 
 /// `pov_Syn` ([`sammy_core::extro::Pov`]): whom the camera follows and whom enemies
 /// measure distance and line of sight to.

@@ -104,13 +104,25 @@ fn digest(world: &mut World) -> String {
     for (p, _) in q.iter(world) {
         let _ = write!(out, " | sammy {} {} {} pan {}", r(p.pos[0] / 32.0), r(p.pos[1] / 32.0), r(p.pos[2] / 32.0), r(p.pan));
     }
-    let mut lines: Vec<String> = world
-        .query::<(Option<&Name>, &GlobalTransform)>()
+    let detail = std::env::var_os("DUMP_AT").is_some();
+    // Particle render batches are plumbing (created when a texture first appears), not
+    // game state.
+    let entities: Vec<(Entity, Option<String>, GlobalTransform)> = world
+        .query_filtered::<(Entity, Option<&Name>, &GlobalTransform), Without<sammy::particles::ParticleBatch>>()
         .iter(world)
-        .map(|(n, t)| {
+        .map(|(e, n, t)| (e, n.map(|n| n.as_str().to_owned()), *t))
+        .collect();
+    let mut lines: Vec<String> = entities
+        .into_iter()
+        .map(|(e, n, t)| {
             let (_, rot, pos) = t.to_scale_rotation_translation();
             let (y, x, z) = rot.to_euler(EulerRot::YXZ);
-            format!("{} {} {} {} {} {} {}", n.map_or("?", |n| n.as_str()), r(pos.x), r(pos.y), r(pos.z), r(y), r(x), r(z))
+            let mut line = format!("{} {} {} {} {} {} {}", n.as_deref().unwrap_or("?"), r(pos.x), r(pos.y), r(pos.z), r(y), r(x), r(z));
+            if detail && n.is_none() && std::env::var_os("DUMP_COMPONENTS").is_some() {
+                let comps: Vec<String> = world.inspect_entity(e).map(|it| it.map(|(_, c)| c.name().shortname().to_string()).collect()).unwrap_or_default();
+                line += &format!(" [{}]", comps.join(","));
+            }
+            line
         })
         .collect();
     lines.sort();

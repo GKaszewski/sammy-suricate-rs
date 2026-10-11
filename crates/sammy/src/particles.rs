@@ -159,7 +159,7 @@ fn update_particles(mut particles: ResMut<Particles>) {
 
 /// One draw batch per (bitmap, additive).
 #[derive(Component)]
-struct ParticleBatch;
+pub struct ParticleBatch;
 
 #[derive(Default)]
 struct Batches(HashMap<(Option<&'static str>, bool), (Entity, Handle<Mesh>)>);

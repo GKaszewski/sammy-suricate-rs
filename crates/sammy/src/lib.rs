@@ -89,7 +89,7 @@ pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, (audio::load_sounds, setup))
-        .add_systems(Update, (level::face_camera.in_set(schedule::FrameSet::Camera), level::animate_sprites));
+        .add_systems(Update, (level::face_camera.in_set(schedule::GameSet::FaceCamera), level::animate_sprites));
     Ok(())
 }
 

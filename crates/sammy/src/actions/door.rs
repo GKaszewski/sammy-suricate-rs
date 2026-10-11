@@ -10,6 +10,22 @@ use crate::audio::Sfx;
 use crate::collision::Brush;
 use crate::coords;
 use crate::game::{GameState, MASTER_KEY};
+use super::is_playing;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// Doors, their key gems and the exit tile.
+pub struct DoorsPlugin;
+
+impl Plugin for DoorsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, run_doors.run_if(is_playing).in_set(GameSet::DoorScan))
+            .add_systems(Update, run_exits.run_if(is_playing).in_set(GameSet::Exits))
+            .add_systems(Update, run_door_gems.in_set(GameSet::DoorGems));
+    }
+}
+
 
 /// A door ([`sammy_core::doors::Door`]) on a brush entity.
 #[derive(Component, Deref, DerefMut)]

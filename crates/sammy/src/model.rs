@@ -15,7 +15,7 @@ pub struct ModelPlugin;
 
 impl Plugin for ModelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, animate_models.in_set(crate::schedule::FrameSet::Animate));
+        app.add_systems(Update, animate_models.in_set(crate::schedule::GameSet::AnimateModels));
     }
 }
 

@@ -15,6 +15,22 @@ pub use sammy_core::player::{BLOB_HAUT, SCALE, State};
 pub use sammy_core::time::TICKS_PER_SEC as TICKS;
 
 pub use crate::game::BOOST_MAX;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// Sammy: tuning resources and movement.
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<JumpParams>()
+            .init_resource::<PlayerTuning>()
+            .add_message::<PlayerTouched>()
+            .add_systems(Update, move_player.in_set(GameSet::Player));
+    }
+}
+
 
 /// [`sammy_core::player::PlayerTuning`] as a resource.
 #[derive(Resource, Clone, Copy, Debug, Default, Deref, DerefMut)]

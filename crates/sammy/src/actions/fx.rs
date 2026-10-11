@@ -16,6 +16,30 @@ use crate::game::GameState;
 use crate::level::GameAssets;
 use crate::lights::DynamicLight;
 use crate::model::ModelAnimator;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// Warning light, blob shadows, the Eye of Truth and the range/call rings.
+pub struct EffectsPlugin;
+
+impl Plugin for EffectsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            (
+                warning_light.in_set(GameSet::WarningLight),
+                spawn_shadows.in_set(GameSet::SpawnShadows),
+                place_shadows.in_set(GameSet::PlaceShadows),
+                run_eye.in_set(GameSet::Eye),
+                spawn_rings.in_set(GameSet::SpawnRings),
+                update_rings.in_set(GameSet::UpdateRings),
+                run_call_rings.in_set(GameSet::CallRings),
+            ),
+        );
+    }
+}
+
 
 /// `LightRange1`: start range of the warning light.
 const WARNING_RANGE: f32 = 300.0;

@@ -4,6 +4,19 @@ use bevy::prelude::*;
 use formats::wmb::Object;
 
 use super::player::TICKS;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// Help signs.
+pub struct TitlesPlugin;
+
+impl Plugin for TitlesPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, update_titles.in_set(GameSet::Titles));
+    }
+}
+
 
 #[derive(Component, Deref, DerefMut)]
 pub struct Title(sammy_core::titles::Title);

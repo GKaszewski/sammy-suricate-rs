@@ -19,6 +19,30 @@ use crate::camera::FollowState;
 use crate::collision::{Brush, Hull};
 use crate::coords;
 use crate::game::GameState;
+use super::is_playing;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// Engines, platforms and teleport pads.
+pub struct PlatformsPlugin;
+
+impl Plugin for PlatformsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            (
+                link_platforms.in_set(GameSet::LinkPlatforms),
+                run_engines.run_if(is_playing).in_set(GameSet::RunEngines),
+                follow_engines.in_set(GameSet::FollowEngines),
+                ride_platforms.in_set(GameSet::RidePlatforms),
+            ),
+        )
+            .add_systems(Update, enter_teleports.run_if(is_playing).in_set(GameSet::TeleportEntry))
+            .add_systems(Update, run_teleports.in_set(GameSet::Teleports));
+    }
+}
+
 
 /// An engine ([`sammy_core::platforms::Engine`]).
 #[derive(Component, Deref, DerefMut)]

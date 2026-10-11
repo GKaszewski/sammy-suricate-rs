@@ -23,8 +23,8 @@ impl Plugin for ShadowPlugin {
         embedded_asset!(app, "shadow.wesl");
         app.add_plugins(MaterialPlugin::<ShadowMaterial>::default())
             .init_resource::<SunAngle>()
-            .add_systems(Update, (spin_sun, attach_shadows).chain().in_set(crate::schedule::FrameSet::Flow))
-            .add_systems(Update, update_shadows.in_set(crate::schedule::GameSet::Doors).after(crate::actions::door::run_doors));
+            .add_systems(Update, (spin_sun, attach_shadows).chain().in_set(crate::schedule::GameSet::Flow))
+            .add_systems(Update, update_shadows.in_set(crate::schedule::GameSet::Shadows));
     }
 }
 

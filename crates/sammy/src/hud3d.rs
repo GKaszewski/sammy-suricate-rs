@@ -17,7 +17,7 @@ pub struct Hud3dPlugin;
 
 impl Plugin for Hud3dPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (spawn_hud_models, end_titles, fly_popups.in_set(crate::schedule::FrameSet::Flow)))
+        app.add_systems(Update, (spawn_hud_models, end_titles, fly_popups.in_set(crate::schedule::GameSet::Flow)))
             .add_systems(PostUpdate, place_hud_models.after(TransformSystems::Propagate).before(bevy::camera::visibility::VisibilitySystems::CheckVisibility));
     }
 }

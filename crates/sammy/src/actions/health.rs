@@ -15,6 +15,23 @@ use crate::camera::FollowState;
 use crate::coords;
 use crate::game::{GameState, ResetScan};
 use crate::model::ModelAnimator;
+use super::is_playing;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// Hazards, hearts, boosts, checkpoints and the death/respawn sequence.
+pub struct HealthPlugin;
+
+impl Plugin for HealthPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, detect_deaths.run_if(is_playing).in_set(GameSet::Hazards))
+            .add_systems(Update, collect_health.run_if(is_playing).in_set(GameSet::HealthPickups))
+            .add_systems(Update, (spin_pickups.in_set(GameSet::SpinHealth), animate_hearts.in_set(GameSet::AnimateHearts), reset_checkpoints.in_set(GameSet::ResetCheckpoints)))
+            .add_systems(Update, run_death.in_set(GameSet::Death));
+    }
+}
+
 
 #[derive(Component)]
 pub struct DeathTile;
