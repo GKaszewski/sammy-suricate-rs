@@ -1,9 +1,9 @@
 //! The game world on screen: the level geometry, every game entity mirrored as a Bevy
-//! entity, and the indicators drawn from the game state (ground shadows, range and
-//! call rings).
+//! entity, and the extras drawn from the game state (ground shadows, range and call
+//! rings, popups, the lose title, the HUD wasp and eye).
 
 pub mod assets;
-pub mod indicators;
+pub mod extras;
 pub mod level;
 pub mod mirror;
 
@@ -37,7 +37,9 @@ impl Plugin for ScenePlugin {
         app.init_resource::<SceneAssets>()
             .init_resource::<Mirror>()
             .add_systems(Update, (level::rebuild, mirror::spawn, mirror::update).chain().after(GameSystems::Tick))
-            .add_systems(Update, (indicators::ground_shadows, indicators::range_rings, indicators::call_rings).after(GameSystems::Tick))
+            .init_resource::<extras::ExtrasState>()
+            .add_systems(Update, (extras::update, extras::draw).chain().after(GameSystems::Tick))
+            .add_systems(PostUpdate, extras::draw_hud.after(TransformSystems::Propagate).before(bevy::camera::visibility::VisibilitySystems::CheckVisibility))
             .add_systems(PostUpdate, face_camera.after(crate::camera::CameraSystems::Place).before(TransformSystems::Propagate));
     }
 }

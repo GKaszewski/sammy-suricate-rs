@@ -4,6 +4,7 @@
 //! out ([`text`]). Frontends draw the result with their own renderer.
 
 pub mod effects;
+pub mod extras;
 pub mod hud;
 pub mod intro;
 pub mod menu;

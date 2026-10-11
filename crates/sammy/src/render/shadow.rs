@@ -1,8 +1,7 @@
 //! A4 engine model shadows (`my.shadow = 1`): Sammy at `AverageFps > 40`
 //! (player.wdl:197-207, so always on modern machines) and entities with the editor
 //! SHADOW flag. The animated mesh is flattened onto the floor below the owner along
-//! `sun_angle` (pan 135, tilt 85 in levels, mm1.wdl:618-620; pan 90 in the extro,
-//! Extro.wdl:81). The exact A4 projection and darkness are [U]; 50 % black is used.
+//! `sun_angle` ([`sammy_present::extras::Extras::sun`]). The exact A4 projection and darkness are [U]; 50 % black is used.
 
 use sammy_core::collision::Hull;
 use bevy::asset::embedded_asset;
@@ -13,7 +12,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, CompareFunction, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError};
 use bevy::shader::ShaderRef;
 
-use crate::game::{Game, GameEvent, GameSystems};
+use crate::game::{Game, GameSystems};
 use crate::render::coords;
 
 pub struct ShadowPlugin;
@@ -22,35 +21,18 @@ impl Plugin for ShadowPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "shadow.wesl");
         app.add_plugins(MaterialPlugin::<ShadowMaterial>::default())
-            .init_resource::<SunAngle>()
-            .add_systems(Update, (sun_for_level, spin_sun, attach_shadows, update_shadows).chain().after(GameSystems::Tick));
+            .add_systems(Update, (attach_shadows, update_shadows).chain().after(GameSystems::Tick));
     }
 }
 
-/// Default `sun_angle` pan in degrees (mm1.wdl:618).
-const DEFAULT_SUN_PAN: f32 = 135.0;
-/// Default `sun_angle` tilt in degrees (mm1.wdl:620).
-const DEFAULT_SUN_TILT: f32 = 85.0;
 /// Shadow colour alpha: 50 % black ([U] in the original).
 const SHADOW_ALPHA: f32 = 0.5;
-/// Win/lose sun pan speed in degrees per tick (mm1.wdl:966).
-const SUN_SPIN_RATE: f32 = 10.0;
 /// Floor probe starts this many quants above the owner origin.
 const FLOOR_PROBE_UP: f32 = 8.0;
 /// Floor probe reaches this many quants below the owner origin.
 const FLOOR_PROBE_DOWN: f32 = 2000.0;
 /// Quants the shadow plane is lifted above the floor, against z-fighting.
 const FLOOR_LIFT: f32 = 0.5;
-
-/// `sun_angle` (pan, tilt) in degrees: the direction the sun is seen from.
-#[derive(Resource, Clone, Copy)]
-pub struct SunAngle(pub f32, pub f32);
-
-impl Default for SunAngle {
-    fn default() -> Self {
-        Self(DEFAULT_SUN_PAN, DEFAULT_SUN_TILT)
-    }
-}
 
 #[derive(Clone, Copy, ShaderType, Default, Debug)]
 pub struct ShadowParams {
@@ -115,27 +97,9 @@ fn attach_shadows(
 #[derive(Component)]
 pub struct ModelShadowLink(#[allow(dead_code)] Entity);
 
-/// Extro `sun_angle` (pan 90, Extro.wdl:81; levels use the default).
-const EXTRO_SUN: SunAngle = SunAngle(90.0, DEFAULT_SUN_TILT);
-
-/// `sun_angle` per level: pan 135 / tilt 85 (mm1.wdl:618-620), pan 90 in the extro.
-fn sun_for_level(game: Res<Game>, mut events: MessageReader<GameEvent>, mut sun: ResMut<SunAngle>) {
-    if events.read().any(|e| matches!(e.0, sammy_core::sim::Event::Loaded { .. })) {
-        *sun = if game.flow.slot == Some(sammy_core::levels::EXTRO_SLOT) { EXTRO_SUN } else { SunAngle::default() };
-    }
-}
-
-/// Win/lose screen: `Sun_Angle.pan += 10 * time` (mm1.wdl:966), so the shadow circles Sammy.
-fn spin_sun(time: Res<Time>, game: Res<Game>, mut sun: ResMut<SunAngle>) {
-    use sammy_core::flow::Phase;
-    if matches!(game.flow.phase, Phase::Won(_) | Phase::Lost(_)) {
-        sun.0 += SUN_SPIN_RATE * time.delta_secs() * sammy_core::time::TICKS_PER_SEC;
-    }
-}
-
 fn update_shadows(
     game: Res<Game>,
-    sun: Res<SunAngle>,
+    extras: Res<crate::scene::extras::ExtrasState>,
     mut materials: ResMut<Assets<ShadowMaterial>>,
     owners: Query<&GlobalTransform>,
     q: Query<(&ModelShadow, &MeshMaterial3d<ShadowMaterial>)>,
@@ -143,7 +107,7 @@ fn update_shadows(
     if game.level.is_none() {
         return;
     }
-    let (p, t) = (sun.0.to_radians(), sun.1.to_radians());
+    let (p, t) = (extras.sun[0].to_radians(), extras.sun[1].to_radians());
     // Light travels from the sun toward the ground.
     let to_sun = [t.cos() * p.cos(), t.cos() * p.sin(), t.sin()];
     let dir = coords::dir([-to_sun[0], -to_sun[1], -to_sun[2]]);

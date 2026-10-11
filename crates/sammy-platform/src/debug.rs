@@ -51,6 +51,8 @@ pub fn options() -> DebugOptions {
         autofire: var("SAMMY_AUTOFIRE").is_some(),
         // SAMMY_SKIP=action1,action2 leaves out objects with those actions.
         skip_actions: var("SAMMY_SKIP").map(|v| v.split(',').map(|a| a.trim().to_lowercase()).collect()).unwrap_or_default(),
+        // SAMMY_GIVE_UP=<secs> gives up the level (lose screen) after that much play.
+        give_up_after: num("SAMMY_GIVE_UP"),
         no_intro: ["SAMMY_MENU_VIEW", "SAMMY_MENU_CAM", "SAMMY_OPTIONS", "SAMMY_MENU_CHOICE", "SAMMY_NOINTRO"].iter().any(|v| var(v).is_some()),
     }
 }

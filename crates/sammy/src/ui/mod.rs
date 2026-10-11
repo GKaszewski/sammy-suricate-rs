@@ -2,7 +2,6 @@
 //! options overlay and the boot intro.
 
 pub mod hud;
-pub mod hud3d;
 #[cfg(feature = "intro")]
 pub mod intro;
 pub mod menu;

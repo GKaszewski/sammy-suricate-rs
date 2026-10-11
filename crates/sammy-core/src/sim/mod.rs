@@ -70,6 +70,8 @@ pub struct DebugOptions {
     pub skip_actions: Vec<String>,
     /// No boot intro.
     pub no_intro: bool,
+    /// Give up the level after this many seconds of play (counts down).
+    pub give_up_after: Option<f32>,
 }
 
 /// The game.
@@ -212,6 +214,15 @@ impl Sim {
         let mut controls = controls.clone();
         if self.debug.autowalk {
             controls.forward = 1.0;
+        }
+        if self.playing()
+            && let Some(left) = self.debug.give_up_after.as_mut()
+        {
+            *left -= secs;
+            if *left <= 0.0 {
+                self.debug.give_up_after = None;
+                self.give_up();
+            }
         }
         let reset = std::mem::take(&mut self.reset_scan);
         self.touched.clear();

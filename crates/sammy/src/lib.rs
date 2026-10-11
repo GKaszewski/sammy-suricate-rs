@@ -78,7 +78,6 @@ impl PluginGroup for SammyPlugins {
             .add(render::particles::ParticlePlugin)
             .add(ui::text::UiTextPlugin)
             .add(ui::hud::HudPlugin)
-            .add(ui::hud3d::Hud3dPlugin)
             .add(ui::menu::MenuPlugin)
             .add(ui::options::OptionsPlugin);
         #[cfg(feature = "intro")]
