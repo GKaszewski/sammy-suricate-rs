@@ -37,11 +37,13 @@ pub struct MenuView {
     /// A modal overlay (options, Yes/No) owns the input.
     pub modal: bool,
     debug_done: bool,
+    /// Orbit angles of the hover sparkles.
+    sparkle: [f32; 2],
 }
 
 impl MenuView {
     pub fn new(gfx: &Gfx, files: &GameFiles) -> Self {
-        Self { cursor: crate::hud::load_ui_image(gfx, files, CURSOR_FILE), clicked_once: false, choices: Vec::new(), modal: false, debug_done: false }
+        Self { cursor: crate::hud::load_ui_image(gfx, files, CURSOR_FILE), clicked_once: false, choices: Vec::new(), modal: false, debug_done: false, sparkle: [0.0; 2] }
     }
 
     /// The menu items on screen: id, code, window-pixel rect and distance.
@@ -95,6 +97,7 @@ impl MenuView {
             if now.is_some() {
                 audio.play("Toc2", TOUCH_VOL);
             }
+            self.sparkle = [0.0; 2];
             sim.menu.hovered = now;
         }
         let clicked = (pointer.clicked && !c.pad) || (c.pad && c.accept && before == sim.menu.hovered);
@@ -110,6 +113,19 @@ impl MenuView {
     }
 
     /// The frame's choices (`ChoixMenu`), after the tick.
+    /// Sparkles orbit a hovered, open level icon (`particle_interface1`), one per
+    /// particle tick.
+    pub fn sparkles(&mut self, sim: &Sim, particles: &mut sammy_present::particles::Particles) {
+        let Some((item, b)) = sim.menu.hovered.and_then(|h| sim.world.menu_items.get(&h).zip(sim.world.bodies.get(&h))) else { return };
+        if !sim.in_menu() || !item.is_icon() || item.locked {
+            return;
+        }
+        for _ in 0..particles.ticks {
+            let off = sammy_present::menu::sparkle(&mut self.sparkle);
+            sammy_present::effects::menu_sparkle(particles, [0, 1, 2].map(|i| b.pos[i] + off[i]));
+        }
+    }
+
     pub fn act(&mut self, sim: &mut Sim) {
         for code in self.choices.drain(..) {
             sim.menu_choice(code);

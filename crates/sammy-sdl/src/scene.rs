@@ -17,6 +17,12 @@ use crate::gfx::{Gfx, Layout, Lights, MAX_LIGHTS, Mesh, Shade, Texture};
 /// A bounding sphere: centre and radius (quants).
 type Sphere = (Vec3, f32);
 
+/// Model shadows: the floor probe from above the owner's origin down, the lift
+/// against z-fighting, and 50 % black ([U] in the original).
+const SHADOW_PROBE_UP: f32 = 8.0;
+const SHADOW_PROBE_DOWN: f32 = 2000.0;
+const SHADOW_LIFT: f32 = 0.5;
+const SHADOW_ALPHA: f32 = 0.5;
 /// Opacity of an opaque body (percent).
 const OPAQUE: f32 = 100.0;
 /// Grey tint of a darkened (absent) level icon in the menu.
@@ -30,9 +36,9 @@ const ASPECT_43: f32 = 4.0 / 3.0;
 const MENU_SKIP: &[&str] = &["black"];
 
 /// A parsed MDL ready to draw: its vertex frames and skins.
-struct ModelAsset {
-    mdl: formats::mdl::Mdl,
-    vb: formats::mdl::VertexBuffer,
+pub struct ModelAsset {
+    pub mdl: formats::mdl::Mdl,
+    pub vb: formats::mdl::VertexBuffer,
     skins: Vec<Texture>,
     /// Skins with the `overlay` colour key, built on demand.
     overlay: std::cell::RefCell<HashMap<u32, Texture>>,
@@ -40,7 +46,7 @@ struct ModelAsset {
 
 impl ModelAsset {
     /// Interleaved pos, normal, uv of frames `a`→`b` blended by `f`.
-    fn vertices(&self, (a, b, f): (usize, usize, f32)) -> Vec<f32> {
+    pub fn vertices(&self, (a, b, f): (usize, usize, f32)) -> Vec<f32> {
         let last = self.mdl.frames.len() - 1;
         let (fa, fb) = (&self.mdl.frames[a.min(last)], &self.mdl.frames[b.min(last)]);
         let mut out = Vec::with_capacity(self.vb.xyz_index.len() * 8);
@@ -54,16 +60,16 @@ impl ModelAsset {
         out
     }
 
-    fn skin(&self, n: u32) -> Texture {
+    pub fn skin(&self, n: u32) -> Texture {
         self.skins[(n.max(1) as usize - 1).min(self.skins.len() - 1)]
     }
 }
 
 /// A sprite: its quad (one frame of the strip), texture and frame count.
-struct SpriteAsset {
-    mesh: Mesh,
-    tex: Texture,
-    frames: u32,
+pub struct SpriteAsset {
+    pub mesh: Mesh,
+    pub tex: Texture,
+    pub frames: u32,
     bounds: Bounds,
 }
 
@@ -105,6 +111,10 @@ pub struct Scene {
     pub stats: std::cell::Cell<Stats>,
     /// The intro logo being shown: its id, mesh and texture.
     logo: Option<(u8, Mesh, Texture)>,
+    /// Lights not on game entities (the lose title's), and the model shadows' sun
+    /// (pan, tilt), set before drawing.
+    pub extra_lights: Vec<(Vec3, f32, [f32; 3])>,
+    pub sun: Option<[f32; 2]>,
 }
 
 /// Per-frame counts for the profile log.
@@ -125,6 +135,9 @@ pub struct Camera {
     pub pos: Vec3,
     /// World axes of the view: forward, left, up.
     pub axes: Mat3,
+    /// Vertical field of view (radians) and aspect ratio.
+    pub fov: f32,
+    pub aspect: f32,
     /// Frustum planes (normal inward, `n·p + d >= 0` inside).
     planes: [Vec4; 6],
 }
@@ -150,7 +163,7 @@ impl Camera {
         // Gribb-Hartmann: each plane is the w row plus or minus another row.
         let rows = [0, 1, 2, 3].map(|i| view_proj.row(i));
         let planes = [rows[3] + rows[0], rows[3] - rows[0], rows[3] + rows[1], rows[3] - rows[1], rows[3] + rows[2], rows[3] - rows[2]].map(|p| p / p.truncate().length());
-        Self { view_proj, pos, axes: Mat3::from_cols(forward, left, up), planes }
+        Self { view_proj, pos, axes: Mat3::from_cols(forward, left, up), fov, aspect, planes }
     }
 
     /// Whether a sphere is at least partly in view.
@@ -169,13 +182,14 @@ struct FrameLights {
 struct SceneLights(Vec<(Vec3, f32, [f32; 3])>);
 
 impl SceneLights {
-    fn new(sim: &Sim, cam: Vec3) -> Self {
+    fn new(sim: &Sim, cam: Vec3, extra: &[(Vec3, f32, [f32; 3])]) -> Self {
         let w = &sim.world;
         let mut list: Vec<(Vec3, f32, [f32; 3])> = w
             .lights
             .iter()
             .filter(|(_, l)| l.range > 0.0)
             .filter_map(|(id, l)| w.bodies.get(id).map(|b| (Vec3::from(b.pos), l.range, l.color.map(|c| c / 255.0))))
+            .chain(extra.iter().copied())
             .collect();
         list.sort_by(|a, b| (a.0 - cam).length_squared().total_cmp(&(b.0 - cam).length_squared()));
         Self(list)
@@ -203,7 +217,7 @@ fn transform(b: &Body, rot: Quat) -> Mat4 {
 }
 
 impl Scene {
-    fn model(&mut self, gfx: &Gfx, files: &GameFiles, file: &str) -> Option<Rc<ModelAsset>> {
+    pub fn model(&mut self, gfx: &Gfx, files: &GameFiles, file: &str) -> Option<Rc<ModelAsset>> {
         let key = file.to_lowercase();
         self.models
             .entry(key.clone())
@@ -241,7 +255,7 @@ impl Scene {
             .clone()
     }
 
-    fn sprite(&mut self, gfx: &Gfx, files: &GameFiles, file: &str) -> Option<Rc<SpriteAsset>> {
+    pub fn sprite(&mut self, gfx: &Gfx, files: &GameFiles, file: &str) -> Option<Rc<SpriteAsset>> {
         let key = file.to_lowercase();
         self.sprites.entry(key.clone()).or_insert_with(|| load_sprite(gfx, files, &key)).clone()
     }
@@ -391,7 +405,7 @@ impl Scene {
     pub fn draw(&self, gfx: &Gfx, sim: &Sim, cam: &Camera, parts: &str) {
         let gl = &gfx.gl;
         let w = &sim.world;
-        let lights = SceneLights::new(sim, cam.pos);
+        let lights = SceneLights::new(sim, cam.pos, &self.extra_lights);
         let mut stats = self.stats.get();
         stats.lights = lights.0.len() as u32;
         let mut f = FrameLights { lights, stats };
@@ -443,6 +457,9 @@ impl Scene {
                 self.draw_entity(gfx, sim, cam, *id, Pass::Opaque, &mut f);
             }
         }
+        if parts.contains("entities") {
+            self.draw_shadows(gfx, sim, cam);
+        }
         translucent.sort_by(|a, b| b.0.total_cmp(&a.0));
         unsafe {
             gl.enable(glow::BLEND);
@@ -451,12 +468,24 @@ impl Scene {
         for (_, id) in translucent {
             self.draw_entity(gfx, sim, cam, id, Pass::Translucent, &mut f);
         }
-        // `Near` entities (help signs) over a fresh depth buffer.
         unsafe {
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        }
+        self.stats.set(f.stats);
+    }
+
+    /// `Near` entities (help signs) over a fresh depth buffer, after the world's extras.
+    pub fn draw_near(&self, gfx: &Gfx, sim: &Sim, cam: &Camera) {
+        let gl = &gfx.gl;
+        let mut f = FrameLights { lights: SceneLights::new(sim, cam.pos, &self.extra_lights), stats: self.stats.get() };
+        unsafe {
+            gl.enable(glow::DEPTH_TEST);
+            gl.enable(glow::BLEND);
+            gl.disable(glow::CULL_FACE);
             gl.depth_mask(true);
             gl.clear(glow::DEPTH_BUFFER_BIT);
         }
-        for (id, _) in w.looks.iter().filter(|(_, l)| l.near) {
+        for (id, _) in sim.world.looks.iter().filter(|(_, l)| l.near) {
             self.draw_entity(gfx, sim, cam, *id, Pass::Translucent, &mut f);
         }
         unsafe {
@@ -464,6 +493,48 @@ impl Scene {
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         }
         self.stats.set(f.stats);
+    }
+
+    /// A4 engine model shadows (`my.shadow`): each caster's mesh flattened along the
+    /// sun onto the floor below it, 50 % black, each floor pixel darkened once.
+    fn draw_shadows(&self, gfx: &Gfx, sim: &Sim, cam: &Camera) {
+        let Some([pan, tilt]) = self.sun else { return };
+        let (p, t) = (pan.to_radians(), tilt.to_radians());
+        // Light travels from the sun toward the ground.
+        let sun = -Vec3::new(t.cos() * p.cos(), t.cos() * p.sin(), t.sin());
+        let gl = &gfx.gl;
+        let w = &sim.world;
+        let mut started = false;
+        for (id, _) in w.looks.iter().filter(|(_, l)| l.shadow) {
+            let (Some(b), Some((_, View::Model { mesh, .. }))) = (w.bodies.get(id), self.views.get(id)) else { continue };
+            if b.hidden || !cam.sees(sphere(b, &self.views[id].1)) {
+                continue;
+            }
+            let o = b.pos;
+            let tr = sim.trace_static(sammy_core::collision::Hull::Point, [o[0], o[1], o[2] + SHADOW_PROBE_UP], [o[0], o[1], o[2] - SHADOW_PROBE_DOWN]).trace;
+            if !tr.hit() || tr.start_solid {
+                continue;
+            }
+            if !started {
+                started = true;
+                unsafe {
+                    gl.enable(glow::BLEND);
+                    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+                    gl.depth_mask(false);
+                    gl.enable(glow::STENCIL_TEST);
+                    gl.stencil_func(glow::EQUAL, 0, 0xff);
+                    gl.stencil_op(glow::KEEP, glow::KEEP, glow::INCR);
+                }
+            }
+            gfx.draw_shadow(mesh, &cam.view_proj, &transform(b, rotation(b.angles)), sun, tr.end[2] + SHADOW_LIFT, SHADOW_ALPHA);
+        }
+        if started {
+            unsafe {
+                gl.disable(glow::STENCIL_TEST);
+                gl.disable(glow::BLEND);
+                gl.depth_mask(true);
+            }
+        }
     }
 
     fn draw_entity(&self, gfx: &Gfx, sim: &Sim, cam: &Camera, id: Id, pass: Pass, f: &mut FrameLights) {

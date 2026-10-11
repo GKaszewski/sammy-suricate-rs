@@ -6,6 +6,7 @@
 //! `SAMMY_SHOT_SECS=2.5,4` to save frames and quit.
 
 mod audio;
+mod fx;
 mod gfx;
 mod hud;
 mod input;
@@ -99,6 +100,8 @@ fn run() -> anyhow::Result<()> {
     attr.set_context_profile(sdl2::video::GLProfile::GLES);
     attr.set_context_version(2, 0);
     attr.set_depth_size(24);
+    // Model shadows darken each floor pixel once.
+    attr.set_stencil_size(8);
     let mut window = video.window("Sammy Suricate", SCREEN.0, SCREEN.1).opengl().resizable().build()?;
     let _ctx = window.gl_create_context().map_err(anyhow::Error::msg)?;
     let _ = video.gl_set_swap_interval(1);
@@ -109,6 +112,7 @@ fn run() -> anyhow::Result<()> {
     let mut audio = audio::Audio::new(&sdl, &files);
     let mut scene = scene::Scene::default();
     let mut hud = hud::HudView::new(&gfx, &files);
+    let mut fx = fx::Fx::new(&gfx);
     let mut painter = ui::Painter::new(&gfx);
     let fonts = text::Fonts::new(&gfx, &files);
     let mut menu = menu::MenuView::new(&gfx, &files);
@@ -164,6 +168,7 @@ fn run() -> anyhow::Result<()> {
         menu.act(&mut sim);
         let drained: Vec<Event> = sim.drain_events().collect();
         for e in drained {
+            fx.event(&sim, &e);
             match e {
                 Event::Sound(name) => audio.play(name, SOUND_VOLUME),
                 Event::Saved => sammy_platform::save::write(&storage, &sim.save),
@@ -202,6 +207,10 @@ fn run() -> anyhow::Result<()> {
             }
         };
         last_cam = sim.camera.pose.map(|pose| scene::Camera::from_pose(&pose, sim.camera.params.arc, w as f32 / h.max(1) as f32));
+        fx.update(&sim, last_cam.as_ref(), if paused { 0.0 } else { dt });
+        menu.sparkles(&sim, &mut fx.particles);
+        scene.extra_lights = fx.lights(&sim);
+        scene.sun = Some(fx.extras.sun);
         trace("sync");
         let t0 = secs();
         scene.sync(&gfx, &files, &sim, last_cam.as_ref());
@@ -213,10 +222,14 @@ fn run() -> anyhow::Result<()> {
             gfx.gl.viewport(0, 0, w as i32, h as i32);
             gfx.gl.clear_color(0.0, 0.0, 0.0, 1.0);
             gfx.gl.depth_mask(true);
-            gfx.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
+            gfx.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT | glow::STENCIL_BUFFER_BIT);
         }
         if let Some(cam) = last_cam.as_ref().filter(|_| draw.contains("scene")) {
             scene.draw(&gfx, &sim, cam, &draw);
+            fx.draw_world(&gfx, &files, &mut scene, &sim, cam);
+            scene.draw_near(&gfx, &sim, cam);
+            let shown = sim.flow.phase != sammy_core::flow::Phase::Menu && draw.contains("hud");
+            fx.draw_over(&gfx, &files, &mut scene, &sim, cam, &fx::HudScreen { window: window_px, ui_scale: painter.scale, shown });
             trace("scene drawn");
         }
         // The intro: black fog over the view, the logo in front of it.

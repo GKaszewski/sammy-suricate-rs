@@ -87,6 +87,39 @@ void main() {
 }
 "#;
 
+const PARTICLE_VS: &str = r#"
+attribute vec3 a_pos; attribute vec2 a_uv; attribute vec4 a_color;
+uniform mat4 u_mvp;
+varying vec2 v_uv; varying vec4 v_color;
+void main() { v_uv = a_uv; v_color = a_color; gl_Position = u_mvp * vec4(a_pos, 1.0); }
+"#;
+
+const PARTICLE_FS: &str = r#"
+precision mediump float;
+uniform sampler2D u_tex;
+varying vec2 v_uv; varying vec4 v_color;
+void main() { gl_FragColor = texture2D(u_tex, v_uv) * v_color; }
+"#;
+
+// Engine model shadows: the mesh flattened along the sun direction onto the floor
+// plane under its owner, 50 % black; the stencil keeps overlaps from darkening twice.
+const SHADOW_VS: &str = r#"
+attribute vec3 a_pos;
+uniform mat4 u_vp; uniform mat4 u_model;
+uniform vec4 u_sun;
+void main() {
+    vec3 w = (u_model * vec4(a_pos, 1.0)).xyz;
+    w -= u_sun.xyz * ((w.z - u_sun.w) / u_sun.z);
+    gl_Position = u_vp * vec4(w, 1.0);
+}
+"#;
+
+const SHADOW_FS: &str = r#"
+precision mediump float;
+uniform vec4 u_color;
+void main() { gl_FragColor = u_color; }
+"#;
+
 const UI_VS: &str = r#"
 attribute vec2 a_pos; attribute vec2 a_uv;
 uniform mat4 u_mvp;
@@ -157,6 +190,8 @@ pub enum Layout {
     Model,
     /// pos 2, uv 2 (HUD).
     Ui,
+    /// pos 3, uv 2, colour 4 (particles).
+    Particle,
 }
 
 impl Layout {
@@ -165,6 +200,7 @@ impl Layout {
             Layout::World => &[3, 2, 2],
             Layout::Model => &[3, 3, 2],
             Layout::Ui => &[2, 2],
+            Layout::Particle => &[3, 2, 4],
         }
     }
 
@@ -205,6 +241,17 @@ impl Mesh {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
             gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytes(vertices));
         }
+    }
+
+    /// Replaces vertices and indices (any count; for meshes rebuilt every frame).
+    pub fn set(&mut self, gl: &glow::Context, vertices: &[f32], indices: &[u32]) {
+        unsafe {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes(vertices), glow::STREAM_DRAW);
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(self.ibo));
+            gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytes(indices), glow::STREAM_DRAW);
+        }
+        self.count = indices.len() as i32;
     }
 
     pub fn draw(&self, gl: &glow::Context) {
@@ -263,6 +310,8 @@ pub struct Gfx {
     /// Models: opaque, and colour-keyed (alpha test).
     model: Program,
     model_cutoff: Program,
+    particle: Program,
+    shadow: Program,
     ui: Program,
     pub white: Texture,
     /// The lightmap of unlit level batches (flat full light).
@@ -288,6 +337,9 @@ impl Gfx {
         let model = Program::new(&gl, MODEL_VS, MODEL_FS, "", model_attribs, MODEL_UNIFORMS)?;
         let model_cutoff = Program::new(&gl, MODEL_VS, MODEL_FS, "#define CUTOFF\n", model_attribs, MODEL_UNIFORMS)?;
         let ui = Program::new(&gl, UI_VS, UI_FS, "", &["a_pos", "a_uv"], &["u_mvp", "u_tex", "u_color"])?;
+        let particle = Program::new(&gl, PARTICLE_VS, PARTICLE_FS, "", &["a_pos", "a_uv", "a_color"], &["u_mvp", "u_tex"])?;
+        // The shadow mesh is a model mesh: normals and UVs are bound but unused.
+        let shadow = Program::new(&gl, SHADOW_VS, SHADOW_FS, "", &["a_pos", "a_normal", "a_uv"], &["u_vp", "u_model", "u_sun", "u_color"])?;
         let white = upload(&gl, &formats::image::RgbaImage { width: 1, height: 1, data: vec![255; 4] }, false, true);
         let flat = (255.0 / GAMMA_MAX).round() as u8;
         let flat_light = upload(&gl, &formats::image::RgbaImage { width: 1, height: 1, data: vec![flat, flat, flat, 255] }, false, true);
@@ -297,6 +349,8 @@ impl Gfx {
             world_dynamic,
             model,
             model_cutoff,
+            particle,
+            shadow,
             ui,
             white,
             flat_light,
@@ -369,6 +423,32 @@ impl Gfx {
             gl.uniform_1_i32(p.loc("u_light_count"), lights.count as i32);
         }
         self.bind(0, tex);
+        mesh.draw(gl);
+    }
+
+    /// A particle batch (vertex-coloured quads); blending is set by the caller.
+    pub fn draw_particles(&self, mesh: &Mesh, view_proj: &Mat4, tex: Texture) {
+        let (gl, p) = (&self.gl, &self.particle);
+        unsafe {
+            gl.use_program(Some(p.program));
+            gl.uniform_matrix_4_f32_slice(p.loc("u_mvp"), false, &view_proj.to_cols_array());
+            gl.uniform_1_i32(p.loc("u_tex"), 0);
+        }
+        self.bind(0, tex);
+        mesh.draw(gl);
+    }
+
+    /// A model mesh's shadow flattened along `sun` (a unit direction pointing down)
+    /// onto the plane `z = floor`; stencil and blending are set by the caller.
+    pub fn draw_shadow(&self, mesh: &Mesh, view_proj: &Mat4, model: &Mat4, sun: Vec3, floor: f32, alpha: f32) {
+        let (gl, p) = (&self.gl, &self.shadow);
+        unsafe {
+            gl.use_program(Some(p.program));
+            gl.uniform_matrix_4_f32_slice(p.loc("u_vp"), false, &view_proj.to_cols_array());
+            gl.uniform_matrix_4_f32_slice(p.loc("u_model"), false, &model.to_cols_array());
+            gl.uniform_4_f32(p.loc("u_sun"), sun.x, sun.y, sun.z, floor);
+            gl.uniform_4_f32(p.loc("u_color"), 0.0, 0.0, 0.0, alpha);
+        }
         mesh.draw(gl);
     }
 
