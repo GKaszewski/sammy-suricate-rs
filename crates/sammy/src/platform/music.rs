@@ -28,6 +28,24 @@ impl Plugin for MusicPlugin {
 
 const RATE: u32 = 44100;
 const BLOCK: usize = 1024;
+/// Rendered audio is stereo.
+const CHANNELS: u16 = 2;
+/// `MusicOrder[]` has one entry per level slot.
+const LEVEL_SLOTS: usize = 50;
+/// Song volume is a percentage; 100 plays at full level.
+const FULL_VOLUME: f32 = 100.0;
+/// Boot-time roll (sammypolish.wdl:284-345): levels from slot 2 get `rand(MUSIC_ROLL)`
+/// (1..8), slots 1..12 alternate musique 1 / 2, and the bonus ranges `BONUS_ROLL_A`/`B`
+/// get `rand(BONUS_ROLL)` (1..3).
+const MUSIC_ROLL: u64 = 8;
+const FIXED_ORDER_SLOTS: usize = 13;
+const BONUS_ROLL: u64 = 3;
+const BONUS_ROLL_A: std::ops::RangeInclusive<usize> = 17..=20;
+const BONUS_ROLL_B: std::ops::RangeInclusive<usize> = 33..=36;
+/// Xorshift64 shifts for the roll.
+const XORSHIFT: (u32, u32, u32) = (13, 7, 17);
+/// The options volume test plays musique4.
+const TEST_SONG: u8 = 4;
 
 /// `Music musique1..9`: musique8/9 reuse sammy01/02.
 const FILES: [&str; 7] = ["sammy01.mid", "sammy02.mid", "sammy03.mid", "sammy04.mid", "sammy05.mid", "sammy06.mid", "sammy07.mid"];
@@ -71,7 +89,7 @@ impl Source for MidiDecoder {
     }
 
     fn channels(&self) -> bevy::audio::ChannelCount {
-        bevy::audio::ChannelCount::new(2).unwrap()
+        bevy::audio::ChannelCount::new(CHANNELS).unwrap()
     }
 
     fn sample_rate(&self) -> bevy::audio::SampleRate {
@@ -99,7 +117,7 @@ impl Decodable for MidiSong {
 pub struct Music {
     font: Arc<Mutex<Option<Arc<SoundFont>>>>,
     /// `MusicOrder[level]` (1..8), rolled at boot (sammypolish.wdl:284-345).
-    order: [u8; 50],
+    order: [u8; LEVEL_SLOTS],
     /// Requested song: (musique 1..7, looping, song volume 0..100); musique 0 = stop.
     pending: Option<(u8, bool, f32)>,
     song_vol: f32,
@@ -113,22 +131,22 @@ impl Default for Music {
     fn default() -> Self {
         let mut seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64) | 1;
         let mut rand = |n: u64| {
-            seed ^= seed << 13;
-            seed ^= seed >> 7;
-            seed ^= seed << 17;
+            seed ^= seed << XORSHIFT.0;
+            seed ^= seed >> XORSHIFT.1;
+            seed ^= seed << XORSHIFT.2;
             (seed % n) as u8 + 1
         };
-        let mut order = [0u8; 50];
+        let mut order = [0u8; LEVEL_SLOTS];
         for v in order.iter_mut().skip(2) {
-            *v = rand(8);
+            *v = rand(MUSIC_ROLL);
         }
-        for (n, v) in order.iter_mut().enumerate().take(13).skip(1) {
+        for (n, v) in order.iter_mut().enumerate().take(FIXED_ORDER_SLOTS).skip(1) {
             *v = if n % 2 == 1 { 1 } else { 2 };
         }
-        for n in (17..=20).chain(33..=36) {
-            order[n] = rand(3);
+        for n in BONUS_ROLL_A.chain(BONUS_ROLL_B) {
+            order[n] = rand(BONUS_ROLL);
         }
-        Self { font: default(), order, pending: None, song_vol: 100.0, entity: None, test: false, loads: 0 }
+        Self { font: default(), order, pending: None, song_vol: FULL_VOLUME, entity: None, test: false, loads: 0 }
     }
 }
 
@@ -150,8 +168,8 @@ impl Music {
     /// `PlayCurrentMusique`: only musique1..7 are handled, so an 8 keeps the old song [Q].
     pub fn play_level(&mut self, slot: u32) {
         let n = self.order.get(slot as usize).copied().unwrap_or(1);
-        if (1..=7).contains(&n) {
-            self.play(n, true, 100.0);
+        if (1..=FILES.len() as u8).contains(&n) {
+            self.play(n, true, FULL_VOLUME);
         }
     }
 }
@@ -196,7 +214,7 @@ fn level_music(current: Res<CurrentLevel>, mut music: ResMut<Music>, mut last: L
     music.loads = current.loads;
     match current.slot {
         Some(slot) => music.play_level(slot.min(EXTRO_SLOT)),
-        None if last.is_none() => music.play(1, true, 100.0),
+        None if last.is_none() => music.play(1, true, FULL_VOLUME),
         None => music.stop(),
     }
     *last = Some(current.slot);
@@ -208,7 +226,7 @@ fn options_test(save: Res<SaveGame>, options: Res<crate::ui::options::OptionsSta
     let open = options.mode.is_some();
     if open && old.is_some_and(|v| v != save.music) && music.entity.is_none() && music.pending.is_none() && !music.test {
         music.test = true;
-        music.play(4, true, 100.0);
+        music.play(TEST_SONG, true, FULL_VOLUME);
     }
     if !open && music.test {
         music.test = false;
@@ -234,7 +252,7 @@ fn start_song(mut commands: Commands, files: Res<GameFiles>, save: Res<SaveGame>
     let Some(midi) = files.read(FILES[n as usize - 1]).ok().and_then(|d| MidiFile::new(&mut d.as_slice()).ok()) else { return };
     music.song_vol = vol;
     let handle = songs.add(MidiSong { font, midi: Arc::new(midi), looping });
-    let v = Volume::Linear(save.music / 100.0 * vol / 100.0);
+    let v = Volume::Linear(save.music / FULL_VOLUME * vol / FULL_VOLUME);
     music.entity = Some(commands.spawn((MusicPlayer, AudioPlayer(handle), PlaybackSettings::DESPAWN.with_volume(v))).id());
 }
 
@@ -247,7 +265,7 @@ fn apply_volume(save: Res<SaveGame>, mut music: ResMut<Music>, mut sinks: Query<
     if music.entity.is_some_and(|e| !alive.contains(e)) {
         music.entity = None;
     }
-    let v = Volume::Linear(save.music / 100.0 * music.song_vol / 100.0);
+    let v = Volume::Linear(save.music / FULL_VOLUME * music.song_vol / FULL_VOLUME);
     for mut sink in &mut sinks {
         sink.set_volume(v);
     }

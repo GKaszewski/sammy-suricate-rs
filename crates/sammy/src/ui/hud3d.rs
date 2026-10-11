@@ -24,6 +24,21 @@ impl Plugin for Hud3dPlugin {
 
 /// `PanWasp` scale per wasp type (`InitCurrentPanWasp`, panels.wdl:1411-1461).
 const WASP_SCALE: [f32; 7] = [0.3, 0.23, 0.2, 0.2, 0.25, 0.3, 0.2];
+/// HUD wasp: mode-6 screen pixel (camera space (100,-45,-35)), depth in quants, and the
+/// starting pan (also its pitch angle) in degrees.
+const WASP_SCREEN: (f32, f32) = (569.0, 434.0);
+const WASP_DEPTH: f32 = 100.0;
+const WASP_PAN_START: f32 = 90.0;
+/// `panwasp.pan += 2*time`: spin per tick (degrees).
+const WASP_SPIN: f32 = 2.0;
+/// Eye of Truth plate: mode-6 screen pixel (camera space (200,-45,-72)) and depth in quants.
+const EYE_SCREEN: (f32, f32) = (445.0, 440.0);
+const EYE_DEPTH: f32 = 200.0;
+/// The original screen's vertical arc basis: half of the 60° arc, at 4:3.
+const ARC_HALF_DEG: f32 = 30.0;
+const ASPECT_43: f32 = 4.0 / 3.0;
+/// Rays at a grazing angle to the view axis are clamped to this cosine.
+const MIN_RAY_COS: f32 = 0.1;
 
 #[derive(Component)]
 struct HudWasp {
@@ -69,8 +84,8 @@ fn spawn_hud_models(
         // Camera space (100,-45,-35): screen ≈ (569, 434) at 640×480.
         let skins: Vec<_> = (1..=7).map(|k| unlit(&mut materials, &m.skin(k), false)).collect();
         commands.spawn((
-            HudWasp { pan: 90.0, kind: 1 },
-            CameraSpace { px: Vec2::new(569.0 - W, 434.0), depth: 100.0, scale: 0.3, angles: [90.0, 0.0, 0.0] },
+            HudWasp { pan: WASP_PAN_START, kind: 1 },
+            CameraSpace { px: Vec2::new(WASP_SCREEN.0 - W, WASP_SCREEN.1), depth: WASP_DEPTH, scale: WASP_SCALE[0], angles: [WASP_PAN_START, 0.0, 0.0] },
             HudSkins(skins.clone()),
             Mesh3d(meshes.add(m.build_mesh(0))),
             MeshMaterial3d(skins[0].clone()),
@@ -84,7 +99,7 @@ fn spawn_hud_models(
         let mat = unlit(&mut materials, &m.skin(1), true);
         commands.spawn((
             HudEye,
-            CameraSpace { px: Vec2::new(445.0, 440.0), depth: 200.0, scale: 1.0, angles: [0.0; 3] },
+            CameraSpace { px: Vec2::new(EYE_SCREEN.0, EYE_SCREEN.1), depth: EYE_DEPTH, scale: 1.0, angles: [0.0; 3] },
             Mesh3d(meshes.add(m.build_mesh(0))),
             MeshMaterial3d(mat),
             Transform::default(),
@@ -115,7 +130,7 @@ fn place_hud_models(
     // Mode-6 pixel size in window pixels, as for the 2D HUD (whole-number UI scale).
     let s = ui_scale.0;
     // Same size relative to the 2D HUD as at 4:3 with the original 60° arc.
-    let vfov_43 = 2.0 * ((30f32).to_radians().tan() / (4.0 / 3.0)).atan();
+    let vfov_43 = 2.0 * (ARC_HALF_DEG.to_radians().tan() / ASPECT_43).atan();
     let size_k = (p.fov / 2.0).tan() / (vfov_43 / 2.0).tan() * s / (win.height() / H);
     for (mut cs, mut tf, mut gtf, mut vis, wasp, skins, mut mat, eye) in &mut q {
         let shown = visible.0
@@ -127,7 +142,7 @@ fn place_hud_models(
         *vis = if shown { Visibility::Inherited } else { Visibility::Hidden };
         if let Some(mut w) = wasp {
             // `panwasp.pan += 2*time`; skin and scale follow the ammo type.
-            w.pan += 2.0 * time.delta_secs() * TICKS;
+            w.pan += WASP_SPIN * time.delta_secs() * TICKS;
             cs.angles[0] = w.pan;
             let k = game.ammo_type.clamp(1, 7);
             if k != w.kind
@@ -144,7 +159,7 @@ fn place_hud_models(
         let Ok(ray) = camera.viewport_to_world(cam_tf, Vec2::new(x, y)) else { continue };
         let fwd = cam_tf.forward().as_vec3();
         let depth = cs.depth / coords::QUANTS_PER_UNIT;
-        let pos = ray.origin + ray.direction.as_vec3() * (depth / ray.direction.dot(fwd).max(0.1));
+        let pos = ray.origin + ray.direction.as_vec3() * (depth / ray.direction.dot(fwd).max(MIN_RAY_COS));
         let (_, cam_rot, _) = cam_tf.to_scale_rotation_translation();
         *tf = Transform { translation: pos, rotation: cam_rot * coords::rotation(cs.angles), scale: Vec3::splat(cs.scale * size_k) };
         *gtf = GlobalTransform::from(*tf);
@@ -152,6 +167,18 @@ fn place_hud_models(
 }
 
 // ---------------------------------------------------------------- popups
+
+/// `Bonus3_Hit` popups: points → (sprite, life in ticks).
+const POPUP_SMALL_POINTS: i32 = 50;
+const POPUP_SMALL: (&str, f32) = ("plus50+6.pcx", 32.0);
+const POPUP_BIG_POINTS: i32 = 100;
+const POPUP_BIG: (&str, f32) = ("plu100+2.pcx", 48.0);
+/// The popup starts this far above the pickup, flies at this speed per tick, tilted up
+/// by `POPUP_TILT_DEG` (`InvDirCamera`), and animates at this many frames per tick.
+const POPUP_LIFT: f32 = 32.0;
+const POPUP_SPEED: f32 = 40.0;
+const POPUP_TILT_DEG: f32 = 20.0;
+const POPUP_FRAMES_PER_TICK: f32 = 0.2;
 
 /// `FlyingPCX` (mm1.wdl:1333-1384): a score sprite flying toward the camera and up.
 #[derive(Component)]
@@ -165,21 +192,21 @@ pub struct FlyingPopup {
 /// Diamond `+50` / `+100` popup at a pickup (`Bonus3_Hit`, mm1.wdl:1252-1275).
 pub fn spawn_popup(commands: &mut Commands, assets: &GameAssets, materials: &mut Assets<StandardMaterial>, at: [f32; 3], cam: [f32; 3], points: i32) {
     let (file, life) = match points {
-        50 => ("plus50+6.pcx", 32.0),
-        100 => ("plu100+2.pcx", 48.0),
+        POPUP_SMALL_POINTS => POPUP_SMALL,
+        POPUP_BIG_POINTS => POPUP_BIG,
         _ => return,
     };
     let Some((mesh, mat, frames)) = assets.sprite(file) else { return };
-    let pos = [at[0], at[1], at[2] + 32.0];
+    let pos = [at[0], at[1], at[2] + POPUP_LIFT];
     // Pan toward the camera, tilt +20° (`InvDirCamera`).
     let d = [cam[0] - pos[0], cam[1] - pos[1]];
     let pan = d[1].atan2(d[0]);
-    let tilt = 20f32.to_radians();
+    let tilt = POPUP_TILT_DEG.to_radians();
     let dir = [pan.cos() * tilt.cos(), pan.sin() * tilt.cos(), tilt.sin()];
     let m = materials.get(&mat).cloned().unwrap_or_default();
     commands.spawn((
-        FlyingPopup { pos, dir, speed: 40.0, life },
-        SpriteAnim { frames, frame: 0.0, fps: 0.2 * TICKS },
+        FlyingPopup { pos, dir, speed: POPUP_SPEED, life },
+        SpriteAnim { frames, frame: 0.0, fps: POPUP_FRAMES_PER_TICK * TICKS },
         Billboard,
         Mesh3d(mesh),
         MeshMaterial3d(materials.add(m)),
@@ -206,6 +233,20 @@ fn fly_popups(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mu
 
 /// `InitTitleLoose` (mm1.wdl:5314-5393): "Przegrałeś" flies in to depth 137.6 at 20
 /// above the view axis, with an amber light and smoke from the logo.
+/// The title starts at `LOSE_START_DEPTH` moving `LOSE_START_SPEED` per tick, slows by
+/// `LOSE_DECEL` (floor `LOSE_MIN_SPEED`) and stops past `LOSE_STOP_DEPTH`; it sits
+/// `LOSE_RAISE` above the view axis, turned `LOSE_PAN` to face the camera, at scale
+/// `LOSE_SCALE`, lit amber.
+const LOSE_START_DEPTH: f32 = 20.0;
+const LOSE_START_SPEED: f32 = 20.0;
+const LOSE_DECEL: f32 = 0.8;
+const LOSE_MIN_SPEED: f32 = 2.0;
+const LOSE_STOP_DEPTH: f32 = 128.0;
+const LOSE_RAISE: f32 = 20.0;
+const LOSE_PAN: f32 = 180.0;
+const LOSE_SCALE: f32 = 0.32;
+const LOSE_LIGHT_COLOR: [f32; 3] = [250.0, 200.0, 50.0];
+const LOSE_LIGHT_RANGE: f32 = 500.0;
 #[derive(Component)]
 struct LoseTitle {
     depth: f32,
@@ -230,11 +271,11 @@ fn end_titles(
         if let Some(m) = assets.as_ref().and_then(|a| a.model("lose.mdl")) {
             let mat = unlit(&mut materials, &m.skin(1), false);
             commands.spawn((
-                LoseTitle { depth: 20.0, speed: 20.0 },
+                LoseTitle { depth: LOSE_START_DEPTH, speed: LOSE_START_SPEED },
                 Mesh3d(meshes.add(m.build_mesh(0))),
                 MeshMaterial3d(mat),
                 Transform::default(),
-                crate::render::lights::DynamicLight { color: [250.0, 200.0, 50.0], range: 500.0 },
+                crate::render::lights::DynamicLight { color: LOSE_LIGHT_COLOR, range: LOSE_LIGHT_RANGE },
                 NEAR_LAYER,
                 crate::flow::LevelScoped,
             ));
@@ -243,16 +284,16 @@ fn end_titles(
     }
     let t = time.delta_secs() * TICKS;
     for (mut title, mut tf) in &mut titles {
-        if title.depth < 128.0 {
+        if title.depth < LOSE_STOP_DEPTH {
             title.depth += title.speed * t;
-            title.speed = (title.speed - 0.8 * t).max(2.0);
+            title.speed = (title.speed - LOSE_DECEL * t).max(LOSE_MIN_SPEED);
         }
         // Camera-relative (depth, 0, 20), facing the camera; scale 0.32.
         let (_, rot, pos) = cam.to_scale_rotation_translation();
-        let local = Vec3::new(0.0, 20.0, -title.depth) / coords::QUANTS_PER_UNIT;
+        let local = Vec3::new(0.0, LOSE_RAISE, -title.depth) / coords::QUANTS_PER_UNIT;
         tf.translation = pos + rot * local;
-        tf.rotation = rot * coords::rotation([180.0, 0.0, 0.0]);
-        tf.scale = Vec3::splat(0.32);
+        tf.rotation = rot * coords::rotation([LOSE_PAN, 0.0, 0.0]);
+        tf.scale = Vec3::splat(LOSE_SCALE);
         for _ in 0..particles.ticks {
             let at = coords::native(tf.translation);
             crate::render::effects::tile_smoke(&mut particles, at);

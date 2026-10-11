@@ -1,6 +1,21 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Intro fog and logo alpha are percentages; the fog starts fully black.
+const FULL_PERCENT: f32 = 100.0;
+/// `Sonar`: the floor trace starts this far above and ends this far below the feet.
+const SONAR_UP: f32 = 200.0;
+const SONAR_DOWN: f32 = 2000.0;
+/// Model logos (`publogo`, `surilogo`) are shown at this scale; the sprite logo at 1.
+const LOGO_MODEL_SCALE: f32 = 1.5;
+/// The fog quad's edge, and its distance from the camera, in quants.
+const FOG_QUAD_QUANTS: f32 = 400.0;
+/// Uncompressed TGA: header length, image type 2 (true colour) and the descriptor's
+/// top-down bit.
+const TGA_HEADER_LEN: usize = 18;
+const TGA_TRUECOLOR: u8 = 2;
+const TGA_TOP_DOWN_BIT: u8 = 0x20;
+
 pub(crate) fn start(
     current: Res<CurrentLevel>,
     mut intro: ResMut<Intro>,
@@ -24,7 +39,7 @@ pub(crate) fn start(
     if !boot || current.phase != Phase::Menu || debug {
         return;
     }
-    *intro = Intro { active: true, fog: 100.0, played: true, loads: current.loads, ..default() };
+    *intro = Intro { active: true, fog: FULL_PERCENT, played: true, loads: current.loads, ..default() };
     let mut pan = 0.0;
     for mut w in &mut walkers {
         w.walking = true; // `EtapesIntro = 1`
@@ -32,7 +47,7 @@ pub(crate) fn start(
     }
     // `Camera_PlusTilt = 50`, arc 70, start at `CameraPosOrigine`.
     params.plus_tilt = PLUS_TILT;
-    params.arc = 70.0;
+    params.arc = crate::ui::menu::MENU_ARC;
     if let Ok(mut st) = cam.single_mut() {
         st.start_from(ORIGIN.0, pan, &params);
     }
@@ -89,7 +104,7 @@ pub(crate) fn tick(
     for (mut w, mut tf, anim) in &mut walkers {
         let [x, y, z] = w.pos;
         if world.ready() {
-            let tr = world.trace_static(Hull::Point, [x, y, z + 200.0], [x, y, z - 2000.0]).trace;
+            let tr = world.trace_static(Hull::Point, [x, y, z + SONAR_UP], [x, y, z - SONAR_DOWN]).trace;
             if tr.hit() && !tr.start_solid {
                 w.pos[2] = tr.end[2] + BLOB_HAUT;
             }
@@ -156,7 +171,7 @@ pub(crate) fn place_logo(
             }),
             n => assets.as_ref().and_then(|a| a.model(if n == 2 { "publogo.mdl" } else { "surilogo.mdl" })).map(|m| {
                 let base = materials.get(&m.skin(1)).cloned().unwrap_or_default();
-                (meshes.add(m.build_mesh(0)), unlit(&mut materials, base), 1.5)
+                (meshes.add(m.build_mesh(0)), unlit(&mut materials, base), LOGO_MODEL_SCALE)
             }),
         };
         if let Some((mesh, mat, scale)) = spawned {
@@ -177,22 +192,22 @@ pub(crate) fn place_logo(
         // Sprites face the camera; models are turned to face it (like the lose title).
         tf.rotation = if v.0 == 1 { cam.rotation } else { cam.rotation * coords::rotation([0.0, 0.0, 0.0]) };
         if let Some(mut m) = materials.get_mut(&mat.0) {
-            m.base_color = m.base_color.with_alpha(intro.logo.alpha / 100.0);
+            m.base_color = m.base_color.with_alpha(intro.logo.alpha / FULL_PERCENT);
         }
     }
     // Fog quad.
     if fog.is_empty() {
         let mat = materials.add(StandardMaterial { base_color: Color::BLACK, unlit: true, alpha_mode: AlphaMode::Blend, ..default() });
-        commands.spawn((FogQuad, Mesh3d(meshes.add(Rectangle::new(400.0, 400.0))), MeshMaterial3d(mat), Transform::default(), Visibility::Hidden, NEAR_LAYER));
+        commands.spawn((FogQuad, Mesh3d(meshes.add(Rectangle::new(FOG_QUAD_QUANTS, FOG_QUAD_QUANTS))), MeshMaterial3d(mat), Transform::default(), Visibility::Hidden, NEAR_LAYER));
         return;
     }
     for (mut tf, mat, mut vis) in &mut fog {
         let f = if intro.active { intro.fog } else { 0.0 };
         *vis = if f > 0.0 { Visibility::Inherited } else { Visibility::Hidden };
-        tf.translation = cam.translation + *cam.forward() * (400.0 / coords::QUANTS_PER_UNIT);
+        tf.translation = cam.translation + *cam.forward() * (FOG_QUAD_QUANTS / coords::QUANTS_PER_UNIT);
         tf.rotation = cam.rotation;
         if let Some(mut m) = materials.get_mut(&mat.0) {
-            m.base_color = Color::BLACK.with_alpha(f / 100.0);
+            m.base_color = Color::BLACK.with_alpha(f / FULL_PERCENT);
         }
     }
 }
@@ -201,13 +216,13 @@ pub(crate) fn place_logo(
 /// colour key.
 pub(crate) fn load_tga(files: &GameFiles, name: &str) -> Option<formats::image::RgbaImage> {
     let d = files.read(name).ok()?;
-    if d.len() < 18 || d[2] != 2 {
+    if d.len() < TGA_HEADER_LEN || d[2] != TGA_TRUECOLOR {
         return None;
     }
     let (w, h) = (u16::from_le_bytes([d[12], d[13]]) as u32, u16::from_le_bytes([d[14], d[15]]) as u32);
     let bpp = d[16] as usize / 8;
-    let top_down = d[17] & 0x20 != 0;
-    let data = d.get(18 + d[0] as usize..)?;
+    let top_down = d[17] & TGA_TOP_DOWN_BIT != 0;
+    let data = d.get(TGA_HEADER_LEN + d[0] as usize..)?;
     let mut img = formats::image::RgbaImage::new(w, h);
     for y in 0..h {
         let sy = if top_down { y } else { h - 1 - y };

@@ -37,6 +37,13 @@ pub struct ParticleCtx<'a> {
 /// A4 `MY_SIZE` to quad width in quants (docs/particles.md §1.5: size/100, uncalibrated).
 pub const SIZE_SCALE: f32 = 0.01;
 
+/// Default `MY_SIZE` of a new particle.
+const DEFAULT_SIZE: f32 = 100.0;
+/// Particle colour channel maximum (RGB is 0..255).
+const COLOR_MAX: f32 = 255.0;
+/// Particle alpha maximum (alpha is 0..100, percent).
+const ALPHA_MAX: f32 = 100.0;
+
 #[derive(Clone, Debug)]
 pub struct Particle {
     /// Native position (quants).
@@ -64,12 +71,15 @@ pub struct Particle {
 
 impl Particle {
     pub fn new(pos: [f32; 3], behaviour: Behaviour) -> Self {
-        Self { pos, vel: [0.0; 3], size: 100.0, color: [255.0; 3], alpha: 100.0, map: None, flare: false, age: 0.0, behaviour, data: [0.0; 4], delay: 0.0 }
+        Self { pos, vel: [0.0; 3], size: DEFAULT_SIZE, color: [COLOR_MAX; 3], alpha: ALPHA_MAX, map: None, flare: false, age: 0.0, behaviour, data: [0.0; 4], delay: 0.0 }
     }
 }
 
 /// Small xorshift for particle randomness (keeps the game `Rng` sequence untouched).
 pub struct ParticleRng(u32);
+
+/// Initial xorshift state of the particle RNG.
+const RNG_SEED: u32 = 0x1234_5678;
 
 impl ParticleRng {
     /// WDL `random(n)`: uniform in [0, n).
@@ -93,12 +103,14 @@ pub struct Particles {
 
 impl Default for Particles {
     fn default() -> Self {
-        Self { list: Vec::new(), rng: ParticleRng(0x1234_5678), acc: 0.0, ticks: 0 }
+        Self { list: Vec::new(), rng: ParticleRng(RNG_SEED), acc: 0.0, ticks: 0 }
     }
 }
 
 /// Hard cap so a runaway emitter can't stall the frame.
 const MAX_PARTICLES: usize = 4000;
+/// Most ticks run in one frame, so a hitch can't snowball.
+const MAX_TICKS_PER_FRAME: u32 = 4;
 
 impl Particles {
     /// One 16 Hz tick: move, age and run every particle function.
@@ -147,7 +159,7 @@ impl Particles {
 
 fn particle_clock(time: Res<Time>, mut ps: ResMut<Particles>) {
     ps.acc += time.delta_secs() * crate::gameplay::player::TICKS;
-    ps.ticks = (ps.acc.floor() as u32).min(4);
+    ps.ticks = (ps.acc.floor() as u32).min(MAX_TICKS_PER_FRAME);
     ps.acc = (ps.acc - ps.ticks as f32).min(1.0);
 }
 
@@ -207,10 +219,10 @@ fn draw_particles(
             for (corner, t) in [(-r - u, [0.0, 1.0]), (r - u, [1.0, 1.0]), (r + u, [1.0, 0.0]), (-r + u, [0.0, 0.0])] {
                 pos.push((c + corner).to_array());
                 uv.push(t);
-                let a = (p.alpha / 100.0).clamp(0.0, 1.0);
+                let a = (p.alpha / ALPHA_MAX).clamp(0.0, 1.0);
                 // Additive batches fade by darkening, blended ones by alpha.
                 let k = if key.1 { a } else { 1.0 };
-                col.push([p.color[0] / 255.0 * k, p.color[1] / 255.0 * k, p.color[2] / 255.0 * k, a]);
+                col.push([p.color[0] / COLOR_MAX * k, p.color[1] / COLOR_MAX * k, p.color[2] / COLOR_MAX * k, a]);
             }
             idx.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
         }
@@ -248,6 +260,7 @@ fn draw_particles(
 
 /// Soft round dot for bitmap-less particles.
 fn dot_image() -> Image {
+    /// Dot texture side in pixels.
     const N: u32 = 16;
     let mut data = Vec::with_capacity((N * N * 4) as usize);
     for y in 0..N {

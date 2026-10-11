@@ -9,6 +9,10 @@ use bevy::shader::ShaderRef;
 pub const LIGHTMAP_SCALE: f32 = 2.0;
 /// Brightness of flat (non-lightmapped) surfaces.
 pub const FLAT_LIGHT: f32 = 1.0;
+/// Dynamic lights the level shader takes (the nearest to the camera).
+pub const MAX_LIGHTS: usize = 8;
+/// `LightData` slots: a position/range and a colour `Vec4` per light.
+const LIGHT_SLOTS: usize = MAX_LIGHTS * 2;
 
 pub struct LevelMaterialPlugin;
 
@@ -23,7 +27,7 @@ impl Plugin for LevelMaterialPlugin {
 /// `data[2i+1]` = colour (0..1) in rgb.
 #[derive(Clone, Copy, ShaderType, Default, PartialEq, Debug)]
 pub struct LightData {
-    pub data: [Vec4; 16],
+    pub data: [Vec4; LIGHT_SLOTS],
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Clone)]

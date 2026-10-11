@@ -110,6 +110,14 @@ pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Fallback scene light: sun illuminance, its direction, and the ambient brightness.
+const SUN_ILLUMINANCE: f32 = 8000.0;
+const SUN_DIRECTION: Vec3 = Vec3::new(1.0, 2.0, 1.5);
+const AMBIENT_BRIGHTNESS: f32 = 400.0;
+/// Model viewer (`--model`): animation frame rate and the fly camera's start position.
+const VIEWER_FPS: f32 = 16.0;
+const VIEWER_CAM_POS: Vec3 = Vec3::new(0.0, 0.5, 4.0);
+
 fn setup(
     mut commands: Commands,
     files: Res<GameFiles>,
@@ -119,8 +127,8 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut pending: ResMut<flow::PendingLoad>,
 ) {
-    commands.spawn((DirectionalLight { illuminance: 8000.0, ..default() }, Transform::from_xyz(1.0, 2.0, 1.5).looking_at(Vec3::ZERO, Vec3::Y)));
-    commands.insert_resource(GlobalAmbientLight { brightness: 400.0, ..default() });
+    commands.spawn((DirectionalLight { illuminance: SUN_ILLUMINANCE, ..default() }, Transform::from_translation(SUN_DIRECTION).looking_at(Vec3::ZERO, Vec3::Y)));
+    commands.insert_resource(GlobalAmbientLight { brightness: AMBIENT_BRIGHTNESS, ..default() });
 
     if let Some((name, anim)) = &args.model {
         let data = files.read(name).expect("model file");
@@ -131,9 +139,9 @@ fn setup(
             Mesh3d(mesh),
             MeshMaterial3d(model.material.clone()),
             Transform::default(),
-            ModelAnimator::new(model.clone(), frames, 16.0),
+            ModelAnimator::new(model.clone(), frames, VIEWER_FPS),
         ));
-        commands.spawn((Camera3d::default(), Transform::from_xyz(0.0, 0.5, 4.0), FlyCamera::default()));
+        commands.spawn((Camera3d::default(), Transform::from_translation(VIEWER_CAM_POS), FlyCamera::default()));
         commands.insert_resource(camera::CameraMode::Fly);
         return;
     }

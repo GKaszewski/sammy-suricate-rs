@@ -1,6 +1,9 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Lion shadow: `shadlio2.pcx` at 1.2 × the lion's scale.
+const LION_SHADOW_SCALE: f32 = 1.2;
+
 #[allow(clippy::type_complexity)]
 pub fn spawn_shadows(
     mut commands: Commands,
@@ -17,8 +20,7 @@ pub fn spawn_shadows(
         commands.entity(owner).insert(HasShadow);
     };
     for (e, enemy) in &enemies {
-        // Lion shadow: shadlio2.pcx at 1.2 × the lion's scale.
-        spawn(e, "shadlio2.pcx", 1.2 * enemy.scale(), 1.2 * enemy.scale());
+        spawn(e, "shadlio2.pcx", LION_SHADOW_SCALE * enemy.scale(), LION_SHADOW_SCALE * enemy.scale());
     }
     // Sammy's blob sprite (ombblob2.pcx) is only shown below 40 fps (player.wdl:197-207);
     // he casts the engine model shadow instead (crate::render::shadow).

@@ -81,13 +81,13 @@ pub fn run_triggers(
                     }
                 }
                 TriggerKind::FinExtro => {
-                    commands.insert_resource(FinExtro(1.0));
+                    commands.insert_resource(FinExtro(FADE_START));
                     commands.spawn((
                         FadePanel,
                         crate::flow::LevelScoped,
                         Node { width: percent(100), height: percent(100), position_type: PositionType::Absolute, ..default() },
                         BackgroundColor(Color::BLACK.with_alpha(0.0)),
-                        GlobalZIndex(100),
+                        GlobalZIndex(Z_FADE),
                     ));
                 }
             }
@@ -115,11 +115,11 @@ pub fn fade_out(
     mut save: ResMut<crate::platform::save::SaveGame>,
 ) {
     let Some(mut fin) = fin else { return };
-    fin.0 = (fin.0 + sammy_core::extro::FADE_SPEED * time.delta_secs() * crate::gameplay::player::TICKS).min(100.0);
+    fin.0 = (fin.0 + sammy_core::extro::FADE_SPEED * time.delta_secs() * crate::gameplay::player::TICKS).min(FADE_FULL);
     for mut bg in &mut panel {
-        bg.0 = Color::BLACK.with_alpha(fin.0 / 100.0);
+        bg.0 = Color::BLACK.with_alpha(fin.0 / FADE_FULL);
     }
-    if fin.0 >= 100.0 {
+    if fin.0 >= FADE_FULL {
         commands.remove_resource::<FinExtro>();
         // `Branch MainMenu` (Extro.wdl:152); Play then resumes level 20 (Extro.wdl:114).
         let _ = &current;

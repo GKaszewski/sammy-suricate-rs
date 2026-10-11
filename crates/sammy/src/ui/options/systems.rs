@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use super::*;
+use crate::ui::hud::{H, W};
 
 /// `MenuOptionsGame`: 0 front-end, 1 level, 2 extro.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -26,6 +27,82 @@ pub(crate) enum Question {
 pub(crate) const TRACK: f32 = 227.0;
 
 pub(crate) const THUMB: f32 = 32.0;
+
+/// An `w×h` element at (x, y) on the 640×480 options plate (options.wdl).
+#[derive(Clone, Copy)]
+struct Area {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+}
+
+impl Area {
+    const fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self { x, y, w, h }
+    }
+
+    fn node(self) -> Node {
+        at(self.x, self.y, self.w, self.h)
+    }
+}
+
+/// Tab buttons.
+const TAB_AUDIO: Area = Area::new(41.0, 14.0, 218.0, 80.0);
+const TAB_HELP: Area = Area::new(41.0, 105.0, 226.0, 47.0);
+const TAB_CREDITS: Area = Area::new(41.0, 152.0, 226.0, 46.0);
+/// Resume / back / quit / restart buttons.
+const BTN_RESUME: Area = Area::new(0.0, 335.0, 306.0, 42.0);
+const BTN_BACK: Area = Area::new(0.0, 377.0, 306.0, 40.0);
+const BTN_QUIT: Area = Area::new(0.0, 417.0, 306.0, 41.0);
+const BTN_RESTART: Area = Area::new(48.0, 268.0, 204.0, 50.0);
+/// Yes/No dialog: plate, text origin and the two buttons.
+const DIALOG_PLATE: Area = Area::new(223.0, 135.0, 199.0, 68.0);
+const DIALOG_TEXT_POS: (f32, f32) = (228.0, 138.0);
+const DIALOG_YES: Area = Area::new(235.0, 171.0, 68.0, 28.0);
+const DIALOG_NO: Area = Area::new(341.0, 171.0, 68.0, 28.0);
+/// Audio tab: music/sound art (and the sub-rect of `volmus` it shows).
+const VOLMUS: Area = Area::new(347.0, 17.0, 266.0, 249.0);
+/// Slider tracks: x, thumb height and the two rows' y.
+const SLIDER_X: f32 = 365.0;
+const SLIDER_H: f32 = 29.0;
+const SLIDER_MUSIC_Y: f32 = 60.0;
+const SLIDER_SOUND_Y: f32 = 161.0;
+/// Slider range (percent) and the pad step.
+const SLIDER_MAX: f32 = 100.0;
+const SLIDER_STEP: f32 = 5.0;
+/// Display rows: x, size and the three rows' y.
+const ROW_X: f32 = 352.0;
+const ROW_W: f32 = 256.0;
+const ROW_H: f32 = 24.0;
+const ROW_MODE_Y: f32 = 272.0;
+const ROW_SIZE_Y: f32 = 302.0;
+const ROW_UI_SIZE_Y: f32 = 346.0;
+/// Highest `ui_size` setting (0 large, 1 medium, 2 small).
+const UI_SIZE_MAX: u8 = 2;
+/// Help tab: text origin, picture, previous / next page buttons.
+const HELP_TEXT_POS: (f32, f32) = (334.0, 20.0);
+const HELP_PICTURE: Area = Area::new(330.0, 297.0, 297.0, 113.0);
+const HELP_PREV: Area = Area::new(330.0, 408.0, 65.0, 62.0);
+const HELP_NEXT: Area = Area::new(560.0, 408.0, 65.0, 62.0);
+/// Help pages 1-7; page 2 has no picture.
+const HELP_LAST_PAGE: u32 = 7;
+const HELP_NO_PICTURE_PAGE: u32 = 2;
+/// Credits tab: team picture and the "Thanksto" text origin.
+const CREDITS_TEAM: Area = Area::new(340.0, 25.0, 282.0, 294.0);
+const CREDITS_THANKS_POS: (f32, f32) = (334.0, 320.0);
+/// Volume of the button / row sounds.
+const UI_SFX_VOL: f32 = 50.0;
+/// Overlay dimming alpha and stacking: overlay, dialog, focus frame.
+const OVERLAY_ALPHA: f32 = 0.7;
+const Z_OVERLAY: i32 = 50;
+const Z_DIALOG: i32 = 60;
+const Z_FOCUS_FRAME: i32 = 70;
+/// Focus frame: border, glow colour (RGB), fill alpha and padding around the item.
+const FRAME_BORDER: f32 = 2.0;
+const FRAME_RGB: (f32, f32, f32) = (1.0, 0.85, 0.2);
+const FRAME_FILL_ALPHA: f32 = 0.15;
+const FRAME_PAD: f32 = 6.0;
 
 pub(crate) fn open_on_esc(
     controls: Res<crate::platform::input::Controls>,
@@ -89,34 +166,34 @@ pub(crate) fn open_close(
             (im("restart2.pcx"), im("restart3.pcx")),
         );
         let tabs = [
-            (Tab::Audio, 41.0, 14.0, 218.0, 80.0, im("audio1.pcx"), im("audio2.pcx")),
-            (Tab::Help, 41.0, 105.0, 226.0, 47.0, im("help1.pcx"), im("help2.pcx")),
-            (Tab::Credits, 41.0, 152.0, 226.0, 46.0, im("credits1.pcx"), im("credits2.pcx")),
+            (Tab::Audio, TAB_AUDIO, im("audio1.pcx"), im("audio2.pcx")),
+            (Tab::Help, TAB_HELP, im("help1.pcx"), im("help2.pcx")),
+            (Tab::Credits, TAB_CREDITS, im("credits1.pcx"), im("credits2.pcx")),
         ];
         commands
             .spawn((
                 OptionsRoot,
                 Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
-                GlobalZIndex(50),
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, OVERLAY_ALPHA)),
+                GlobalZIndex(Z_OVERLAY),
             ))
             .with_children(|root| {
-                root.spawn((Node { width: px(640.0), height: px(480.0), ..default() }, ImageNode::new(bg))).with_children(|c| {
-                    for (tab, x, y, w, h, n, hv) in tabs {
-                        c.spawn((at(x, y, w, h), RelativeCursorPosition::default(), ImageNode::new(n.clone()), ButtonImages { normal: n, hover: hv, lit: false }, Action::Tab(tab)));
+                root.spawn((Node { width: px(W), height: px(H), ..default() }, ImageNode::new(bg))).with_children(|c| {
+                    for (tab, area, n, hv) in tabs {
+                        c.spawn((area.node(), RelativeCursorPosition::default(), ImageNode::new(n.clone()), ButtonImages { normal: n, hover: hv, lit: false }, Action::Tab(tab)));
                     }
-                    let mut button = |(n, hv): (Handle<Image>, Handle<Image>), x: f32, y: f32, w: f32, h: f32, action: Action| {
-                        c.spawn((at(x, y, w, h), RelativeCursorPosition::default(), ImageNode::new(n.clone()), ButtonImages { normal: n, hover: hv, lit: false }, action));
+                    let mut button = |(n, hv): (Handle<Image>, Handle<Image>), area: Area, action: Action| {
+                        c.spawn((area.node(), RelativeCursorPosition::default(), ImageNode::new(n.clone()), ButtonImages { normal: n, hover: hv, lit: false }, action));
                     };
                     if mode != OptionsMode::Menu {
-                        button(resume, 0.0, 335.0, 306.0, 42.0, Action::Resume);
+                        button(resume, BTN_RESUME, Action::Resume);
                     }
-                    button(back, 0.0, 377.0, 306.0, 40.0, Action::Back);
-                    button(quit, 0.0, 417.0, 306.0, 41.0, Action::Quit);
+                    button(back, BTN_BACK, Action::Back);
+                    button(quit, BTN_QUIT, Action::Quit);
                     if mode == OptionsMode::Level {
-                        button(restart, 48.0, 268.0, 204.0, 50.0, Action::Restart);
+                        button(restart, BTN_RESTART, Action::Restart);
                     }
-                    c.spawn((TabContent, at(0.0, 0.0, 640.0, 480.0)));
+                    c.spawn((TabContent, at(0.0, 0.0, W, H)));
                 });
             });
     }
@@ -141,14 +218,14 @@ pub(crate) fn open_close(
                 .spawn((
                     DialogRoot,
                     Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..default() },
-                    GlobalZIndex(60),
+                    GlobalZIndex(Z_DIALOG),
                 ))
                 .with_children(|root| {
-                    root.spawn(Node { width: px(640.0), height: px(480.0), ..default() }).with_children(|c| {
-                        c.spawn((at(223.0, 135.0, 199.0, 68.0), ImageNode::new(bg)));
-                        c.spawn((Node { position_type: PositionType::Absolute, left: px(228.0), top: px(138.0), ..default() }, BitmapText::new(FontKind::Small, text)));
-                        c.spawn((at(235.0, 171.0, 68.0, 28.0), RelativeCursorPosition::default(), ImageNode::new(yes.0.clone()), ButtonImages { normal: yes.0, hover: yes.1, lit: false }, Action::Yes));
-                        c.spawn((at(341.0, 171.0, 68.0, 28.0), RelativeCursorPosition::default(), ImageNode::new(no.0.clone()), ButtonImages { normal: no.0, hover: no.1, lit: false }, Action::No));
+                    root.spawn(Node { width: px(W), height: px(H), ..default() }).with_children(|c| {
+                        c.spawn((DIALOG_PLATE.node(), ImageNode::new(bg)));
+                        c.spawn((Node { position_type: PositionType::Absolute, left: px(DIALOG_TEXT_POS.0), top: px(DIALOG_TEXT_POS.1), ..default() }, BitmapText::new(FontKind::Small, text)));
+                        c.spawn((DIALOG_YES.node(), RelativeCursorPosition::default(), ImageNode::new(yes.0.clone()), ButtonImages { normal: yes.0, hover: yes.1, lit: false }, Action::Yes));
+                        c.spawn((DIALOG_NO.node(), RelativeCursorPosition::default(), ImageNode::new(no.0.clone()), ButtonImages { normal: no.0, hover: no.1, lit: false }, Action::No));
                     });
                 });
         }
@@ -193,21 +270,21 @@ pub(crate) fn build_tab(
     let tab = state.tab;
     let page = state.help_page;
     let (thumb, volmus, prev, next) = (im("butvol1.pcx"), im("volmus.pcx"), (im("flechga1.pcx"), im("flechga2.pcx")), (im("flechdr1.pcx"), im("flechdr2.pcx")));
-    let picture = (page != 2).then(|| im(&format!("help0{page}.pcx")));
+    let picture = (page != HELP_NO_PICTURE_PAGE).then(|| im(&format!("help0{page}.pcx")));
     let team = im("lateam.pcx");
     commands.entity(root).with_children(|c| match tab {
         Tab::Audio => {
             // The music/sound art and the "Rozdzielczość grafiki" heading; the old
             // resolution slider below it is replaced by the display rows.
-            c.spawn((at(347.0, 17.0, 266.0, 249.0), ImageNode { image: volmus, rect: Some(Rect::new(0.0, 0.0, 266.0, 249.0)), ..default() }));
-            for (slider, y) in [(Slider::Music, 60.0), (Slider::Sound, 161.0)] {
-                c.spawn((at(365.0, y, TRACK, 29.0), RelativeCursorPosition::default(), slider)).with_children(|t| {
-                    t.spawn((at(0.0, 0.0, THUMB, 29.0), ImageNode::new(thumb.clone()), SliderThumb(slider)));
+            c.spawn((VOLMUS.node(), ImageNode { image: volmus, rect: Some(Rect::new(0.0, 0.0, VOLMUS.w, VOLMUS.h)), ..default() }));
+            for (slider, y) in [(Slider::Music, SLIDER_MUSIC_Y), (Slider::Sound, SLIDER_SOUND_Y)] {
+                c.spawn((at(SLIDER_X, y, TRACK, SLIDER_H), RelativeCursorPosition::default(), slider)).with_children(|t| {
+                    t.spawn((at(0.0, 0.0, THUMB, SLIDER_H), ImageNode::new(thumb.clone()), SliderThumb(slider)));
                 });
             }
-            for (choice, y) in [(Choice::Mode, 272.0), (Choice::Size, 302.0), (Choice::UiSize, 346.0)] {
+            for (choice, y) in [(Choice::Mode, ROW_MODE_Y), (Choice::Size, ROW_SIZE_Y), (Choice::UiSize, ROW_UI_SIZE_Y)] {
                 c.spawn((
-                    Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..at(352.0, y, 256.0, 24.0) },
+                    Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center, ..at(ROW_X, y, ROW_W, ROW_H) },
                     RelativeCursorPosition::default(),
                     choice,
                 ))
@@ -217,20 +294,20 @@ pub(crate) fn build_tab(
             }
         }
         Tab::Help => {
-            c.spawn((Node { position_type: PositionType::Absolute, left: px(334.0), top: px(20.0), ..default() }, BitmapText::new(FontKind::Help, text(&format!("Help{page}_Str"))).narrow()));
+            c.spawn((Node { position_type: PositionType::Absolute, left: px(HELP_TEXT_POS.0), top: px(HELP_TEXT_POS.1), ..default() }, BitmapText::new(FontKind::Help, text(&format!("Help{page}_Str"))).narrow()));
             if let Some(p) = picture {
-                c.spawn((at(330.0, 297.0, 297.0, 113.0), ImageNode::new(p)));
+                c.spawn((HELP_PICTURE.node(), ImageNode::new(p)));
             }
             if page > 1 {
-                c.spawn((at(330.0, 408.0, 65.0, 62.0), RelativeCursorPosition::default(), ImageNode::new(prev.0.clone()), ButtonImages { normal: prev.0, hover: prev.1, lit: false }, Action::PrevPage));
+                c.spawn((HELP_PREV.node(), RelativeCursorPosition::default(), ImageNode::new(prev.0.clone()), ButtonImages { normal: prev.0, hover: prev.1, lit: false }, Action::PrevPage));
             }
-            if page < 7 {
-                c.spawn((at(560.0, 408.0, 65.0, 62.0), RelativeCursorPosition::default(), ImageNode::new(next.0.clone()), ButtonImages { normal: next.0, hover: next.1, lit: false }, Action::NextPage));
+            if page < HELP_LAST_PAGE {
+                c.spawn((HELP_NEXT.node(), RelativeCursorPosition::default(), ImageNode::new(next.0.clone()), ButtonImages { normal: next.0, hover: next.1, lit: false }, Action::NextPage));
             }
         }
         Tab::Credits => {
-            c.spawn((at(340.0, 25.0, 282.0, 294.0), ImageNode::new(team)));
-            c.spawn((Node { position_type: PositionType::Absolute, left: px(334.0), top: px(320.0), ..default() }, BitmapText::new(FontKind::Help, text("Thanksto_Str")).narrow()));
+            c.spawn((CREDITS_TEAM.node(), ImageNode::new(team)));
+            c.spawn((Node { position_type: PositionType::Absolute, left: px(CREDITS_THANKS_POS.0), top: px(CREDITS_THANKS_POS.1), ..default() }, BitmapText::new(FontKind::Help, text("Thanksto_Str")).narrow()));
         }
     });
 }
@@ -266,21 +343,21 @@ pub(crate) fn buttons(
     }
     match action {
         Action::Tab(t) => {
-            sfx.play_vol(if t == Tab::Credits { "tigre_son" } else { "Ding2" }, 50.0);
+            sfx.play_vol(if t == Tab::Credits { "tigre_son" } else { "Ding2" }, UI_SFX_VOL);
             state.tab = t;
             state.dirty = true;
         }
         Action::PrevPage | Action::NextPage => {
-            sfx.play_vol("Ding1", 50.0);
-            state.help_page = if action == Action::PrevPage { state.help_page.saturating_sub(1).max(1) } else { (state.help_page + 1).min(7) };
+            sfx.play_vol("Ding1", UI_SFX_VOL);
+            state.help_page = if action == Action::PrevPage { state.help_page.saturating_sub(1).max(1) } else { (state.help_page + 1).min(HELP_LAST_PAGE) };
             state.dirty = true;
         }
         Action::Resume => {
-            sfx.play_vol("Ding2", 50.0);
+            sfx.play_vol("Ding2", UI_SFX_VOL);
             close(&mut commands, &mut state, &mut time, &roots);
         }
         Action::Back => {
-            sfx.play_vol("Ding2", 50.0);
+            sfx.play_vol("Ding2", UI_SFX_VOL);
             let mode = state.mode;
             close(&mut commands, &mut state, &mut time, &roots);
             // In a game: abandon it (stored like a lost game, no lose screen) and go to the menu.
@@ -294,7 +371,7 @@ pub(crate) fn buttons(
             }
         }
         Action::Quit => {
-            sfx.play_vol("Ding2", 50.0);
+            sfx.play_vol("Ding2", UI_SFX_VOL);
             state.dialog = Some(Question::Quit);
         }
         Action::Restart => state.dialog = Some(Question::Restart),
@@ -362,11 +439,11 @@ pub(crate) fn sliders(
         if *dragging == Some(id)
             && let Some(p) = rel.normalized
         {
-            value = ((p.x + 0.5).clamp(0.0, 1.0) * 100.0).round();
+            value = ((p.x + 0.5).clamp(0.0, 1.0) * SLIDER_MAX).round();
         } else if focus.0 == Some(e)
             && let Some(d) = controls.nav_dir().filter(|d| d.x != 0)
         {
-            value = (value + 5.0 * d.x as f32).clamp(0.0, 100.0);
+            value = (value + SLIDER_STEP * d.x as f32).clamp(0.0, SLIDER_MAX);
             changed = true;
         } else {
             continue;
@@ -375,7 +452,7 @@ pub(crate) fn sliders(
             Slider::Music => save.music = value,
             Slider::Sound => {
                 save.sound = value;
-                volume.volume = bevy::audio::Volume::Linear(save.sound / 100.0);
+                volume.volume = bevy::audio::Volume::Linear(save.sound / SLIDER_MAX);
             }
         }
     }
@@ -384,8 +461,8 @@ pub(crate) fn sliders(
     }
     for (thumb, mut node) in &mut thumbs {
         let f = match thumb.0 {
-            Slider::Music => save.music / 100.0,
-            Slider::Sound => save.sound / 100.0,
+            Slider::Music => save.music / SLIDER_MAX,
+            Slider::Sound => save.sound / SLIDER_MAX,
         };
         node.left = px(f * (TRACK - THUMB));
     }
@@ -418,7 +495,7 @@ pub(crate) fn choices(
             Choice::Mode => {
                 let modes = [DisplayMode::Windowed, DisplayMode::Borderless, DisplayMode::Fullscreen];
                 let i = modes.iter().position(|m| *m == d.mode).unwrap_or(0);
-                d.mode = modes[cycle(i, 3)];
+                d.mode = modes[cycle(i, modes.len())];
             }
             Choice::Size => {
                 let list = crate::platform::display::sizes(d.mode, monitor);
@@ -434,9 +511,9 @@ pub(crate) fn choices(
                     DisplayMode::Borderless => {}
                 }
             }
-            Choice::UiSize => d.ui_size = (2 - cycle(2 - d.ui_size.min(2) as usize, 3)) as u8,
+            Choice::UiSize => d.ui_size = (UI_SIZE_MAX as usize - cycle(UI_SIZE_MAX as usize - d.ui_size.min(UI_SIZE_MAX) as usize, UI_SIZE_MAX as usize + 1)) as u8,
         }
-        sfx.play_vol("Toc2", 50.0);
+        sfx.play_vol("Toc2", UI_SFX_VOL);
         crate::platform::save::write(&save);
         return;
     }
@@ -463,7 +540,7 @@ pub(crate) fn choice_labels(
                 (_, Some([w, h])) => format!("<  {w} x {h}  >"),
                 _ => String::new(),
             },
-            Choice::UiSize => format!("<  Interfejs: {}  >", ["duży", "średni", "mały"][d.ui_size.min(2) as usize]),
+            Choice::UiSize => format!("<  Interfejs: {}  >", ["duży", "średni", "mały"][d.ui_size.min(UI_SIZE_MAX) as usize]),
         };
         let bytes = crate::ui::text::cp1250(&label);
         for c in children.iter() {
@@ -516,7 +593,7 @@ pub(crate) fn focus_nav(
         .filter_map(|i| {
             let v = i.1 - at;
             let along = v.dot(dir);
-            (along > 1.0).then(|| (i.0, along + 2.0 * (v - dir * along).length()))
+            (along > crate::ui::menu::PAD_MIN_ALONG).then(|| (i.0, along + crate::ui::menu::PAD_CROSS_WEIGHT * (v - dir * along).length()))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|i| i.0)
@@ -535,10 +612,10 @@ pub(crate) fn focus_frame(
     let Ok((mut node, mut vis)) = frame.single_mut() else {
         commands.spawn((
             FocusFrame,
-            Node { position_type: PositionType::Absolute, border: UiRect::all(px(2.0)), ..default() },
-            BorderColor::all(Color::srgb(1.0, 0.85, 0.2)),
-            BackgroundColor(Color::srgba(1.0, 0.85, 0.2, 0.15)),
-            GlobalZIndex(70),
+            Node { position_type: PositionType::Absolute, border: UiRect::all(px(FRAME_BORDER)), ..default() },
+            BorderColor::all(Color::srgb(FRAME_RGB.0, FRAME_RGB.1, FRAME_RGB.2)),
+            BackgroundColor(Color::srgba(FRAME_RGB.0, FRAME_RGB.1, FRAME_RGB.2, FRAME_FILL_ALPHA)),
+            GlobalZIndex(Z_FOCUS_FRAME),
             Visibility::Hidden,
         ));
         return;
@@ -548,7 +625,7 @@ pub(crate) fn focus_frame(
         return;
     };
     let k = n.inverse_scale_factor();
-    let size = n.size() * k + Vec2::splat(6.0);
+    let size = n.size() * k + Vec2::splat(FRAME_PAD);
     let c = t.translation * k;
     (node.left, node.top, node.width, node.height) = (px(c.x - size.x / 2.0), px(c.y - size.y / 2.0), px(size.x), px(size.y));
     *vis = Visibility::Inherited;

@@ -28,13 +28,28 @@ impl Plugin for ShadowPlugin {
     }
 }
 
+/// Default `sun_angle` pan in degrees (mm1.wdl:618).
+const DEFAULT_SUN_PAN: f32 = 135.0;
+/// Default `sun_angle` tilt in degrees (mm1.wdl:620).
+const DEFAULT_SUN_TILT: f32 = 85.0;
+/// Shadow colour alpha: 50 % black ([U] in the original).
+const SHADOW_ALPHA: f32 = 0.5;
+/// Win/lose sun pan speed in degrees per tick (mm1.wdl:966).
+const SUN_SPIN_RATE: f32 = 10.0;
+/// Floor probe starts this many quants above the owner origin.
+const FLOOR_PROBE_UP: f32 = 8.0;
+/// Floor probe reaches this many quants below the owner origin.
+const FLOOR_PROBE_DOWN: f32 = 2000.0;
+/// Quants the shadow plane is lifted above the floor, against z-fighting.
+const FLOOR_LIFT: f32 = 0.5;
+
 /// `sun_angle` (pan, tilt) in degrees: the direction the sun is seen from.
 #[derive(Resource, Clone, Copy)]
 pub struct SunAngle(pub f32, pub f32);
 
 impl Default for SunAngle {
     fn default() -> Self {
-        Self(135.0, 85.0)
+        Self(DEFAULT_SUN_PAN, DEFAULT_SUN_TILT)
     }
 }
 
@@ -92,7 +107,7 @@ fn attach_shadows(
     q: Query<(Entity, &Mesh3d), (With<CastsShadow>, Without<ModelShadowLink>)>,
 ) {
     for (e, mesh) in &q {
-        let mat = materials.add(ShadowMaterial { params: ShadowParams { sun: Vec4::new(0.0, -1.0, 0.0, 0.0), color: Vec4::new(0.0, 0.0, 0.0, 0.5) } });
+        let mat = materials.add(ShadowMaterial { params: ShadowParams { sun: Vec4::new(0.0, -1.0, 0.0, 0.0), color: Vec4::new(0.0, 0.0, 0.0, SHADOW_ALPHA) } });
         let child = commands.spawn((ModelShadow { owner: e }, Mesh3d(mesh.0.clone()), MeshMaterial3d(mat), NotShadowCaster, Transform::default(), Visibility::Inherited, ChildOf(e))).id();
         commands.entity(e).insert(ModelShadowLink(child));
     }
@@ -105,7 +120,7 @@ pub struct ModelShadowLink(#[allow(dead_code)] Entity);
 fn spin_sun(time: Res<Time>, current: Res<crate::flow::CurrentLevel>, mut sun: ResMut<SunAngle>) {
     use crate::flow::Phase;
     if matches!(current.phase, Phase::Won(_) | Phase::Lost(_)) {
-        sun.0 += 10.0 * time.delta_secs() * crate::gameplay::player::TICKS;
+        sun.0 += SUN_SPIN_RATE * time.delta_secs() * crate::gameplay::player::TICKS;
     }
 }
 
@@ -126,10 +141,10 @@ fn update_shadows(
     for (s, mat) in &q {
         let Ok(gt) = owners.get(s.owner) else { continue };
         let o = coords::native(gt.translation());
-        let tr = world.trace_static(Hull::Point, [o[0], o[1], o[2] + 8.0], [o[0], o[1], o[2] - 2000.0]).trace;
-        let floor = if tr.hit() && !tr.start_solid { tr.end[2] } else { o[2] - 2000.0 };
+        let tr = world.trace_static(Hull::Point, [o[0], o[1], o[2] + FLOOR_PROBE_UP], [o[0], o[1], o[2] - FLOOR_PROBE_DOWN]).trace;
+        let floor = if tr.hit() && !tr.start_solid { tr.end[2] } else { o[2] - FLOOR_PROBE_DOWN };
         if let Some(mut m) = materials.get_mut(&mat.0) {
-            m.params.sun = dir.extend((floor + 0.5) / coords::QUANTS_PER_UNIT);
+            m.params.sun = dir.extend((floor + FLOOR_LIFT) / coords::QUANTS_PER_UNIT);
         }
     }
 }

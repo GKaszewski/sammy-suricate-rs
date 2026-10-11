@@ -7,6 +7,62 @@ use crate::render::particles::{Particle, ParticleCtx, ParticleRng, Particles};
 /// Frames per tick the original was tuned at (≈ 40 fps, docs/particles.md §1.6).
 const F: f32 = 2.5;
 
+/// Particle colour channel maximum (RGB is 0..255).
+const COLOR_MAX: f32 = 255.0;
+/// Number of gem colours (Skill6 1..=6).
+const GEM_COLORS: u32 = 6;
+
+// Lifetimes in ticks (`p.age < LIFE`), per effect.
+/// `particle_<colour>` dots (§2.1).
+const DOT_LIFE: f32 = 10.0;
+/// `particle_<colour>Bmp` stars (§2.2).
+const STAR_LIFE: f32 = 10.0;
+/// `GemExplose` shards (§2.3).
+const SHARD_LIFE: f32 = 30.0;
+/// `GemCatch` stars (§2.4).
+const GEM_CATCH_LIFE: f32 = 30.0;
+/// Gem mix end burst stars (§2.5).
+const GEM_MIX_LIFE: f32 = 30.0;
+/// Diamond burst (§2.6).
+const DIAMOND_LIFE: f32 = 8.0;
+/// `Poussiere1` dust puff (§2.7).
+const DUST_LIFE: f32 = 40.0;
+/// `particle_hit1` stars (§2.12).
+const HIT_LIFE: f32 = 16.0;
+/// `particle_SpeedySammy` (§2.14).
+const SPEEDY_LIFE: f32 = 24.0;
+/// `particle_GemRestart` (§2.8).
+const RESTART_LIFE: f32 = 30.0;
+/// `particle_TileDeath` smoke (§2.9).
+const SMOKE_LIFE: f32 = 22.0;
+/// Wasp effect discs (§2.10).
+const WASP_DISC_LIFE: f32 = 18.0;
+/// `particle_life` heart (§2.16).
+const HEART_LIFE: f32 = 10.0;
+/// `particle_Getlife` (§2.16).
+const GET_LIFE_LIFE: f32 = 20.0;
+/// `particle_SmallHeart` (§2.16).
+const SMALL_HEART_LIFE: f32 = 12.0;
+/// `particle_TakeEyeTruth` (§2.17).
+const TAKE_EYE_LIFE: f32 = 16.0;
+
+/// Start size of a wasp trail disc (scaled by the wasp), `Wasp` trail.
+const WASP_TRAIL_SIZE: f32 = 3000.0;
+/// Start size of a wasp death / hive burst disc.
+const WASP_BURST_SIZE: f32 = 1500.0;
+/// Dust puff target size after a hard landing.
+const DUST_HARD_LANDING: f32 = 5000.0;
+/// Dust puff target size when walking, landing on the move, or landing.
+const DUST_WALK: f32 = 3000.0;
+/// Dust puff target size when turning.
+const DUST_TURN: f32 = 2000.0;
+/// Editor Flag3 bit (index 2) of a level object: disables the tile smoke / idle teleport sparkle.
+const FLAG3: u32 = 1 << 2;
+/// Enemy class of the "You Win" wasp.
+const WIN_WASP_CLASS: u32 = 99;
+/// `wasp_spec` of an enemy wasp is `WASP_SPEC_BASE + wasp type` (types 1..=7).
+const WASP_SPEC_BASE: u32 = 100;
+
 /// Every particle bitmap, preloaded with the level.
 pub const PARTICLE_MAPS: &[&str] = &[
     "tistar0a.pcx", "tistar0b.pcx", "tistar1a.pcx", "tistar1b.pcx", "tistar2a.pcx", "tistar2b.pcx", "tistar3a.pcx", "tistar3b.pcx",
@@ -31,7 +87,7 @@ fn rnd_dir(rng: &mut ParticleRng, half: f32, len: f32) -> [f32; 3] {
 fn mapped(p: &mut Particle, map: &'static str) {
     p.map = Some(map);
     p.flare = true;
-    p.color = [255.0; 3];
+    p.color = [COLOR_MAX; 3];
 }
 
 fn age(p: &Particle) -> i32 {
@@ -83,7 +139,7 @@ fn dot(p: &mut Particle, ctx: &mut ParticleCtx) -> bool {
     if matches!(c, 2..=5) {
         p.color = dot_color(ctx.rng, c);
     }
-    p.age < 10.0
+    p.age < DOT_LIFE
 }
 
 /// `particle_<colour>Bmp` stars (§2.2): life 10.
@@ -91,13 +147,13 @@ fn init_star(p: &mut Particle, rng: &mut ParticleRng, color: u32) {
     p.vel = [rng.random(6.0) - 3.0, rng.random(6.0) - 3.0, rng.random(1.0) - 4.0];
     p.size = rng.random(300.0) + 750.0;
     mapped(p, star_map(rng, color));
-    p.behaviour = |p, _| p.age < 10.0;
+    p.behaviour = |p, _| p.age < STAR_LIFE;
 }
 
 /// `Particle_GemKeys` (§3.2): a flying gem's trail, 3 stars of its colour (255 = one of each).
 pub fn gem_trail(ps: &mut Particles, pos: [f32; 3], color: u32) {
     if color == crate::gameplay::state::MASTER_KEY {
-        for c in 1..=6 {
+        for c in 1..=GEM_COLORS {
             ps.emit(1, pos, |p, rng| init_star(p, rng, c));
         }
     } else {
@@ -107,7 +163,7 @@ pub fn gem_trail(ps: &mut Particles, pos: [f32; 3], color: u32) {
 
 /// `GemExplose` (§2.3, gems.wdl:364-391): ~15 falling shards dropping dots.
 pub fn gem_explode(ps: &mut Particles, pos: [f32; 3], color: u32) {
-    let color = if (1..=6).contains(&color) { color } else { 1 + ps.random(6.0) as u32 };
+    let color = if (1..=GEM_COLORS).contains(&color) { color } else { 1 + ps.random(GEM_COLORS as f32) as u32 };
     let v4 = ps.random(5.0) + 5.0;
     ps.emit(15, pos, |p, rng| {
         p.vel = [v4 * (rng.random(6.0) - 3.0), v4 * (rng.random(6.0) - 3.0), v4 + rng.random(30.0)];
@@ -125,12 +181,12 @@ fn shard(p: &mut Particle, ctx: &mut ParticleCtx) -> bool {
         init_dot(&mut d, ctx.rng, p.data[0] as u32);
         ctx.spawn.push(d);
     }
-    p.age < 30.0
+    p.age < SHARD_LIFE
 }
 
 /// `GemCatch` (§2.4, gems.wdl:395-449): 25 rising stars, in three waves.
 pub fn gem_catch(ps: &mut Particles, pos: [f32; 3], color: u32) {
-    let color = if (1..=6).contains(&color) { color } else { 0 };
+    let color = if (1..=GEM_COLORS).contains(&color) { color } else { 0 };
     let v4 = ps.random(2.0) + 1.0;
     for (n, delay) in [(5, 0.0), (10, 2.0), (10, 6.0)] {
         ps.emit_delayed(n, pos, delay, |p, rng| {
@@ -142,7 +198,7 @@ pub fn gem_catch(ps: &mut Particles, pos: [f32; 3], color: u32) {
                 if p.size > 100.0 {
                     p.size -= 50.0;
                 }
-                p.age < 30.0
+                p.age < GEM_CATCH_LIFE
             };
         });
     }
@@ -160,7 +216,7 @@ pub fn gem_mix(ps: &mut Particles, pos: [f32; 3], color: u32) {
                 p.size -= 2.0 * F;
             }
             p.vel[2] -= 1.5;
-            p.age < 30.0
+            p.age < GEM_MIX_LIFE
         };
     });
 }
@@ -175,7 +231,7 @@ pub fn diamond_burst(ps: &mut Particles, pos: [f32; 3]) {
             if p.size > 20.0 {
                 p.size -= 30.0;
             }
-            p.age < 8.0
+            p.age < DIAMOND_LIFE
         };
     });
 }
@@ -201,7 +257,7 @@ pub fn dust(ps: &mut Particles, ground: [f32; 3], target: f32, fwd: f32) {
                 p.size += (p.data[0] - p.size) * 0.2;
             }
             p.vel[2] -= 0.08 * F;
-            p.age < 40.0
+            p.age < DUST_LIFE
         };
     });
 }
@@ -223,7 +279,7 @@ pub fn hit_stars(ps: &mut Particles, pos: [f32; 3], n: usize) {
             if p.size > 50.0 {
                 p.size += (50.0 - p.size) * 0.1;
             }
-            p.age < 16.0
+            p.age < HIT_LIFE
         };
     });
 }
@@ -242,7 +298,7 @@ pub fn speedy(ps: &mut Particles, pos: [f32; 3]) {
             if p.size > 50.0 {
                 p.size += (50.0 - p.size) * 0.2;
             }
-            p.age < 24.0
+            p.age < SPEEDY_LIFE
         };
     });
 }
@@ -305,7 +361,7 @@ pub fn restart_sparkle(ps: &mut Particles, pos: [f32; 3]) {
             if p.size > 100.0 {
                 p.size -= 50.0;
             }
-            p.age < 30.0
+            p.age < RESTART_LIFE
         };
     });
 }
@@ -338,7 +394,7 @@ pub fn tile_smoke(ps: &mut Particles, pos: [f32; 3]) {
             if p.size < 2500.0 {
                 p.size += 50.0;
             }
-            p.age < 22.0
+            p.age < SMOKE_LIFE
         };
     });
 }
@@ -358,16 +414,21 @@ const WASP_LETTERS: [[&str; 4]; 7] = [
 ];
 const RED: usize = 0;
 const YELLOW: usize = 1;
+const BLUE: usize = 2;
+const GREEN: usize = 3;
+const MAGENTA: usize = 4;
+const GRADIENT: usize = 5;
+const WHITE: usize = 6;
 
 /// Bitmap family of wasp type 2-7 (types 1 use red + yellow).
 fn wasp_family(kind: u32) -> usize {
     match kind {
         2 => RED,
-        3 => 2,
-        4 => 3,
-        5 => 4,
-        6 => 5,
-        7 => 6,
+        3 => BLUE,
+        4 => GREEN,
+        5 => MAGENTA,
+        6 => GRADIENT,
+        7 => WHITE,
         _ => YELLOW,
     }
 }
@@ -388,7 +449,7 @@ fn wasp_disc(p: &mut Particle, ctx: &mut ParticleCtx) -> bool {
     if p.size > 100.0 {
         p.size += (100.0 - p.size) * 0.2;
     }
-    p.age < 18.0
+    p.age < WASP_DISC_LIFE
 }
 
 fn init_disc(p: &mut Particle, family: usize, size: f32) {
@@ -403,14 +464,14 @@ fn init_disc(p: &mut Particle, family: usize, size: f32) {
 pub fn wasp_trail(ps: &mut Particles, pos: [f32; 3], kind: u32, scale: f32) {
     if kind <= 1 {
         if ps.random(2.0) < 1.0 {
-            ps.emit(1, pos, |p, _| init_disc(p, RED, 3000.0 * scale));
+            ps.emit(1, pos, |p, _| init_disc(p, RED, WASP_TRAIL_SIZE * scale));
         }
         if ps.random(4.0) < 1.0 {
-            ps.emit(1, pos, |p, _| init_disc(p, YELLOW, 3000.0 * scale));
+            ps.emit(1, pos, |p, _| init_disc(p, YELLOW, WASP_TRAIL_SIZE * scale));
         }
     } else if ps.random(2.0) < 1.0 {
         let f = wasp_family(kind);
-        ps.emit(1, pos, |p, _| init_disc(p, f, 3000.0 * scale));
+        ps.emit(1, pos, |p, _| init_disc(p, f, WASP_TRAIL_SIZE * scale));
     }
 }
 
@@ -422,7 +483,7 @@ pub fn wasp_explode(ps: &mut Particles, pos: [f32; 3], kind: u32, spread: f32) {
         let v = [ps.random(spread * 2.0) - spread, ps.random(spread * 2.0) - spread, ps.random(spread * 2.0) - spread];
         ps.emit_delayed(1, pos, tick as f32, |p, rng| {
             p.vel = v.map(|c| c * rng.random(5.0));
-            init_disc(p, family, 1500.0);
+            init_disc(p, family, WASP_BURST_SIZE);
         });
     }
 }
@@ -430,11 +491,11 @@ pub fn wasp_explode(ps: &mut Particles, pos: [f32; 3], kind: u32, spread: f32) {
 /// Hive exhausted (bullets.wdl:1255-1272): 12 bursts 3 ticks apart of 6 colours.
 pub fn hive_burst(ps: &mut Particles, pos: [f32; 3]) {
     for burst in 0..12 {
-        for family in [YELLOW, RED, 2, 3, 4, 5] {
+        for family in [YELLOW, RED, BLUE, GREEN, MAGENTA, GRADIENT] {
             let v = [ps.random(20.0) - 10.0, ps.random(20.0) - 10.0, ps.random(20.0) - 10.0];
             ps.emit_delayed(1, pos, burst as f32 * 3.0, |p, rng| {
                 p.vel = v.map(|c| c * rng.random(5.0));
-                init_disc(p, family, 1500.0);
+                init_disc(p, family, WASP_BURST_SIZE);
             });
         }
     }
@@ -486,7 +547,7 @@ fn init_life(p: &mut Particle, rng: &mut ParticleRng) {
     mapped(p, "phearth1.pcx");
     p.behaviour = |p, _| {
         heart_frames(p);
-        p.age < 10.0
+        p.age < HEART_LIFE
     };
 }
 
@@ -503,7 +564,7 @@ pub fn get_life(ps: &mut Particles, pos: [f32; 3], delay: f32) {
             let mut h = Particle::new(p.pos, |_, _| true);
             init_life(&mut h, ctx.rng);
             ctx.spawn.push(h);
-            p.age < 20.0
+            p.age < GET_LIFE_LIFE
         };
     });
 }
@@ -518,7 +579,7 @@ pub fn small_heart(ps: &mut Particles, pos: [f32; 3]) {
             if p.size > 50.0 {
                 p.size -= 30.0;
             }
-            p.age < 12.0
+            p.age < SMALL_HEART_LIFE
         };
     });
 }
@@ -534,7 +595,7 @@ pub fn take_eye(ps: &mut Particles, pos: [f32; 3]) {
             if p.size > 50.0 {
                 p.size -= 20.0;
             }
-            p.age < 16.0
+            p.age < TAKE_EYE_LIFE
         };
     });
 }
@@ -632,12 +693,12 @@ pub fn emit_trails(
             if e.gone() {
                 continue;
             }
-            if e.class() == 99 {
+            if e.class() == WIN_WASP_CLASS {
                 // "You Win" wasp: a burst from a random vertex (bullets.wdl:1810-1821).
                 let at = [e.pos[0] + ps.random(120.0) - 60.0, e.pos[1] + ps.random(120.0) - 60.0, e.pos[2] + ps.random(80.0) - 40.0];
                 win_sparkle(&mut ps, at);
-            } else if (101..=107).contains(&e.wasp_spec) {
-                wasp_trail(&mut ps, e.pos, e.wasp_spec - 100, 1.0);
+            } else if (WASP_SPEC_BASE + 1..=WASP_SPEC_BASE + 7).contains(&e.wasp_spec) {
+                wasp_trail(&mut ps, e.pos, e.wasp_spec - WASP_SPEC_BASE, 1.0);
             }
         }
         for (tf, gem) in &gems {
@@ -649,7 +710,7 @@ pub fn emit_trails(
         // Death tiles every 2 ticks, lava 1/9 of that (mm1.wdl:4033,4878); Flag3 = no smoke.
         for (tf, obj, lava) in &tiles {
             let at = crate::render::coords::native(tf.translation);
-            if obj.0.flags & (1 << 2) != 0 || !near(at) {
+            if obj.0.flags & FLAG3 != 0 || !near(at) {
                 continue;
             }
             if ps.random(if lava { 18.0 } else { 2.0 }) < 1.0 {
@@ -659,7 +720,7 @@ pub fn emit_trails(
         // Idle teleport pads (Flag3 != 1), 1/4 per tick (mm1.wdl:4109).
         for (tf, obj) in &pads {
             let at = crate::render::coords::native(tf.translation);
-            if obj.0.flags & (1 << 2) == 0 && near(at) && ps.random(4.0) < 1.0 {
+            if obj.0.flags & FLAG3 == 0 && near(at) && ps.random(4.0) < 1.0 {
                 teleport_sparkle(&mut ps, at, false, 1);
             }
         }
@@ -689,9 +750,9 @@ pub fn emit_sammy(mut ps: ResMut<Particles>, player: Query<(&Player, Has<Telepor
     // Landing: one big puff on a hard landing, a smaller one landing on the move.
     if p.state == State::Land && was != State::Land {
         if p.hard_landing {
-            dust(&mut ps, ground, 5000.0, fwd);
+            dust(&mut ps, ground, DUST_HARD_LANDING, fwd);
         } else if fwd > 1.0 && ps.random(2.0) < 1.0 {
-            dust(&mut ps, ground, 3000.0, fwd);
+            dust(&mut ps, ground, DUST_WALK, fwd);
         }
     }
     if teleporting && !was_tp {
@@ -701,9 +762,9 @@ pub fn emit_sammy(mut ps: ResMut<Particles>, player: Query<(&Player, Has<Telepor
     for _ in 0..ps.ticks {
         // `ticks1 % TicksPoussiere` sampled per frame: walk 4 → ≈ f/4, turn 8 → ≈ f/8 per tick.
         let (chance, target) = match p.state {
-            State::Walk => (F / 4.0, 3000.0),
-            State::Turn => (F / 8.0, 2000.0),
-            State::Land => (1.0, 3000.0),
+            State::Walk => (F / 4.0, DUST_WALK),
+            State::Turn => (F / 8.0, DUST_TURN),
+            State::Land => (1.0, DUST_WALK),
             _ => (0.0, 0.0),
         };
         if chance > 0.0 && ps.random(1.0) < chance {

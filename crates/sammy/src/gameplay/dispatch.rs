@@ -8,6 +8,16 @@ use formats::wmb::Object;
 use super::*;
 use crate::camera::CameraParams;
 
+/// Stand-animation speeds: the boost pickup, and lions / wasp enemies (also the extro
+/// wasp's walk).
+const BOOST_ANIM_SPEED: f32 = 10.0;
+const ENEMY_ANIM_SPEED: f32 = 3.0;
+/// Menu level-grid markers (`ChoixMenu` view codes): tutorial, jump and think worlds, bonus.
+const MARKER_TUTORIAL: u32 = 2;
+const MARKER_JUMP: u32 = 3;
+const MARKER_THINK: u32 = 4;
+const MARKER_BONUS: u32 = 50;
+
 pub use sammy_core::level::Presentation as ActionInit;
 pub use sammy_core::level::{is_marker, is_passable};
 
@@ -129,7 +139,7 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initboost" => {
             health::init_boost(obj, entity);
-            ActionInit { anim: Some(("stand", 10.0)), ..default() }
+            ActionInit { anim: Some(("stand", BOOST_ANIM_SPEED)), ..default() }
         }
         "setcamera" => {
             crate::camera::init_zone(obj, entity);
@@ -141,16 +151,16 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initlion" => {
             let skin = enemies::init_lion(obj, entity);
-            ActionInit { skin, anim: Some(("stand", 3.0)), ..default() }
+            ActionInit { skin, anim: Some(("stand", ENEMY_ANIM_SPEED)), ..default() }
         }
         "initwaspennemy" => {
             let skin = enemies::init_wasp_ennemy(obj, entity, false);
-            ActionInit { skin, anim: Some(("stand", 3.0)), ..default() }
+            ActionInit { skin, anim: Some(("stand", ENEMY_ANIM_SPEED)), ..default() }
         }
         "startextro" => {
             let skin = enemies::init_wasp_ennemy(obj, entity, true);
             extro::start_extro(entity);
-            ActionInit { skin, anim: Some(("walk", 3.0)), ..default() }
+            ActionInit { skin, anim: Some(("walk", ENEMY_ANIM_SPEED)), ..default() }
         }
         "initsetpovsyn" | "initsetanimplayer" | "initsetfinextro" => {
             extro::init_trigger(&action, obj, entity);
@@ -158,10 +168,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initmainmenu" => crate::ui::menu::init_item(obj, false, entity),
         "initmaintitle" => crate::ui::menu::init_item(obj, true, entity),
-        "postutoriallevels" => crate::ui::menu::init_marker(obj, 2, entity),
-        "posjumplevels" => crate::ui::menu::init_marker(obj, 3, entity),
-        "posthinklevels" => crate::ui::menu::init_marker(obj, 4, entity),
-        "posbonuslevels" => crate::ui::menu::init_marker(obj, 50, entity),
+        "postutoriallevels" => crate::ui::menu::init_marker(obj, MARKER_TUTORIAL, entity),
+        "posjumplevels" => crate::ui::menu::init_marker(obj, MARKER_JUMP, entity),
+        "posthinklevels" => crate::ui::menu::init_marker(obj, MARKER_THINK, entity),
+        "posbonuslevels" => crate::ui::menu::init_marker(obj, MARKER_BONUS, entity),
         "initplayerpatrol" => {
             crate::ui::intro::init_walker(obj, entity);
             ActionInit { anim: Some(("walkB", 0.0)), ..default() }

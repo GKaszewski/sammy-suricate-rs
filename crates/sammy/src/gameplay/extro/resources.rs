@@ -15,6 +15,12 @@ pub struct Scanners(pub sammy_core::extro::Scanners);
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct TriggerClock(pub(crate) sammy_core::time::TickClock);
 
+/// The fade starts at `FADE_START` and the extro ends at `FADE_FULL` (fog percent).
+pub(crate) const FADE_START: f32 = 1.0;
+pub(crate) const FADE_FULL: f32 = 100.0;
+/// Stacking of the black fade panel.
+pub(crate) const Z_FADE: i32 = 100;
+
 /// Fade to black after `SetFinExtro`, in fog percent; at 100 the extro ends.
 #[derive(Resource)]
 pub struct FinExtro(pub f32);

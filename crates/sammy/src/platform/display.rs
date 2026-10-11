@@ -18,6 +18,10 @@ impl Plugin for DisplayPlugin {
 /// The interface's design resolution (the original's mode 6).
 const W: f32 = 640.0;
 const H: f32 = 480.0;
+/// Smallest fullscreen mode offered (the original art size).
+const MIN_FULLSCREEN: [u32; 2] = [640, 480];
+/// Windows smaller than the art fit it fractionally, but never below this scale.
+const MIN_FRACTIONAL_SCALE: f32 = 0.25;
 
 /// Windowed sizes offered (those that fit the monitor).
 const WINDOW_SIZES: [[u32; 2]; 10] = [[640, 480], [800, 600], [1024, 768], [1280, 720], [1280, 960], [1366, 768], [1600, 900], [1920, 1080], [2560, 1440], [3840, 2160]];
@@ -31,7 +35,7 @@ pub fn sizes(mode: DisplayMode, monitor: Option<&Monitor>) -> Vec<[u32; 2]> {
             let mut v: Vec<[u32; 2]> = monitor.map(|m| m.video_modes.iter().map(|v| [v.physical_size.x, v.physical_size.y]).collect()).unwrap_or_default();
             v.sort();
             v.dedup();
-            v.retain(|s| s[0] >= 640 && s[1] >= 480);
+            v.retain(|s| s[0] >= MIN_FULLSCREEN[0] && s[1] >= MIN_FULLSCREEN[1]);
             v
         }
         DisplayMode::Borderless => Vec::new(),
@@ -96,7 +100,7 @@ fn apply(save: Res<SaveGame>, monitors: Query<&Monitor, With<PrimaryMonitor>>, m
 fn ui_scale(save: Res<SaveGame>, windows: Query<&Window, With<PrimaryWindow>>, mut scale: ResMut<UiScale>) {
     let Ok(w) = windows.single() else { return };
     let fit = (w.physical_height() as f32 / H).min(w.physical_width() as f32 / W);
-    let s = if fit < 1.0 { fit.max(0.25) } else { (fit.floor() - save.display.ui_size as f32).max(1.0) };
+    let s = if fit < 1.0 { fit.max(MIN_FRACTIONAL_SCALE) } else { (fit.floor() - save.display.ui_size as f32).max(1.0) };
     let s = s / w.scale_factor();
     if (scale.0 - s).abs() > 1e-4 {
         scale.0 = s;

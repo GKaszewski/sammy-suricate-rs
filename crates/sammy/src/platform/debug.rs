@@ -5,13 +5,19 @@
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 
+/// `SAMMY_SHOT_SECS` default: screenshot times in seconds.
+const DEFAULT_SHOT_SECS: &str = "2.5,4";
+/// Seconds between state log lines, and the wait after the last screenshot before exit.
+const LOG_INTERVAL: f32 = 1.0;
+const EXIT_GRACE: f32 = 0.5;
+
 pub struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         if let Ok(path) = std::env::var("SAMMY_SCREENSHOT") {
             let times: Vec<f32> = std::env::var("SAMMY_SHOT_SECS")
-                .unwrap_or_else(|_| "2.5,4".into())
+                .unwrap_or_else(|_| DEFAULT_SHOT_SECS.into())
                 .split(',')
                 .filter_map(|s| s.trim().parse().ok())
                 .collect();
@@ -43,7 +49,7 @@ fn screenshot(
     let now = time.elapsed_secs();
     job.log_timer -= time.delta_secs();
     if job.log_timer <= 0.0 {
-        job.log_timer = 1.0;
+        job.log_timer = LOG_INTERVAL;
         if let Ok(p) = player.single() {
             info!(
                 "t={now:.1} {} {:?} player {:?} pente {:?} state {:?} on {:?} | score {}/{} key {} lives {} hearts {:.0} start {:?} won {}",
@@ -64,7 +70,7 @@ fn screenshot(
         commands.spawn(Screenshot::primary_window()).observe(save_to_disk(p));
         job.next += 1;
     }
-    if job.next >= job.times.len() && now >= job.times.last().copied().unwrap_or(0.0) + 0.5 {
+    if job.next >= job.times.len() && now >= job.times.last().copied().unwrap_or(0.0) + EXIT_GRACE {
         exit.write(AppExit::Success);
     }
 }

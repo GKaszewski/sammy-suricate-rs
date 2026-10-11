@@ -20,6 +20,13 @@ const DEADZONE: f32 = 0.25;
 /// Stick nav: first repeat after this many seconds, then every `NAV_REPEAT`.
 const NAV_DELAY: f32 = 0.4;
 const NAV_REPEAT: f32 = 0.15;
+/// Mouse motion this large (squared pixels per frame) hands control back from the pad.
+const MOUSE_MOVE_SQ: f32 = 4.0;
+/// A stick pushed past this length navigates the menus.
+const STICK_NAV: f32 = 0.5;
+/// `SAMMY_PAD_NAV` debug script: starts after this many seconds, one input per step.
+const PAD_NAV_START: f32 = 3.0;
+const PAD_NAV_STEP: f32 = 0.5;
 
 /// This frame's [`sammy_core::input::Controls`].
 #[derive(Resource, Default, Debug, Clone, Deref, DerefMut)]
@@ -85,7 +92,7 @@ fn read_controls(
             nav = Some(d);
         }
     }
-    if out.any || mouse.get_just_pressed().next().is_some() || motion.delta.length_squared() > 4.0 {
+    if out.any || mouse.get_just_pressed().next().is_some() || motion.delta.length_squared() > MOUSE_MOVE_SQ {
         out.pad = false;
     }
     let mut stick_dir = None;
@@ -116,10 +123,10 @@ fn read_controls(
                 nav = Some(d);
             }
         }
-        if stick.length() > 0.5 {
+        if stick.length() > STICK_NAV {
             stick_dir = Some(if stick.x.abs() > stick.y.abs() { IVec2::new(stick.x.signum() as i32, 0) } else { IVec2::new(0, stick.y.signum() as i32) });
         }
-        if pressed || stick.length() > 0.5 || dpad != Vec2::ZERO {
+        if pressed || stick.length() > STICK_NAV || dpad != Vec2::ZERO {
             out.pad = true;
         }
     }
@@ -139,11 +146,11 @@ fn read_controls(
         None => repeat.dir = None,
     }
     out.nav = nav.map(|d: IVec2| d.to_array());
-    // Debug: SAMMY_PAD_NAV=right,down,a,b,... presses one pad input every 0.5 s from 3 s on.
+    // Debug: SAMMY_PAD_NAV=right,down,a,b,... presses one pad input every `PAD_NAV_STEP` from `PAD_NAV_START` on.
     if let Ok(script) = std::env::var("SAMMY_PAD_NAV") {
-        let t = time.elapsed_secs() - 3.0;
-        let step = (t / 0.5).floor();
-        if t >= 0.0 && (t - time.delta_secs()) / 0.5 < step
+        let t = time.elapsed_secs() - PAD_NAV_START;
+        let step = (t / PAD_NAV_STEP).floor();
+        if t >= 0.0 && (t - time.delta_secs()) / PAD_NAV_STEP < step
             && let Some(cmd) = script.split(',').nth(step as usize)
         {
             out.pad = true;

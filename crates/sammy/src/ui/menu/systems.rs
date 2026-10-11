@@ -1,6 +1,69 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Icon alpha is a percentage; 100 is opaque.
+const ALPHA_OPAQUE: f32 = 100.0;
+/// Grey tint of a darkened (absent) level icon.
+const DARK_TINT: f32 = 0.35;
+/// Icons grow ×1.2 while hovered.
+const HOVER_SCALE: f32 = 1.2;
+/// Level icons have `ChoixMenu` codes above this (`LEVEL_ICON + slot`).
+const ICON_CODE_BASE: u32 = sammy_core::menu::LEVEL_ICON;
+/// `ChoixMenu` code 20: back to the root view.
+const CHOICE_BACK: u32 = 20;
+/// Camera `arc` in the menu (degrees).
+pub(crate) const MENU_ARC: f32 = 70.0;
+/// `SAMMY_MENU_CAM` carries x,y,z,pan,tilt.
+const MENU_CAM_FIELDS: usize = 5;
+/// `Mouse_Range`: picking reach in quants.
+const MOUSE_RANGE: f32 = 6000.0;
+/// `Toc2` touch / `Ding1` click volumes.
+const TOUCH_VOL: f32 = 25.0;
+const CLICK_VOL: f32 = 50.0;
+/// Hover light colours (orange; darker for locked icons) and range.
+const LIGHT_COLOR: [f32; 3] = [255.0, 180.0, 50.0];
+const LIGHT_COLOR_LOCKED: [f32; 3] = [255.0, 100.0, 20.0];
+const LIGHT_RANGE: f32 = 300.0;
+/// `particle_interface1`: sparkle orbit radius (quants), sideways wobble and per-tick
+/// angle steps (degrees).
+const SPARKLE_RADIUS: f32 = 64.0;
+const SPARKLE_WOBBLE: f32 = 5.0;
+const SPARKLE_STEP_A: f32 = 40.0;
+const SPARKLE_STEP_B: f32 = 15.0;
+/// A face is a room's back wall when its normal points this far along -Y.
+const WALL_NORMAL_Y: f32 = -0.99;
+/// Back-wall search window around the camera marker: depth ahead, half-width, half-height.
+const WALL_DEPTH: f32 = 1500.0;
+const WALL_HALF_X: f32 = 700.0;
+const WALL_HALF_Z: f32 = 600.0;
+/// Faces within this of the farthest one belong to the back wall.
+const WALL_THICKNESS: f32 = 1.0;
+/// The extension quad sits this far behind the wall, and reaches this far sideways / vertically.
+const WALL_QUAD_OFFSET: f32 = 2.0;
+const WALL_QUAD_SIDE: f32 = 8000.0;
+const WALL_QUAD_VERT: f32 = 1200.0;
+/// Pad focus: minimum progress along the direction, and the weight of the sideways miss.
+pub(crate) const PAD_MIN_ALONG: f32 = 1.0;
+pub(crate) const PAD_CROSS_WEIGHT: f32 = 2.0;
+/// Ray-box test: rays this parallel to a slab are treated as parallel, and boxes are
+/// at least this thick (half extent).
+const RAY_PARALLEL_EPS: f32 = 1e-8;
+const MIN_HALF_EXTENT: f32 = 0.05;
+/// Version text.
+const VERSION_TEXT: &[u8] = b"Sammy Suricate V1.42";
+const VERSION_POS: (f32, f32) = (2.0, 4.0);
+/// UI stacking: version text, tooltips, cursor.
+const Z_VERSION: i32 = 20;
+const Z_TOOLTIP: i32 = 21;
+const Z_CURSOR: i32 = 100;
+/// Cursor sprite size; its hot spot is the centre.
+const CURSOR_SIZE: f32 = 16.0;
+const CURSOR_HOTSPOT: f32 = 8.0;
+/// Tooltip offsets from the cursor: title x (unlocked / locked), and the locked message.
+const TOOLTIP_DX: f32 = 20.0;
+const TOOLTIP_DX_LOCKED: f32 = 32.0;
+const TOOLTIP_MSG_OFFSET: (f32, f32) = (-64.0, 26.0);
+
 pub fn in_menu(current: Res<CurrentLevel>, intro: Res<crate::ui::intro::Intro>) -> bool {
     current.phase == Phase::Menu && !intro.active
 }
@@ -30,11 +93,11 @@ pub(crate) fn style_items(
             }
         };
         if let Some(mut mat) = mat
-            && (alpha < 100.0 || dark)
+            && (alpha < ALPHA_OPAQUE || dark)
         {
             let mut m = materials.get(&mat.0).cloned().unwrap_or_default();
             m.alpha_mode = AlphaMode::Blend;
-            m.base_color = if dark { Color::srgba(0.35, 0.35, 0.35, alpha / 100.0) } else { Color::srgba(1.0, 1.0, 1.0, alpha / 100.0) };
+            m.base_color = if dark { Color::srgba(DARK_TINT, DARK_TINT, DARK_TINT, alpha / ALPHA_OPAQUE) } else { Color::srgba(1.0, 1.0, 1.0, alpha / ALPHA_OPAQUE) };
             mat.0 = materials.add(m);
         }
     }
@@ -51,8 +114,7 @@ pub(crate) fn animate_items(time: Res<Time>, state: Res<MenuState>, mut q: Query
                 tf.rotation = coords::rotation(item.bob.angles);
             }
         }
-        // Icons grow ×1.2 while hovered.
-        let k = if state.hovered == Some(e) && item.code > 100 && !item.locked { 1.2 } else { 1.0 };
+        let k = if state.hovered == Some(e) && item.code > ICON_CODE_BASE && !item.locked { HOVER_SCALE } else { 1.0 };
         tf.scale = item.scale * k;
     }
 }
@@ -64,16 +126,16 @@ pub(crate) fn place_camera(
     markers: Query<&MenuMarker>,
     mut cam: Query<&mut Transform, With<MainCamera>>,
 ) {
-    if params.arc != 70.0 {
-        params.arc = 70.0;
+    if params.arc != MENU_ARC {
+        params.arc = MENU_ARC;
     }
     let (mut pos, mut pan, mut tilt) = match markers.iter().find(|m| m.code == state.view && state.view != 0) {
         Some(m) => (m.pos, m.pan, m.tilt),
-        None => params.origin.unwrap_or(([1.0, -369.0, 115.0], 90.0, 1.0)),
+        None => params.origin.unwrap_or(sammy_core::intro::MENU_ORIGIN),
     };
     // Debug: SAMMY_MENU_CAM=x,y,z,pan,tilt.
     if let Some(v) = std::env::var("SAMMY_MENU_CAM").ok().map(|v| v.split(',').filter_map(|n| n.parse::<f32>().ok()).collect::<Vec<_>>())
-        && v.len() == 5
+        && v.len() == MENU_CAM_FIELDS
     {
         (pos, pan, tilt) = ([v[0], v[1], v[2]], v[3], v[4]);
     }
@@ -83,7 +145,7 @@ pub(crate) fn place_camera(
     }
 }
 
-/// Ray from the cursor against the items' mesh boxes (`Mouse_Range` 6000).
+/// Ray from the cursor against the items' mesh boxes (`Mouse_Range`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn pick(
     mut state: ResMut<MenuState>,
@@ -110,7 +172,7 @@ pub(crate) fn pick(
             let kids = children.into_iter().flatten().filter_map(|c| parts.get(*c).ok().map(|(g, a)| (*g, *a)));
             for (g, a) in own.into_iter().chain(kids) {
                 if let Some(d) = ray_obb(ray, &g, &a)
-                    && d * coords::QUANTS_PER_UNIT < 6000.0
+                    && d * coords::QUANTS_PER_UNIT < MOUSE_RANGE
                     && best.is_none_or(|(_, b)| d < b)
                 {
                     best = Some((e, d));
@@ -125,7 +187,7 @@ pub(crate) fn pick(
         now = pad_focus(&controls, state.hovered, camera, cam_tf, &items);
         // B backs out of a level grid.
         if controls.back && state.view != 0 {
-            choices.write(MenuChoice(20));
+            choices.write(MenuChoice(CHOICE_BACK));
         }
     }
     if now != state.hovered {
@@ -136,25 +198,29 @@ pub(crate) fn pick(
         if let Some(new) = now
             && let Ok((_, item, ..)) = items.get(new)
         {
-            sfx.play_vol("Toc2", 25.0);
-            let color = if item.locked { [255.0, 100.0, 20.0] } else { [255.0, 180.0, 50.0] };
-            commands.entity(new).insert(crate::render::lights::DynamicLight { color, range: 300.0 });
+            sfx.play_vol("Toc2", TOUCH_VOL);
+            let color = if item.locked { LIGHT_COLOR_LOCKED } else { LIGHT_COLOR };
+            commands.entity(new).insert(crate::render::lights::DynamicLight { color, range: LIGHT_RANGE });
         }
         state.hovered = now;
     }
     // Sparkles orbit a hovered icon (`particle_interface1`, 64 quants out).
     if let Some(h) = state.hovered
         && let Ok((_, mut item, _, gt, ..)) = items.get_mut(h)
-        && item.code > 100
+        && item.code > ICON_CODE_BASE
         && !item.locked
     {
         for _ in 0..particles.ticks {
             let (a, b) = (item.sparkle[0].to_radians(), item.sparkle[1].to_radians());
-            let off = [64.0 * a.cos() * b.cos() - 5.0 * a.sin(), 64.0 * a.sin() * b.cos() + 5.0 * a.cos(), 64.0 * b.sin()];
+            let off = [
+                SPARKLE_RADIUS * a.cos() * b.cos() - SPARKLE_WOBBLE * a.sin(),
+                SPARKLE_RADIUS * a.sin() * b.cos() + SPARKLE_WOBBLE * a.cos(),
+                SPARKLE_RADIUS * b.sin(),
+            ];
             let c = coords::native(gt.translation());
             crate::render::effects::menu_sparkle(&mut particles, [c[0] + off[0], c[1] + off[1], c[2] + off[2]]);
-            item.sparkle[0] += 40.0;
-            item.sparkle[1] += 15.0;
+            item.sparkle[0] += SPARKLE_STEP_A;
+            item.sparkle[1] += SPARKLE_STEP_B;
         }
     }
     if (mouse.just_pressed(MouseButton::Left) || (controls.pad && controls.accept && before == state.hovered))
@@ -163,7 +229,7 @@ pub(crate) fn pick(
         && let Ok((_, item, ..)) = items.get(h)
         && !item.locked
     {
-        sfx.play_vol("Ding1", 50.0);
+        sfx.play_vol("Ding1", CLICK_VOL);
         state.clicked_once = true;
         choices.write(MenuChoice(item.code));
     }
@@ -187,7 +253,7 @@ pub(crate) fn extend_grid_walls(
     for m in &markers {
         let [mx, my, mz] = m.pos;
         let faces: Vec<(usize, [f32; 3], [f32; 3])> = (0..w.faces.len())
-            .filter(|&f| w.face_visible(f) && w.face_normal(f)[1] < -0.99)
+            .filter(|&f| w.face_visible(f) && w.face_normal(f)[1] < WALL_NORMAL_Y)
             .map(|f| {
                 let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
                 for v in w.face_vertices(f) {
@@ -198,19 +264,24 @@ pub(crate) fn extend_grid_walls(
                 }
                 (f, lo, hi)
             })
-            .filter(|(_, lo, hi)| lo[1] > my && lo[1] < my + 1500.0 && hi[0] > mx - 700.0 && lo[0] < mx + 700.0 && hi[2] > mz - 600.0 && lo[2] < mz + 600.0)
+            .filter(|(_, lo, hi)| lo[1] > my && lo[1] < my + WALL_DEPTH && hi[0] > mx - WALL_HALF_X && lo[0] < mx + WALL_HALF_X && hi[2] > mz - WALL_HALF_Z && lo[2] < mz + WALL_HALF_Z)
             .collect();
         let Some(wall_y) = faces.iter().map(|f| f.1[1]).reduce(f32::max) else { continue };
-        let wall: Vec<_> = faces.iter().filter(|f| (f.1[1] - wall_y).abs() < 1.0).collect();
+        let wall: Vec<_> = faces.iter().filter(|f| (f.1[1] - wall_y).abs() < WALL_THICKNESS).collect();
         let Some(&&(face, ..)) = wall.first() else { continue };
         let (Some(tex), ti) = (w.face_texture(face), &w.texinfos[w.faces[face].texinfo as usize]) else { continue };
         let (lo_x, hi_x) = wall.iter().fold((f32::MAX, f32::MIN), |a, f| (a.0.min(f.1[0]), a.1.max(f.2[0])));
         let (lo_z, hi_z) = wall.iter().fold((f32::MAX, f32::MIN), |a, f| (a.0.min(f.1[2]), a.1.max(f.2[2])));
         let t = &w.textures[tex];
         let (tw, th) = (t.width as f32, t.height as f32);
-        let y = wall_y + 2.0;
+        let y = wall_y + WALL_QUAD_OFFSET;
         // Vertically only a little: the rooms lie under the menu desert.
-        let corners = [[lo_x - 8000.0, y, lo_z - 1200.0], [hi_x + 8000.0, y, lo_z - 1200.0], [hi_x + 8000.0, y, hi_z + 1200.0], [lo_x - 8000.0, y, hi_z + 1200.0]];
+        let corners = [
+            [lo_x - WALL_QUAD_SIDE, y, lo_z - WALL_QUAD_VERT],
+            [hi_x + WALL_QUAD_SIDE, y, lo_z - WALL_QUAD_VERT],
+            [hi_x + WALL_QUAD_SIDE, y, hi_z + WALL_QUAD_VERT],
+            [lo_x - WALL_QUAD_SIDE, y, hi_z + WALL_QUAD_VERT],
+        ];
         let mut mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::default());
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, corners.iter().map(|&p| coords::pos(p).to_array()).collect::<Vec<_>>());
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![coords::pos([0.0, -1.0, 0.0]).normalize().to_array(); 4]);
@@ -260,7 +331,7 @@ pub(crate) fn pad_focus(
         .filter_map(|i| {
             let v = i.2 - at;
             let along = v.dot(dir);
-            (along > 1.0).then(|| (i.0, along + 2.0 * (v - dir * along).length()))
+            (along > PAD_MIN_ALONG).then(|| (i.0, along + PAD_CROSS_WEIGHT * (v - dir * along).length()))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|i| i.0)
@@ -271,10 +342,10 @@ pub(crate) fn ray_obb(ray: Ray3d, gt: &GlobalTransform, aabb: &Aabb) -> Option<f
     let inv = gt.affine().inverse();
     let o = inv.transform_point3(ray.origin);
     let d = inv.transform_vector3(ray.direction.as_vec3());
-    let (c, h) = (Vec3::from(aabb.center), Vec3::from(aabb.half_extents).max(Vec3::splat(0.05)));
+    let (c, h) = (Vec3::from(aabb.center), Vec3::from(aabb.half_extents).max(Vec3::splat(MIN_HALF_EXTENT)));
     let (mut t0, mut t1) = (f32::MIN, f32::MAX);
     for i in 0..3 {
-        if d[i].abs() < 1e-8 {
+        if d[i].abs() < RAY_PARALLEL_EPS {
             if (o[i] - c[i]).abs() > h[i] {
                 return None;
             }
@@ -334,11 +405,11 @@ pub(crate) fn debug_start(mut state: ResMut<MenuState>, mut req: ResMut<crate::u
 
 pub(crate) fn setup_overlay(mut commands: Commands, files: Res<GameFiles>, mut images: ResMut<Assets<Image>>) {
     let abs = |x: f32, y: f32| Node { position_type: PositionType::Absolute, left: px(x), top: px(y), ..default() };
-    commands.spawn((VersionText, abs(2.0, 4.0), BitmapText::new(FontKind::Standard, b"Sammy Suricate V1.42".to_vec()), GlobalZIndex(20), Visibility::Hidden));
-    commands.spawn((TooltipTitle, abs(0.0, 0.0), BitmapText::new(FontKind::Small, Vec::new()), GlobalZIndex(21), Visibility::Hidden));
-    commands.spawn((TooltipMessage, abs(0.0, 0.0), BitmapText::new(FontKind::Small, Vec::new()), GlobalZIndex(21), Visibility::Hidden));
+    commands.spawn((VersionText, abs(VERSION_POS.0, VERSION_POS.1), BitmapText::new(FontKind::Standard, VERSION_TEXT.to_vec()), GlobalZIndex(Z_VERSION), Visibility::Hidden));
+    commands.spawn((TooltipTitle, abs(0.0, 0.0), BitmapText::new(FontKind::Small, Vec::new()), GlobalZIndex(Z_TOOLTIP), Visibility::Hidden));
+    commands.spawn((TooltipMessage, abs(0.0, 0.0), BitmapText::new(FontKind::Small, Vec::new()), GlobalZIndex(Z_TOOLTIP), Visibility::Hidden));
     if let Some((image, _)) = load_ui_image(&files, &mut images, "arrow.pcx") {
-        commands.spawn((Cursor, Node { position_type: PositionType::Absolute, width: px(16.0), height: px(16.0), ..default() }, ImageNode::new(image), GlobalZIndex(100), Visibility::Hidden));
+        commands.spawn((Cursor, Node { position_type: PositionType::Absolute, width: px(CURSOR_SIZE), height: px(CURSOR_SIZE), ..default() }, ImageNode::new(image), GlobalZIndex(Z_CURSOR), Visibility::Hidden));
     }
 }
 
@@ -360,20 +431,20 @@ pub(crate) fn overlay(
         *v = if state.clicked_once || state.modal { Visibility::Hidden } else { Visibility::Inherited };
     }
     let cursor = windows.single().ok().and_then(|w| w.cursor_position()).map(|c| c / ui_scale.0).unwrap_or_default();
-    let icon = state.hovered.and_then(|h| items.get(h).ok()).filter(|i| i.code > 100);
+    let icon = state.hovered.and_then(|h| items.get(h).ok()).filter(|i| i.code > ICON_CODE_BASE);
     let (Ok((mut tt, mut tn, mut tv)), Ok((mut mt, mut mn, mut mv))) = (title.single_mut(), message.single_mut()) else { return };
     let Some(item) = icon else {
         *tv = Visibility::Hidden;
         *mv = Visibility::Hidden;
         return;
     };
-    let n = item.code - 100;
+    let n = item.code - ICON_CODE_BASE;
     let text = strings.get(&format!("level{n}_Str")).to_vec();
     if tt.bytes != text {
         tt.bytes = text;
     }
     *tv = Visibility::Inherited;
-    let dx = if item.locked { 32.0 } else { 20.0 };
+    let dx = if item.locked { TOOLTIP_DX_LOCKED } else { TOOLTIP_DX };
     (tn.left, tn.top) = (px(cursor.x + dx), px(cursor.y));
     if item.locked {
         let msg = if save.state(n) == LevelState::Locked { "mustbewin_Str" } else { "LevelNothere_Str" };
@@ -381,7 +452,7 @@ pub(crate) fn overlay(
         if mt.bytes != bytes {
             mt.bytes = bytes;
         }
-        (mn.left, mn.top) = (px(cursor.x - 64.0), px(cursor.y + 26.0));
+        (mn.left, mn.top) = (px(cursor.x + TOOLTIP_MSG_OFFSET.0), px(cursor.y + TOOLTIP_MSG_OFFSET.1));
         *mv = Visibility::Inherited;
     } else {
         *mv = Visibility::Hidden;
@@ -408,7 +479,7 @@ pub(crate) fn show_cursor(
     match win.cursor_position().filter(|_| on && !controls.pad) {
         Some(c) => {
             let c = c / ui_scale.0;
-            (n.left, n.top) = (px(c.x - 8.0), px(c.y - 8.0));
+            (n.left, n.top) = (px(c.x - CURSOR_HOTSPOT), px(c.y - CURSOR_HOTSPOT));
             *v = Visibility::Inherited;
         }
         None => *v = Visibility::Hidden,

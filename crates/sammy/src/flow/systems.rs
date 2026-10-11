@@ -1,6 +1,16 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Extro `sun_angle` (pan 90, Extro.wdl:81; levels use the default).
+const EXTRO_SUN_ANGLE: crate::render::shadow::SunAngle = crate::render::shadow::SunAngle(90.0, 85.0);
+/// Level 10 hard-codes 4 lives (Loads.wdl:80).
+const FIXED_LIVES_SLOT: u32 = 10;
+const FIXED_LIVES: i32 = 4;
+/// Debug `SAMMY_EYE`: eye ticks for the whole level.
+const DEBUG_EYE_TICKS: f32 = 1.0e9;
+/// Poison per ammo type 1..7 for the debug `SAMMY_AMMO` override.
+const AMMO_POISON: [f32; 7] = [3.0, 2.0, 1.0, 1.0, 4.0, 6.0, 1.0];
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn load_pending(
     mut commands: Commands,
@@ -44,7 +54,7 @@ pub(crate) fn load_pending(
     }
     let slot = slot_for(&file);
     // `sun_angle`: pan 135 / tilt 85 in levels (mm1.wdl:618-620), pan 90 in the extro (Extro.wdl:81).
-    commands.insert_resource(if slot == Some(EXTRO_SLOT) { crate::render::shadow::SunAngle(90.0, 85.0) } else { crate::render::shadow::SunAngle::default() });
+    commands.insert_resource(if slot == Some(EXTRO_SLOT) { EXTRO_SUN_ANGLE } else { crate::render::shadow::SunAngle::default() });
     let phase = if file.eq_ignore_ascii_case(crate::ui::menu::MENU_FILE) { Phase::Menu } else { Phase::Intro };
     *current = CurrentLevel { flow: sammy_core::flow::LevelFlow { slot, file: file.clone(), phase, intro_ticks: 0.0 }, loads: current.loads + 1 };
     let mut spawner = Spawner {
@@ -79,9 +89,8 @@ pub(crate) fn load_pending(
             g.checkpoint = true; // [I] kept until the next game end stores it again
         });
     }
-    // Level 10 hard-codes 4 lives (Loads.wdl:80).
-    if slot == Some(10) {
-        commands.queue(|w: &mut World| w.resource_mut::<GameState>().lives = 4);
+    if slot == Some(FIXED_LIVES_SLOT) {
+        commands.queue(|w: &mut World| w.resource_mut::<GameState>().lives = FIXED_LIVES);
     }
     // Debug overrides applied after the level's own config entities.
     commands.queue(|w: &mut World| {
@@ -94,7 +103,7 @@ pub(crate) fn load_pending(
             g.hearts = h;
         }
         if env("SAMMY_EYE").is_some() {
-            g.eye_ticks = 1.0e9; // Eye of Truth for the whole level
+            g.eye_ticks = DEBUG_EYE_TICKS; // Eye of Truth for the whole level
         }
         // SAMMY_AMMO=count,type
         if let Some((n, k)) = std::env::var("SAMMY_AMMO").ok().and_then(|v| {
@@ -103,7 +112,7 @@ pub(crate) fn load_pending(
         }) {
             g.ammo = n;
             g.ammo_type = k;
-            g.ammo_poison = [3.0, 2.0, 1.0, 1.0, 4.0, 6.0, 1.0][(k.clamp(1, 7) - 1) as usize];
+            g.ammo_poison = AMMO_POISON[(k.clamp(1, AMMO_POISON.len() as u32) - 1) as usize];
         }
     });
     info!("loaded level {file} (slot {slot:?})");

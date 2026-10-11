@@ -5,7 +5,20 @@ use bevy::prelude::*;
 
 use crate::camera::MainCamera;
 use crate::render::coords::QUANTS_PER_UNIT;
-use crate::render::material::{LevelMaterial, LightData};
+use crate::render::material::{LevelMaterial, LightData, MAX_LIGHTS};
+
+/// A4 light colour channel maximum (colours are 0..255).
+const COLOR_MAX: f32 = 255.0;
+/// Bevy point light intensity at `POINT_LIGHT_REF_RANGE`; scales linearly with range.
+const POINT_LIGHT_INTENSITY: f32 = 2_000_000.0;
+/// Range in quants at which a point light has `POINT_LIGHT_INTENSITY`.
+const POINT_LIGHT_REF_RANGE: f32 = 300.0;
+/// Smallest Bevy point light range (units), keeps off lights valid.
+const MIN_POINT_RANGE: f32 = 0.01;
+/// Full-strength light colour channel of a key light.
+const KEY_FULL: f32 = 250.0;
+/// Orange key light green channel.
+const KEY_ORANGE_G: f32 = 100.0;
 
 pub struct LightsPlugin;
 
@@ -35,19 +48,19 @@ fn sync_point_lights(
 ) {
     for (e, l, children) in &lights {
         let child = children.and_then(|c| c.iter().find(|c| points.contains(*c)));
-        let color = Color::srgb(l.color[0] / 255.0, l.color[1] / 255.0, l.color[2] / 255.0);
+        let color = Color::srgb(l.color[0] / COLOR_MAX, l.color[1] / COLOR_MAX, l.color[2] / COLOR_MAX);
         let range = l.range / QUANTS_PER_UNIT;
-        let intensity = if l.range > 0.0 { 2_000_000.0 * (l.range / 300.0) } else { 0.0 };
+        let intensity = if l.range > 0.0 { POINT_LIGHT_INTENSITY * (l.range / POINT_LIGHT_REF_RANGE) } else { 0.0 };
         match child.and_then(|c| points.get_mut(c).ok()) {
             Some(mut p) => {
                 p.color = color;
-                p.range = range.max(0.01);
+                p.range = range.max(MIN_POINT_RANGE);
                 p.intensity = intensity;
             }
             None => {
                 commands.entity(e).with_child((
                     DynamicPointLight,
-                    PointLight { color, range: range.max(0.01), intensity, shadow_maps_enabled: false, ..default() },
+                    PointLight { color, range: range.max(MIN_POINT_RANGE), intensity, shadow_maps_enabled: false, ..default() },
                     Transform::default(),
                 ));
             }
@@ -70,9 +83,9 @@ fn update_level_lights(
         .collect();
     active.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut data = LightData::default();
-    for (i, (_, p, l)) in active.iter().take(8).enumerate() {
+    for (i, (_, p, l)) in active.iter().take(MAX_LIGHTS).enumerate() {
         data.data[i * 2] = p.extend(l.range / QUANTS_PER_UNIT);
-        data.data[i * 2 + 1] = Vec4::new(l.color[0] / 255.0, l.color[1] / 255.0, l.color[2] / 255.0, 0.0);
+        data.data[i * 2 + 1] = Vec4::new(l.color[0] / COLOR_MAX, l.color[1] / COLOR_MAX, l.color[2] / COLOR_MAX, 0.0);
     }
     if data == *last {
         return;
@@ -97,13 +110,13 @@ pub struct FadingLight {
 /// Light colour of a key colour bitmask (`GemLight` / `DoorLight`, gems.wdl:454-477).
 pub fn key_color(key: u32) -> [f32; 3] {
     match key {
-        1 => [250.0, 0.0, 0.0],
-        2 => [250.0, 250.0, 0.0],
-        3 => [250.0, 100.0, 0.0],
-        4 => [0.0, 0.0, 250.0],
-        5 => [250.0, 0.0, 250.0],
-        6 => [0.0, 250.0, 0.0],
-        _ => [250.0, 250.0, 250.0],
+        1 => [KEY_FULL, 0.0, 0.0],
+        2 => [KEY_FULL, KEY_FULL, 0.0],
+        3 => [KEY_FULL, KEY_ORANGE_G, 0.0],
+        4 => [0.0, 0.0, KEY_FULL],
+        5 => [KEY_FULL, 0.0, KEY_FULL],
+        6 => [0.0, KEY_FULL, 0.0],
+        _ => [KEY_FULL, KEY_FULL, KEY_FULL],
     }
 }
 

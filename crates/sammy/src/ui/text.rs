@@ -127,17 +127,29 @@ impl BitmapText {
 #[derive(Component)]
 struct Glyph;
 
+/// Font sheets: 256 glyph cells laid out 32 per row.
+const GLYPH_COUNT: u32 = 256;
+const GLYPH_COLS: u32 = 32;
+/// Cell sizes of the `ackfont`, `polish1017` and `polish1320` sheets.
+const CELL_STANDARD: Vec2 = Vec2::new(6.0, 9.0);
+const CELL_SMALL: Vec2 = Vec2::new(10.0, 17.0);
+const CELL_HELP: Vec2 = Vec2::new(13.0, 20.0);
+/// Narrow text: an empty glyph is this fraction of the cell wide, and glyphs advance by
+/// their ink plus this gap (px).
+const EMPTY_GLYPH_WIDTH: f32 = 0.4;
+const NARROW_GAP: f32 = 1.0;
+
 fn setup(mut commands: Commands, files: Res<GameFiles>, mut images: ResMut<Assets<Image>>) {
     let mut fonts = HashMap::new();
     for (kind, file, cell) in [
-        (FontKind::Standard, "ackfont.pcx", Vec2::new(6.0, 9.0)),
-        (FontKind::Small, "polish1017.pcx", Vec2::new(10.0, 17.0)),
-        (FontKind::Help, "polish1320.pcx", Vec2::new(13.0, 20.0)),
+        (FontKind::Standard, "ackfont.pcx", CELL_STANDARD),
+        (FontKind::Small, "polish1017.pcx", CELL_SMALL),
+        (FontKind::Help, "polish1320.pcx", CELL_HELP),
     ] {
         let Some(pcx) = files.read(file).ok().and_then(|d| formats::pcx::parse(&d).ok()) else { continue };
-        let ink = (0..256u32)
+        let ink = (0..GLYPH_COUNT)
             .map(|g| {
-                let (gx, gy) = ((g % 32) * cell.x as u32, (g / 32) * cell.y as u32);
+                let (gx, gy) = ((g % GLYPH_COLS) * cell.x as u32, (g / GLYPH_COLS) * cell.y as u32);
                 let cols: Vec<u32> = (0..cell.x as u32)
                     .filter(|&x| {
                         (0..cell.y as u32).any(|y| {
@@ -148,7 +160,7 @@ fn setup(mut commands: Commands, files: Res<GameFiles>, mut images: ResMut<Asset
                     .collect();
                 match (cols.first(), cols.last()) {
                     (Some(&a), Some(&b)) => (a as f32, (b - a + 1) as f32),
-                    _ => (0.0, cell.x * 0.4),
+                    _ => (0.0, cell.x * EMPTY_GLYPH_WIDTH),
                 }
             })
             .collect();
@@ -187,14 +199,14 @@ fn layout_text(mut commands: Commands, fonts: Option<Res<BitmapFonts>>, mut q: Q
                 // Narrow: draw the inked columns only and advance by them + 1 px.
                 let (ix, iw) = if text.narrow { font.ink[b as usize] } else { (0.0, cw) };
                 if b != b' ' {
-                    let (gx, gy) = ((b % 32) as f32 * cw + ix, (b / 32) as f32 * ch);
+                    let (gx, gy) = ((b % GLYPH_COLS as u8) as f32 * cw + ix, (b / GLYPH_COLS as u8) as f32 * ch);
                     p.spawn((
                         Glyph,
                         Node { position_type: PositionType::Absolute, left: px(x), top: px(row as f32 * ch), width: px(iw), height: px(ch), ..default() },
                         ImageNode { image: font.image.clone(), rect: Some(Rect::new(gx, gy, gx + iw, gy + ch)), ..default() },
                     ));
                 }
-                x += if text.narrow { iw + 1.0 } else { cw };
+                x += if text.narrow { iw + NARROW_GAP } else { cw };
                 max_x = max_x.max(x);
             }
         });

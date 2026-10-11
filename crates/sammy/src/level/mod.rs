@@ -24,6 +24,21 @@ pub const SKY_LAYER: RenderLayers = RenderLayers::layer(1);
 /// Render layer for `Near` entities (help signs), drawn last over a cleared depth buffer.
 pub const NEAR_LAYER: RenderLayers = RenderLayers::layer(2);
 
+/// Frame rate a model animator is created with (the A4 default); speeds are then set in
+/// percent via `set_speed_pct`.
+pub const MODEL_FPS: f32 = 8.0;
+/// Animation a model plays without an `anim` from its init: `("stand", speed %)`.
+const DEFAULT_ANIM: (&str, f32) = ("stand", 2.0);
+/// Alpha is a percentage; 100 is opaque.
+const ALPHA_OPAQUE: f32 = 100.0;
+/// Knuth's multiplicative hash and shift: the stand-in for WDL `random(frames)`.
+const START_FRAME_HASH: u32 = 2654435761;
+const START_FRAME_SHIFT: u32 = 7;
+/// `InitBonus3` sprite animation speed (frames per second).
+const BONUS3_FPS: f32 = 48.0;
+/// Sprite alpha-mask cut-off.
+const SPRITE_ALPHA_CUTOFF: f32 = 0.5;
+
 /// Marker for every entity spawned from a WMB object record.
 #[derive(Component)]
 pub struct LevelObject(#[allow(dead_code)] pub Object);
@@ -286,8 +301,8 @@ impl Spawner<'_, '_, '_> {
                 }
                 return;
             }
-            let (scene, pct) = init.anim.unwrap_or(("stand", 2.0));
-            let mut animator = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
+            let (scene, pct) = init.anim.unwrap_or(DEFAULT_ANIM);
+            let mut animator = ModelAnimator::new(model.clone(), Vec::new(), MODEL_FPS);
             animator.play(scene, true, 0.0);
             animator.set_speed_pct(pct, gameplay::player::TICKS);
             let mesh = self.meshes.add(model.build_mesh(animator.frames.first().copied().unwrap_or(0)));
@@ -323,16 +338,16 @@ impl Spawner<'_, '_, '_> {
                 let mut m = self.materials.get(&mat).cloned().unwrap_or_default();
                 m.alpha_mode = AlphaMode::Blend;
                 (self.materials.add(m), None)
-            } else if init.alpha.is_some_and(|a| a < 100.0) {
+            } else if init.alpha.is_some_and(|a| a < ALPHA_OPAQUE) {
                 let mut m = self.materials.get(&mat).cloned().unwrap_or_default();
                 m.alpha_mode = AlphaMode::Blend;
-                m.base_color.set_alpha(init.alpha.unwrap_or(100.0) / 100.0);
+                m.base_color.set_alpha(init.alpha.unwrap_or(ALPHA_OPAQUE) / ALPHA_OPAQUE);
                 (self.materials.add(m), None)
             } else if frames > 1 {
                 let m = self.materials.get(&mat).cloned().unwrap_or_default();
                 // Deterministic stand-in for WDL `random(frames)` start frame.
-                let start = (id.index_u32().wrapping_mul(2654435761) >> 7) % frames;
-                let fps = if obj.action.eq_ignore_ascii_case("initbonus3") { 48.0 } else { 0.0 };
+                let start = (id.index_u32().wrapping_mul(START_FRAME_HASH) >> START_FRAME_SHIFT) % frames;
+                let fps = if obj.action.eq_ignore_ascii_case("initbonus3") { BONUS3_FPS } else { 0.0 };
                 (self.materials.add(m), Some(SpriteAnim { frames, frame: start as f32, fps }))
             } else {
                 (mat, None)
@@ -407,7 +422,7 @@ impl Spawner<'_, '_, '_> {
             .with_inserted_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
         let material = self.materials.add(StandardMaterial {
             base_color_texture: Some(self.images.add(crate::render::image::to_bevy(&img, true, false))),
-            alpha_mode: AlphaMode::Mask(0.5),
+            alpha_mode: AlphaMode::Mask(SPRITE_ALPHA_CUTOFF),
             unlit: true,
             double_sided: true,
             cull_mode: None,

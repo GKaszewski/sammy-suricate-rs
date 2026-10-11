@@ -19,7 +19,7 @@ pub fn init_door_weak(obj: &Object, entity: &mut EntityCommands) {
 pub(crate) fn spawn_wasp(commands: &mut Commands, assets: &GameAssets, meshes: &mut Assets<Mesh>, sfx: &mut Sfx, shot: sammy_core::wasps::Shot, shooter: Entity) {
     let Some(model) = assets.model("wasp1.mdl") else { return };
     let w = sammy_core::wasps::Wasp::new(shot, Some(id(shooter)));
-    let mut anim = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
+    let mut anim = ModelAnimator::new(model.clone(), Vec::new(), crate::level::MODEL_FPS);
     anim.play("walk", true, 0.0);
     anim.set_speed_pct(sammy_core::wasps::WING_ANIM * w.speed(), TICKS);
     sfx.play("Wasp_son");

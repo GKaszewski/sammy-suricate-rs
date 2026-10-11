@@ -1,6 +1,11 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Pickup flash on taking ammo: start range, shrink per tick, cut-off range.
+const TAKE_FLASH: (f32, f32, f32) = (300.0, 15.0, 100.0);
+/// Spread of a wasp's death burst (`wasp_explode`).
+const WASP_BURST_SPREAD: f32 = 2.0;
+
 pub fn spin_pickups(time: Res<Time>, mut q: Query<(&mut Spinning, &mut Transform)>) {
     let t = time.delta_secs() * TICKS;
     for (mut s, mut tf) in &mut q {
@@ -28,7 +33,7 @@ pub fn collect_ammo(
         sfx.play("clog3");
         sfx.play("TakeWasp_son");
         let color = AMMO_COLORS[(a.kind.clamp(1, 7) - 1) as usize];
-        commands.entity(e).insert((Shrinking, crate::render::lights::flash(color, 300.0, 15.0, 100.0)));
+        commands.entity(e).insert((Shrinking, crate::render::lights::flash(color, TAKE_FLASH.0, TAKE_FLASH.1, TAKE_FLASH.2)));
     }
 }
 
@@ -100,7 +105,7 @@ pub fn fly_wasps(
                 }
             }
             let (at, kind) = (w.pos, w.kind);
-            crate::render::effects::queue(&mut commands, move |ps| crate::render::effects::wasp_explode(ps, at, kind, 2.0));
+            crate::render::effects::queue(&mut commands, move |ps| crate::render::effects::wasp_explode(ps, at, kind, WASP_BURST_SPREAD));
             sfx.play(sammy_core::wasps::burst_sound(&mut rng));
             commands.entity(e).despawn();
         }
@@ -176,7 +181,7 @@ pub fn run_hives(
     for (e, mut h, tf) in &mut hives {
         let Some((l, exhausted)) = h.step(&game, &mut rng.0, t) else { continue };
         let Some(model) = assets.model("wasp1.mdl") else { continue };
-        let mut anim = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
+        let mut anim = ModelAnimator::new(model.clone(), Vec::new(), crate::level::MODEL_FPS);
         anim.play("walk", true, 0.0);
         anim.set_speed_pct(sammy_core::wasps::HIVE_WASP_ANIM, TICKS);
         commands.spawn((
@@ -238,7 +243,7 @@ pub fn expire_pickups(time: Res<Time>, mut commands: Commands, mut q: Query<(Ent
             // `InitWaspWed` countdown over: the wasp bursts (bullets.wdl:80-108).
             if let Some(a) = ammo {
                 let (at, kind) = (crate::render::coords::native(tf.translation), a.kind);
-                crate::render::effects::queue(&mut commands, move |ps| crate::render::effects::wasp_explode(ps, at, kind, 2.0));
+                crate::render::effects::queue(&mut commands, move |ps| crate::render::effects::wasp_explode(ps, at, kind, WASP_BURST_SPREAD));
             }
             commands.entity(e).despawn();
         }

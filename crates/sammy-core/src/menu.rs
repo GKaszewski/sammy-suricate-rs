@@ -61,7 +61,7 @@ pub enum Choice {
 }
 
 /// Level icons are `LEVEL_ICON + slot`.
-const LEVEL_ICON: u32 = 100;
+pub const LEVEL_ICON: u32 = 100;
 
 impl Choice {
     pub fn from_code(code: u32) -> Self {
