@@ -1,6 +1,7 @@
 //! Keeping mirrored entities in step: transforms, visibility, lights, animation.
 
 use super::*;
+use sammy_core::percent::Percent;
 
 /// Transforms, visibility, lights and animation of every mirrored entity.
 pub(in crate::scene) fn update(
@@ -53,7 +54,7 @@ pub(in crate::scene) fn update(
         if let (Some(mut view), Some(mut mat)) = (view, mat) {
             let dark = w.menu_items.get(&id).is_some_and(|i| i.dark);
             let frame = w.sprite_anims.get(&id).map(|a| a.frame);
-            let needs_own = view.blend || b.alpha < OPAQUE || dark || (view.frames > 1 && frame.is_some());
+            let needs_own = view.blend || b.alpha < Percent::FULL || dark || (view.frames > 1 && frame.is_some());
             match (needs_own, view.own.clone()) {
                 (true, None) => {
                     let base = materials.get(&view.base).cloned().unwrap_or_default();
@@ -71,7 +72,7 @@ pub(in crate::scene) fn update(
             if let Some(own) = &view.own
                 && let Some(mut m) = materials.get_mut(own)
             {
-                let a = (b.alpha / OPAQUE).clamp(0.0, 1.0);
+                let a = b.alpha.fraction().clamp(0.0, 1.0);
                 let blend = view.blend || a < 1.0;
                 let mode = if blend { AlphaMode::Blend } else { view.base_mode };
                 if m.alpha_mode != mode {

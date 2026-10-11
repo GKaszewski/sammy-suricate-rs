@@ -12,6 +12,7 @@ use crate::id::Id;
 use crate::intro::MENU_ORIGIN;
 use crate::level::Presentation;
 use crate::menu::{Bob, Choice, LEVEL_ICON, Look, MenuAction};
+use crate::percent::Percent;
 
 /// Camera `arc` in the menu (degrees).
 pub const MENU_ARC: f32 = 70.0;
@@ -145,11 +146,11 @@ pub(super) fn step(sim: &mut Sim, dt: Dt) {
                     b.hidden = true;
                     item.code = 0;
                 }
-                Look::Shown { alpha } => b.alpha = alpha,
+                Look::Shown { alpha } => b.alpha = Percent(alpha),
                 Look::Locked { alpha, dark } => {
                     item.locked = true;
                     item.dark = dark;
-                    b.alpha = alpha;
+                    b.alpha = Percent(alpha);
                 }
             }
         }

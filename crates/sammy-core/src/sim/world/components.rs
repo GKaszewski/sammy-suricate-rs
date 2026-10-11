@@ -1,6 +1,7 @@
 //! What an entity looks like: its body, model or sprite, animation and light.
 
 use super::*;
+use crate::percent::Percent;
 
 /// Where an entity is and how it shows (native coordinates, degrees).
 #[derive(Clone, Debug)]
@@ -13,7 +14,7 @@ pub struct Body {
     pub scale: [f32; 3],
     pub hidden: bool,
     /// Opacity in percent (100 = opaque).
-    pub alpha: f32,
+    pub alpha: Percent,
 }
 
 impl Body {
@@ -34,7 +35,7 @@ impl Body {
 }
 
 /// Opacity of an opaque body (percent).
-pub const OPAQUE: f32 = 100.0;
+pub const OPAQUE: Percent = Percent::FULL;
 
 /// How a sprite is turned.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]

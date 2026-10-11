@@ -33,8 +33,6 @@ const SHADOW_PROBE_UP: f32 = 8.0;
 const SHADOW_PROBE_DOWN: f32 = 2000.0;
 const SHADOW_LIFT: f32 = 0.5;
 const SHADOW_ALPHA: f32 = 0.5;
-/// Opacity of an opaque body (percent).
-const OPAQUE: f32 = 100.0;
 /// Grey tint of a darkened (absent) level icon in the menu.
 const DARK_TINT: f32 = 0.35;
 /// Near and far planes (quants).

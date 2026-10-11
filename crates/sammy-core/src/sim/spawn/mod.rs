@@ -14,6 +14,7 @@ pub(super) use self::sprites::{gem_sprite, snap_sprites};
 use crate::collision::{BoxCollider, Brush, Hull};
 use crate::id::Id;
 use crate::level::{Presentation, is_passable};
+use crate::percent::Percent;
 
 /// Frame rate a model animator starts with (the A4 default); speeds are then set in
 /// percent with `set_speed_pct`.
@@ -159,9 +160,9 @@ impl Sim {
             if init.title {
                 look.blend = true;
                 look.near = true;
-            } else if let Some(a) = init.alpha.filter(|a| *a < super::world::OPAQUE) {
+            } else if let Some(a) = init.alpha.filter(|a| Percent(*a) < super::world::OPAQUE) {
                 look.blend = true;
-                body.alpha = a;
+                body.alpha = Percent(a);
             } else if frames > 1 {
                 // Deterministic stand-in for WDL `random(frames)` start frame.
                 let start = ((id.0 as u32).wrapping_mul(START_FRAME_HASH) >> START_FRAME_SHIFT) % frames;

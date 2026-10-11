@@ -6,6 +6,7 @@ use crate::collision::BoxCollider;
 use crate::enemies::{Impact, Out, Shared, World};
 use crate::id::Id;
 use crate::player::{SCALE, State};
+use crate::percent::Percent;
 
 /// Wasp homing and fear tagging.
 pub(super) fn home_wasps(sim: &mut Sim, dt: Dt) {
@@ -125,7 +126,7 @@ pub(super) fn place(sim: &mut Sim) {
             c.solid = solid;
         }
         let Some(b) = w.bodies.get_mut(id) else { continue };
-        b.alpha = e.alpha;
+        b.alpha = Percent(e.alpha);
         if let Some((pos, angles)) = e.pose(a) {
             b.pos = pos;
             b.angles = angles;

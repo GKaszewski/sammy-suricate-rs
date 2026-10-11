@@ -24,8 +24,6 @@ mod update;
 
 pub(super) use self::{spawn::*, update::*};
 
-/// Opacity of an opaque body (percent).
-const OPAQUE: f32 = 100.0;
 /// Grey tint of a darkened (absent) level icon in the menu.
 const DARK_TINT: f32 = 0.35;
 

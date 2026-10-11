@@ -9,6 +9,7 @@ use crate::collision::Hull;
 use crate::id::Id;
 use crate::platforms::{CAMERA_SNAP, Platform, TeleportStep, UNLOCKED_PLATFORM};
 use crate::player::State;
+use crate::percent::Percent;
 
 /// A platform or body and the engine it follows.
 #[derive(Clone, Debug)]
@@ -137,14 +138,14 @@ pub(super) fn run_teleports(sim: &mut Sim, dt: Dt) {
             let alpha = tp.state.alpha;
             w.teleporting.remove(&me);
             if let Some(b) = w.bodies.get_mut(&me) {
-                b.alpha = alpha;
+                b.alpha = Percent(alpha);
             }
             return;
         }
     }
     let alpha = tp.state.alpha;
     if let Some(b) = w.bodies.get_mut(&me) {
-        b.alpha = alpha;
+        b.alpha = Percent(alpha);
     }
 }
 

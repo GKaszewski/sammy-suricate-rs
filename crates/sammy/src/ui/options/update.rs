@@ -16,7 +16,7 @@ pub(super) fn apply(effects: Vec<Effect>, game: &mut Game, storage: &crate::plat
                 exit.write(AppExit::Success);
             }
             Effect::SaveChanged => {
-                volume.volume = bevy::audio::Volume::Linear(game.save.sound / 100.0);
+                volume.volume = bevy::audio::Volume::Linear(game.save.sound.fraction());
                 crate::platform::save::write(storage, &game.save);
             }
         }

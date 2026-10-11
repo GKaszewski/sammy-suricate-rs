@@ -1,4 +1,5 @@
 use super::*;
+use sammy_core::percent::Percent;
 
 #[test]
 fn pad_walks_the_overlay_and_quits_through_the_dialog() {
@@ -25,7 +26,7 @@ fn sliders_step_with_the_pad() {
     o.focus = Some(Control::Slider(Slider::Music));
     let before = save.music;
     let fx = o.update(&Input { nav: Some([-1, 0]), pad: true, ..Default::default() }, &mut save, None);
-    assert_eq!(save.music, (before - SLIDER_STEP).max(0.0));
+    assert_eq!(save.music, Percent((before.get() - SLIDER_STEP).max(0.0)));
     assert_eq!(fx, vec![Effect::SaveChanged]);
     assert_eq!(o.focus, Some(Control::Slider(Slider::Music)));
 }

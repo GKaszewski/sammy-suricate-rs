@@ -5,6 +5,7 @@ use formats::sav::{self, ids};
 use serde::{Deserialize, Serialize};
 
 use crate::levels::{FIRST_OF_WORLD, LAST_OF_WORLD, LEVELS, LevelSlot, NBR_LEVELS};
+use crate::percent::Percent;
 
 mod display;
 mod level_state;
@@ -35,8 +36,8 @@ pub struct SaveGame {
     /// `NumberLastTut/Jump/ThinkLevel` (12 / 28 / 44 as shipped).
     pub last_levels: [LevelSlot; 3],
     /// Option sliders 0..100.
-    pub music: f32,
-    pub sound: f32,
+    pub music: Percent,
+    pub sound: Percent,
     pub joypad: bool,
     /// Port additions: window mode, resolutions and UI size.
     #[serde(default)]
@@ -68,8 +69,8 @@ impl Default for SaveGame {
             extro_seen: false,
             bonus_state: 0,
             last_levels: LAST_OF_WORLD,
-            music: 100.0,
-            sound: 100.0,
+            music: Percent(100.0),
+            sound: Percent(100.0),
             joypad: false,
             display: DisplaySettings::default(),
             readonly: false,
@@ -162,8 +163,8 @@ impl SaveGame {
         s.levels_reached = skill("NbrLevelsReach") as u32;
         s.games_started = skill("NeverPlayed") as u32;
         s.extro_seen = best.var(ids::EXTRO_VUE).unwrap_or(0.0) != 0.0;
-        s.music = best.var(ids::SLIDER_MUSIC).unwrap_or(100.0);
-        s.sound = best.var(ids::SLIDER_SOUND).unwrap_or(100.0);
+        s.music = Percent(best.var(ids::SLIDER_MUSIC).unwrap_or(100.0));
+        s.sound = Percent(best.var(ids::SLIDER_SOUND).unwrap_or(100.0));
         s.joypad = best.var(ids::JOYPAD).unwrap_or(0.0) != 0.0;
         Some(s)
     }

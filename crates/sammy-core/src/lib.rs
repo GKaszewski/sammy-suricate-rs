@@ -27,6 +27,7 @@ pub mod level;
 pub mod levels;
 pub mod menu;
 pub mod physics;
+pub mod percent;
 pub mod pickups;
 pub mod platforms;
 pub mod player;

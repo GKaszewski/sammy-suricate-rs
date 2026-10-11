@@ -1,6 +1,7 @@
 //! Drawing the world in passes: sky, level, entities, shadows, translucent, near.
 
 use super::*;
+use sammy_core::percent::Percent;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Pass {
@@ -71,8 +72,8 @@ impl Scene {
             if look.sky || look.near {
                 continue;
             }
-            let alpha = w.bodies.get(id).map_or(OPAQUE, |b| b.alpha);
-            if look.blend || look.flare || alpha < OPAQUE {
+            let alpha = w.bodies.get(id).map_or(Percent::FULL, |b| b.alpha);
+            if look.blend || look.flare || alpha < Percent::FULL {
                 let d = w.bodies.get(id).map_or(0.0, |b| (Vec3::from(b.pos) - cam.pos).length_squared());
                 translucent.push((d, *id));
             } else {
@@ -174,7 +175,7 @@ impl Scene {
         stats.drawn += 1;
         let lights = &if look.sky || matches!(view, View::Sprite { .. }) { Lights::default() } else { lights.reaching(bounds) };
         let gl = &gfx.gl;
-        let alpha = (b.alpha / OPAQUE).clamp(0.0, 1.0);
+        let alpha = b.alpha.fraction().clamp(0.0, 1.0);
         let tint = if w.menu_items.get(&id).is_some_and(|i| i.dark) { DARK_TINT } else { 1.0 };
         let mut shade = Shade { color: [tint, tint, tint, alpha], unlit: look.sky, ..Default::default() };
         if pass == Pass::Translucent {

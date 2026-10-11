@@ -1,6 +1,7 @@
 //! Dying, respawning and the checkpoint reset.
 
 use super::*;
+use crate::percent::Percent;
 
 /// Hazards under Sammy's feet and running out of health start a death.
 pub(in crate::sim) fn detect_deaths(sim: &mut Sim, dt: Dt) {
@@ -32,7 +33,7 @@ pub(in crate::sim) fn run_death(sim: &mut Sim, dt: Dt) {
     d.step(&mut sim.game, w.animators.get_mut(&me).map(|a| &mut a.anim), victim, dt.t, &mut events);
     let alpha = d.alpha;
     if fading && let Some(b) = w.bodies.get_mut(&me) {
-        b.alpha = alpha;
+        b.alpha = Percent(alpha);
     }
     for ev in events {
         match ev {

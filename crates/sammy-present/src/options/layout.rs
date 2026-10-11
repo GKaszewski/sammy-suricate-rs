@@ -177,7 +177,7 @@ impl Options {
                     let f = match s {
                         Slider::Music => save.music,
                         Slider::Sound => save.sound,
-                    } / SLIDER_MAX;
+                    }.get() / SLIDER_MAX;
                     img("butvol1.pcx", [area[0] + f * (TRACK - THUMB), area[1], THUMB, SLIDER_H])
                 }
                 Control::Row(r) => Element::Text { font: FontKind::Help, narrow: true, bytes: row_label(r, save, display), at: [area[0], area[1]], centre_in: Some(area) },

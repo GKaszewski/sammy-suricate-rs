@@ -84,7 +84,7 @@ impl App {
         let t0 = self.clock.now();
         self.sim.tick(self.game_dt(input.dt), &input.controls, &self.files as &dyn Files);
         self.prof.tick += self.clock.now() - t0;
-        self.audio.set_volume(self.sim.save.sound);
+        self.audio.set_volume(self.sim.save.sound.get());
         self.music.update(&self.sim, self.options.model.mode.is_some(), &mut self.audio, &self.files);
         self.menu.act(&mut self.sim);
         self.game_events(&mut effects);

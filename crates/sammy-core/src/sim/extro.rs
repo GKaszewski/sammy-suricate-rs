@@ -7,6 +7,7 @@ use crate::id::Id;
 use crate::input::Controls;
 use crate::levels::MENU_FILE;
 use crate::player::State;
+use crate::percent::Percent;
 
 /// The fade starts at `FADE_START` and the extro ends at `FADE_FULL` (fog percent).
 const FADE_START: f32 = 1.0;
@@ -119,7 +120,7 @@ pub(super) fn titles(sim: &mut Sim, controls: &Controls, dt: Dt) {
         if let Some(b) = w.bodies.get_mut(id) {
             b.hidden = !shown;
             if shown {
-                b.alpha = title.alpha;
+                b.alpha = Percent(title.alpha);
             }
         }
     }

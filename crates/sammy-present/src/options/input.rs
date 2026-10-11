@@ -1,6 +1,7 @@
 //! The frame's input: hover, clicks, sliders, rows and focus moves.
 
 use super::*;
+use sammy_core::percent::Percent;
 
 impl Options {
     /// One frame: hover, clicks, sliders, rows, focus moves, close / cancel. Settings
@@ -43,12 +44,12 @@ impl Options {
             if self.dragging == Some(*s)
                 && let Some(p) = input.pointer
             {
-                *value = (((p[0] - area[0]) / area[2]).clamp(0.0, 1.0) * SLIDER_MAX).round();
+                *value = Percent((((p[0] - area[0]) / area[2]).clamp(0.0, 1.0) * SLIDER_MAX).round());
             } else if input.pad
                 && self.focus == Some(*c)
                 && let Some(d) = input.nav.filter(|d| d[0] != 0)
             {
-                *value = (*value + SLIDER_STEP * d[0] as f32).clamp(0.0, SLIDER_MAX);
+                *value = Percent((value.get() + SLIDER_STEP * d[0] as f32).clamp(0.0, SLIDER_MAX));
                 out.push(Effect::SaveChanged);
             }
         }

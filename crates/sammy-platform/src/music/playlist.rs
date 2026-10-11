@@ -43,7 +43,7 @@ pub struct Playlist {
     /// The last load's slot (None: menu), once a level was seen.
     last: Option<Option<LevelSlot>>,
     /// The music slider while the options are open.
-    slider: Option<f32>,
+    slider: Option<sammy_core::percent::Percent>,
 }
 
 impl Playlist {
@@ -124,6 +124,6 @@ impl Playlist {
 
     /// `Midi_Vol = Slider_MusicVol` × the song's volume, 0..1.
     pub fn volume(&self, sim: &Sim) -> f32 {
-        sim.save.music / FULL_VOLUME * self.song_volume / FULL_VOLUME
+        sim.save.music.get() / FULL_VOLUME * self.song_volume / FULL_VOLUME
     }
 }
