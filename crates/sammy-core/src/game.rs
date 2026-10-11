@@ -1,6 +1,7 @@
 //! Global game state (the WDL globals of skills.wdl that the actions share).
 
 use formats::wmb::Object;
+use crate::time::Ticks;
 
 pub use crate::keys::MASTER_KEY;
 /// `WindowHeartsOrg`: full health.
@@ -34,7 +35,7 @@ pub struct GameState {
     /// Out of lives (`BallesJoueur1 == 0` after a death).
     pub lost: bool,
     /// Ticks left of the score-panel blink (`WarnScoreGoal`).
-    pub warn_score: f32,
+    pub warn_score: Ticks,
     /// `WindowHearts`: health 0..48.
     pub hearts: f32,
     /// `Player1Start` / `Player1AngleStart`: respawn point (spawn or checkpoint).
@@ -66,7 +67,7 @@ impl Default for GameState {
             goal_reached: false,
             won: false,
             lost: false,
-            warn_score: 0.0,
+            warn_score: Ticks::ZERO,
             hearts: MAX_HEARTS,
             start: None,
             checkpoint: false,

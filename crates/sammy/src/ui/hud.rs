@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 use sammy_present::hud::{DIGIT_GLYPHS, Hud, IMAGES};
-use sammy_core::time::TICKS_PER_SEC as TICKS;
+use sammy_core::time::Secs;
 
 use crate::game::Game;
 use crate::platform::vfs::GameFiles;
@@ -74,7 +74,7 @@ fn update(
     mut root: Query<(Entity, &mut Visibility, Option<&Children>), With<HudRoot>>,
     mut nodes: Query<(&mut Node, &mut ImageNode)>,
 ) {
-    state.tick(&sim.game, time.delta_secs() * TICKS);
+    state.tick(&sim.game, Secs(time.delta_secs()).ticks());
     let (Some(images), Ok((root, mut vis, children)), Ok(win)) = (images, root.single_mut(), windows.single()) else { return };
     *vis = if visible.0 { Visibility::Inherited } else { Visibility::Hidden };
     let size = [win.width() / ui_scale.0, win.height() / ui_scale.0];

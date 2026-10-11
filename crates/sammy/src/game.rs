@@ -8,6 +8,7 @@ use sammy_core::sim::{Event, Sim};
 use crate::platform::audio::Sfx;
 use crate::platform::input::Controls;
 use crate::platform::vfs::GameFiles;
+use sammy_core::time::Secs;
 
 /// The game.
 #[derive(Resource, Deref, DerefMut)]
@@ -41,7 +42,7 @@ pub fn new_game(save: sammy_core::save::SaveGame) -> Game {
 }
 
 fn tick(time: Res<Time>, controls: Res<Controls>, files: Res<GameFiles>, storage: Res<crate::platform::storage::Storage>, mut game: ResMut<Game>, mut sfx: Sfx, mut events: MessageWriter<GameEvent>) {
-    game.tick(time.delta_secs(), &controls.0, &*files);
+    game.tick(Secs(time.delta_secs()), &controls.0, &*files);
     let drained: Vec<Event> = game.drain_events().collect();
     for e in drained {
         match e {

@@ -1,6 +1,7 @@
 //! Sammy firing wasps, and the queued shots of a fan.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Shots still to fire in a fan: (ticks left, pan offset), from one spawn point.
 #[derive(Clone, Debug)]
@@ -76,7 +77,8 @@ pub fn fire(p: &mut Player, anim: &mut Anim, game: &mut GameState, trigger: bool
 impl PendingShots {
     /// Releases due shots (type as of the frame's start, poison at least 1); true once
     /// the fan is done.
-    pub fn release(&mut self, kind: u32, poison: f32, pan: f32, t: f32, out: &mut Vec<Shot>) -> bool {
+    pub fn release(&mut self, kind: u32, poison: f32, pan: f32, t: Ticks, out: &mut Vec<Shot>) -> bool {
+        let t = t.get();
         let spawn = self.spawn;
         self.shots.retain_mut(|(left, off)| {
             *left -= t;

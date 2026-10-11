@@ -40,12 +40,12 @@ fn opens_rises_holds_and_closes() {
     let mut origin = [0.0; 3];
     let mut out = Vec::new();
     let near = DoorView { sammy: [100.0, 0.0, 0.0], sammy_dead: false, blockers: &[] };
-    d.step(&mut origin, &mut game, &near, 1.0, &mut out);
+    d.step(&mut origin, &mut game, &near, Ticks(1.0), &mut out);
     assert_eq!(d.state, DoorState::Rising);
     assert!(out.contains(&DoorEvent::Sound("DoorOpen_son")) && out.contains(&DoorEvent::Flash { color: 1 }));
     let away = DoorView { sammy: [5000.0, 0.0, 0.0], sammy_dead: false, blockers: &[] };
     for _ in 0..40 {
-        d.step(&mut origin, &mut game, &away, 1.0, &mut out);
+        d.step(&mut origin, &mut game, &away, Ticks(1.0), &mut out);
     }
     assert_eq!(d.state, DoorState::Down);
     assert_eq!(origin[2], 0.0);
@@ -61,17 +61,17 @@ fn validated_door_keeps_the_flying_gem() {
     let mut origin = [0.0; 3];
     let mut out = Vec::new();
     let near = DoorView { sammy: [200.0, 0.0, 0.0], sammy_dead: false, blockers: &[] };
-    d.step(&mut origin, &mut game, &near, 1.0, &mut out);
+    d.step(&mut origin, &mut game, &near, Ticks(1.0), &mut out);
     assert!(out.contains(&DoorEvent::LaunchGem { color: 1 }) && d.gem_flying && game.key == 0);
     let under = DoorView { sammy: [50.0, 0.0, 0.0], ..near };
     for _ in 0..20 {
-        d.step(&mut origin, &mut game, &under, 1.0, &mut out);
+        d.step(&mut origin, &mut game, &under, Ticks(1.0), &mut out);
     }
     assert!(out.contains(&DoorEvent::MorphDark));
     assert_eq!(d.state, DoorState::Open);
     assert!(d.gem_flying && d.validated);
     // Walking away no longer recalls it.
     let away = DoorView { sammy: [450.0, 0.0, 0.0], ..near };
-    d.step(&mut origin, &mut game, &away, 1.0, &mut out);
+    d.step(&mut origin, &mut game, &away, Ticks(1.0), &mut out);
     assert!(d.gem_flying);
 }

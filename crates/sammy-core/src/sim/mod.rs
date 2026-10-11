@@ -52,7 +52,7 @@ use crate::physics::JumpParams;
 use crate::player::PlayerTuning;
 use crate::rng::Rng;
 use crate::save::SaveGame;
-use crate::time::{TICKS_PER_SEC, TickClock};
+use crate::time::{Secs, TickClock, Ticks};
 
 /// The game.
 pub struct Sim {
@@ -109,8 +109,8 @@ pub(crate) struct WaspHit {
 /// One frame's time: ticks (`time`) and seconds.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Dt {
-    pub t: f32,
-    pub secs: f32,
+    pub t: Ticks,
+    pub secs: Secs,
 }
 
 impl Sim {

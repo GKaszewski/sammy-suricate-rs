@@ -11,6 +11,7 @@ use crate::input::Controls;
 use crate::intro::{END_KEY, FRICTION, FRICTION_AT, GLIDE_FOG_CLEAR, Logo, MENU_ORIGIN, PLUS_TILT};
 use crate::player::BLOB_HAUT;
 use crate::time::TICKS_PER_SEC;
+use crate::time::Ticks;
 
 /// Intro fog is a percentage; the fog starts fully black.
 const FULL_PERCENT: f32 = 100.0;
@@ -27,7 +28,7 @@ pub struct IntroState {
     pub active: bool,
     /// `MoveMenu`: the camera glides back to the menu pose.
     pub gliding: bool,
-    acc: f32,
+    acc: Ticks,
     ticks: f32,
     /// `Camera.fog` (0..100, black).
     pub fog: f32,
@@ -81,11 +82,11 @@ pub(super) fn tick(sim: &mut Sim, controls: &Controls, dt: Dt) {
     let t = dt.t;
     let nodes: Vec<crate::intro::PathNode> = sim.world.intro_nodes.values().cloned().collect();
     for w in sim.world.walkers.values_mut() {
-        if !w.walking || t <= 0.0 {
+        if !w.walking || t <= Ticks::ZERO {
             continue;
         }
         // Sub-step long frames so the node logic keeps its 1-tick resolution.
-        let n = t.ceil().max(1.0);
+        let n = t.get().ceil().max(1.0);
         for _ in 0..n as u32 {
             w.step(&nodes, t / n);
         }
@@ -94,8 +95,8 @@ pub(super) fn tick(sim: &mut Sim, controls: &Controls, dt: Dt) {
         }
     }
     intro.acc += t;
-    while intro.acc >= 1.0 {
-        intro.acc -= 1.0;
+    while intro.acc >= Ticks(1.0) {
+        intro.acc -= Ticks(1.0);
         if !intro.active {
             continue;
         }

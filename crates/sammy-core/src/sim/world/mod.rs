@@ -110,7 +110,7 @@ world! {
     planks: Table<crate::wasps::Plank>,
     hives: Table<crate::wasps::Hive>,
     hive_wasps: Table<crate::wasps::HiveWasp>,
-    pickup_lifetimes: Table<f32>,
+    pickup_lifetimes: Table<crate::time::Ticks>,
     /// Old-type wasps flying off after a type switch.
     escapees: Table<crate::wasps::Escapee>,
     /// Wasps that hit a lion, recoiling.

@@ -79,7 +79,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim) {
 /// Picked up: shrink ×0.8 per tick, then gone (`Bonus3_Hit`, `ScaleDownGem`). Entities
 /// that can come back (level keys, checkpoints) are hidden instead.
 pub(in crate::sim) fn shrink(sim: &mut Sim, dt: crate::sim::Dt) {
-    let k = SHRINK_PER_TICK.powf(dt.t);
+    let k = SHRINK_PER_TICK.powf(dt.t.get());
     let w = &mut sim.world;
     let mut gone = Vec::new();
     for id in &w.shrinking {

@@ -1,6 +1,7 @@
 //! Menu items bobbing and flipping.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Bob and spin of an `InitMainMenu` / `InitMainTitle` item (interfac.wdl:74-198,
 /// :977-1014): it eases toward ±Skill7 around its origin, flipping when close, and
@@ -48,7 +49,8 @@ impl Bob {
     }
 
     /// One frame; returns the position.
-    pub fn step(&mut self, t: f32) -> [f32; 3] {
+    pub fn step(&mut self, t: Ticks) -> [f32; 3] {
+        let t = t.get();
         self.z += (self.target - self.z) * self.damping * t;
         for i in 0..3 {
             self.angles[i] += self.spin[i] * t;

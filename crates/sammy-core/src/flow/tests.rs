@@ -15,11 +15,11 @@ fn a_win_is_recorded_once() {
     let mut save = SaveGame::default();
     let mut f = LevelFlow { slot: Some(1), file: "10001.wmb".into(), phase: Phase::Playing, intro_ticks: 0.0 };
     let game = GameState { won: true, score: 500, ..Default::default() };
-    assert!(f.step(FlowInput { t: 1.0, ..Default::default() }, &game, &mut save).saved);
+    assert!(f.step(FlowInput { t: Ticks(1.0), ..Default::default() }, &game, &mut save).saved);
     assert_eq!(f.phase, Phase::Won(0.0));
     assert!(save.playable(2));
-    let step = f.step(FlowInput { t: 20.0, ..Default::default() }, &game, &mut save);
+    let step = f.step(FlowInput { t: Ticks(20.0), ..Default::default() }, &game, &mut save);
     assert!(!step.saved && step.load.is_none());
-    let step = f.step(FlowInput { t: 1.0, any: true, ..Default::default() }, &game, &mut save);
+    let step = f.step(FlowInput { t: Ticks(1.0), any: true, ..Default::default() }, &game, &mut save);
     assert_eq!(step.load.as_deref(), Some("10002.wmb"));
 }

@@ -1,6 +1,7 @@
 //! The gem flying into a permanent door.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Gem flying from Sammy into a permanent door (`AnimGemKey`, gems.wdl:1043-1233):
 /// phase 1 at [`SPEED_GEM_KEY`] for ≤80 ticks, phase 2 closes 70 % of the gap per tick
@@ -59,7 +60,8 @@ impl DoorGem {
 
     /// One frame: `Some(true)` arrived (validate the door), `Some(false)` back with Sammy
     /// (return the key), `None` still flying.
-    pub fn fly(&mut self, target: DoorGemTarget, sammy: [f32; 3], t: f32) -> Option<bool> {
+    pub fn fly(&mut self, target: DoorGemTarget, sammy: [f32; 3], t: Ticks) -> Option<bool> {
+        let t = t.get();
         let aim = [target.door_pos[0], target.door_pos[1], target.door_pos[2] + DOOR_AIM_HEIGHT];
         match self.phase {
             DoorGemPhase::Approach => {

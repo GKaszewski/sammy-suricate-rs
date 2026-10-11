@@ -5,7 +5,7 @@ fn run(kind: DeathKind, game: &mut GameState) -> Vec<DeathEvent> {
     let mut out = Vec::new();
     let victim = Victim { pos: [0.0; 3], pan: 0.0, vel: [0.0; 3] };
     for _ in 0..200 {
-        d.step(game, None, victim, 1.0, &mut out);
+        d.step(game, None, victim, Ticks(1.0), &mut out);
     }
     out
 }

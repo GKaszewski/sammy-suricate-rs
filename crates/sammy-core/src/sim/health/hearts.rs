@@ -1,6 +1,7 @@
 //! Hearts and boosts ducking away, growing back and spinning.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Small hearts that ducked away (health was full) shrink, wait and grow back.
 pub(in crate::sim) fn animate_hearts(sim: &mut Sim, dt: Dt) {
@@ -13,15 +14,15 @@ pub(in crate::sim) fn animate_hearts(sim: &mut Sim, dt: Dt) {
         }
         let Some(b) = w.bodies.get_mut(id) else { continue };
         let left = left - t;
-        if left > 0.0 {
-            b.shrink(HEART_AWAY_SHRINK.powf(t));
+        if left > Ticks::ZERO {
+            b.shrink(HEART_AWAY_SHRINK.powf(t.get()));
             if b.scale[1] < HEART_HIDDEN_BELOW {
                 b.hidden = true;
             }
             h.item.away = Some(left);
         } else {
             b.hidden = false;
-            let k = HEART_REGROW.powf(t);
+            let k = HEART_REGROW.powf(t.get());
             b.scale = std::array::from_fn(|i| (b.scale[i].max(HEART_HIDDEN_BELOW) * k).min(h.scale[i]));
             if b.scale[1] >= h.scale[1] {
                 h.item.away = None;

@@ -1,6 +1,7 @@
 //! Ammo pickups lying in the level.
 
 use super::*;
+use crate::time::Ticks;
 
 /// An ammo pickup.
 #[derive(Clone, Copy, Debug)]
@@ -64,5 +65,5 @@ impl AmmoPickup {
 }
 
 /// Hive pickups shrink over their last ticks, then burst.
-pub const PICKUP_FADE: f32 = 16.0;
+pub const PICKUP_FADE: Ticks = Ticks(16.0);
 pub const PICKUP_FADE_SHRINK: f32 = 0.85;

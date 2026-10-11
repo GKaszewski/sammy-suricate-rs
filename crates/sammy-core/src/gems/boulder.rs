@@ -1,6 +1,7 @@
 //! Boulders that launch gems when hit.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A gem to launch (`EjectNewKey`).
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -78,7 +79,8 @@ impl Boulder {
     }
 
     /// Auto mode: a gem every Skill8 ticks.
-    pub fn step(&mut self, rng: &mut Rng, t: f32) -> Option<Launch> {
+    pub fn step(&mut self, rng: &mut Rng, t: Ticks) -> Option<Launch> {
+        let t = t.get();
         if self.period <= 0.0 {
             return None;
         }

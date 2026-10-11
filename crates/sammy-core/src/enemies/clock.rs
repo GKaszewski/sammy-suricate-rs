@@ -1,5 +1,7 @@
 //! The AI's fixed 16 Hz clock.
 
+use crate::time::Ticks;
+
 /// 16 Hz clock for the enemy AI.
 #[derive(Clone, Debug, Default)]
 pub struct AiClock {
@@ -12,7 +14,8 @@ pub struct AiClock {
 
 impl AiClock {
     /// Enemies wait for `PartieEncours == 1` (lion.wdl:143-148); at most 4 ticks per frame.
-    pub fn advance(&mut self, t: f32, playing: bool) {
+    pub fn advance(&mut self, t: Ticks, playing: bool) {
+        let t = t.get();
         if !playing {
             self.ticks = 0;
             return;

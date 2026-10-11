@@ -1,6 +1,7 @@
 //! The follow camera's state and its frame.
 
 use super::*;
+use crate::time::{Secs, Ticks};
 
 /// Follow-camera state in native coordinates.
 #[derive(Clone, Debug, Default)]
@@ -62,7 +63,9 @@ pub struct Subject {
 /// One frame of the follow camera (`t` ticks, `dt` seconds). `sweep`: the level-start
 /// fly-in is running. `sammy` is needed by the type-2 camera.
 #[allow(clippy::too_many_arguments)]
-pub fn follow(st: &mut FollowState, params: &CameraParams, rt: &mut CameraRuntime, level: Option<&Wmb>, pov: Subject, sammy: Option<Subject>, sweep: bool, t: f32, dt: f32) -> Option<CameraPose> {
+pub fn follow(st: &mut FollowState, params: &CameraParams, rt: &mut CameraRuntime, level: Option<&Wmb>, pov: Subject, sammy: Option<Subject>, sweep: bool, t: Ticks, dt: Secs) -> Option<CameraPose> {
+    let t = t.get();
+    let dt = dt.get();
     if rt.cam_type == 0 {
         rt.cam_type = params.start_type;
     }

@@ -137,7 +137,8 @@ impl Particles {
 
     /// Advances the clock by `secs` of game time: the whole 16 Hz ticks elapsing go to
     /// [`Particles::ticks`] (emitters run their per-tick code this often).
-    pub fn advance(&mut self, secs: f32) {
+    pub fn advance(&mut self, secs: sammy_core::time::Secs) {
+        let secs = secs.get();
         self.acc += secs * sammy_core::time::TICKS_PER_SEC;
         self.ticks = (self.acc.floor() as u32).min(MAX_TICKS_PER_FRAME);
         self.acc = (self.acc - self.ticks as f32).min(1.0);

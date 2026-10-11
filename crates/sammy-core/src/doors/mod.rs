@@ -4,6 +4,7 @@
 use formats::wmb::Object;
 
 use crate::game::GameState;
+use crate::time::Ticks;
 
 mod exit;
 mod step;
@@ -32,7 +33,7 @@ const RECALL_MARGIN: f32 = 4.0;
 /// Ticks of the "wrong key" flash.
 const WRONG_KEY_FLASH: f32 = 3.0;
 /// Ticks the score panel blinks when the exit door is refused (`WarnScoreGoal`).
-const WARN_SCORE_TICKS: f32 = 8.0;
+const WARN_SCORE_TICKS: Ticks = Ticks(8.0);
 /// Holds longer than this ring bells: a blink every [`BELL_PERIOD`], `Bell1` in the
 /// last [`BELL_WINDOW`] ticks (but not the very last [`BELL_QUIET`]).
 const BELL_WINDOW: f32 = 48.0;

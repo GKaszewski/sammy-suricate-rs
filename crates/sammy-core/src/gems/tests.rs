@@ -1,4 +1,5 @@
 use super::*;
+use crate::time::Ticks;
 
 #[test]
 fn fates() {
@@ -12,6 +13,6 @@ fn fates() {
 fn door_gem_reaches_a_waiting_door() {
     let mut g = DoorGem::new(2, [0.0; 3]);
     let target = DoorGemTarget { door_pos: [200.0, 0.0, 0.0], wanted: true, validated: false };
-    let arrived = (0..100).find_map(|_| g.fly(target, [0.0; 3], 1.0));
+    let arrived = (0..100).find_map(|_| g.fly(target, [0.0; 3], Ticks(1.0)));
     assert_eq!(arrived, Some(true));
 }

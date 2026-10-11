@@ -1,6 +1,7 @@
 //! The intro's walking Sammy and his path nodes.
 
 use super::*;
+use crate::time::Ticks;
 
 /// The scripted Sammy (`InitPlayerPatrol` :231-329, `MoveSammyonPath` :412-456).
 #[derive(Clone, Debug)]
@@ -81,7 +82,8 @@ impl Walker {
     }
 
     /// `MoveSammyonPath` over `t` ticks (per frame, rates × `time` as in the script).
-    pub fn step(&mut self, nodes: &[PathNode], t: f32) {
+    pub fn step(&mut self, nodes: &[PathNode], t: Ticks) {
+        let t = t.get();
         // PlayerPatrol.
         match self.target {
             None => {

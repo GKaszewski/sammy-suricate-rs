@@ -1,6 +1,7 @@
 //! A dead wasp falling and recoiling.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A wasp that hit a lion (`wasptat` 1004, bullets.wdl:577-644): it stays visible,
 /// puffs `particle_hit1` (counts at ticks after the hit), plays a second death sound,
@@ -52,7 +53,8 @@ impl Corpse {
 
     /// One frame; `trace` sweeps a point through the level (the corpse is passable to
     /// entities).
-    pub fn step(&mut self, anim: Option<&mut Anim>, t: f32, trace: impl Fn([f32; 3], [f32; 3]) -> Trace) -> CorpseStep {
+    pub fn step(&mut self, anim: Option<&mut Anim>, t: Ticks, trace: impl Fn([f32; 3], [f32; 3]) -> Trace) -> CorpseStep {
+        let t = t.get();
         let (before, now) = (self.elapsed, self.elapsed + t);
         self.elapsed = now;
         let due = |at: f32| at >= before && at < now;

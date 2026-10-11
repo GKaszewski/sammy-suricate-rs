@@ -1,6 +1,7 @@
 //! Platform engines: movement along their path.
 
 use super::*;
+use crate::time::Ticks;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EngineState {
@@ -60,7 +61,8 @@ impl Engine {
     }
 
     /// One frame; `trace` sweeps a point through the level (the engine is a tiny sprite).
-    pub fn step(&mut self, boosted: bool, t: f32, trace: impl Fn([f32; 3], [f32; 3]) -> Trace) {
+    pub fn step(&mut self, boosted: bool, t: Ticks, trace: impl Fn([f32; 3], [f32; 3]) -> Trace) {
+        let t = t.get();
         let speed = if boosted { self.speed * BOOST_FACTOR } else { self.speed };
         self.delta = [0.0; 3];
         if !self.unlocked {

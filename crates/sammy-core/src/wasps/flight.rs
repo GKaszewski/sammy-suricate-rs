@@ -1,6 +1,7 @@
 //! A fired wasp in flight.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A flying wasp.
 #[derive(Clone, Debug)]
@@ -67,7 +68,8 @@ impl Wasp {
     }
 
     /// One frame.
-    pub fn step(&mut self, space: &impl Space, sammy: Option<[f32; 3]>, t: f32) -> WaspStep {
+    pub fn step(&mut self, space: &impl Space, sammy: Option<[f32; 3]>, t: Ticks) -> WaspStep {
+        let t = t.get();
         // Types 5/6: climb, hold, ease to level, then a slow dive (HandleVspeed, bullets.wdl:922-948).
         if let Some(mut c) = self.climb {
             if c[0] > 0.0 {

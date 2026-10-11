@@ -11,6 +11,7 @@ use std::path::Path;
 
 use sammy_core::input::Controls;
 use sammy_core::levels::{LEVELS, MENU_FILE, file_for};
+use sammy_core::time::Secs;
 use sammy_core::save::{LevelState, SaveGame};
 use sammy_core::sim::Sim;
 
@@ -91,7 +92,7 @@ fn play(level: &str, seconds: f32, mut script: impl FnMut(u64) -> Controls) -> O
     for f in 0..(seconds * FPS) as u64 {
         // The first frame has no elapsed time (as on an engine's first update).
         let dt = if f == 0 { 0.0 } else { 1.0 / FPS };
-        sim.tick(dt, &script(f), files);
+        sim.tick(Secs(dt), &script(f), files);
         sim.drain_events().for_each(drop);
         if f % SAMPLE == 0 {
             let _ = writeln!(got, "{:5.1}s {}", f as f32 / FPS, digest(&sim));
@@ -250,14 +251,14 @@ fn lions_hurt_sammy() {
     let Some(files) = files() else { return };
     let mut sim = new_sim();
     sim.request_load(file_for(4).unwrap());
-    sim.tick(0.0, &Controls::default(), files);
+    sim.tick(Secs(0.0), &Controls::default(), files);
     let lion = sim.world.enemies.values().map(|e| e.pos).next().expect("a lion");
     sim.debug.start = Some(([lion[0] + 150.0, lion[1], lion[2] + 40.0], Some(180.0)));
     sim.request_load(file_for(4).unwrap());
     let (mut min_hearts, mut lives_lost, mut hits) = (f32::MAX, false, 0);
     let mut last = 48.0;
     for f in 0..(180.0 * FPS) as u64 {
-        sim.tick(if f == 0 { 0.0 } else { 1.0 / FPS }, &Controls::default(), files);
+        sim.tick(if f == 0 { Secs(0.0) } else { Secs(1.0 / FPS) }, &Controls::default(), files);
         hits += sim.drain_events().filter(|e| matches!(e, sammy_core::sim::Event::Sound("Hit1" | "Hit2" | "Hit3"))).count();
         let h = sim.game.hearts;
         min_hearts = min_hearts.min(h);
@@ -274,7 +275,7 @@ fn sim_at(slot: u32, ammo: Option<(i32, u32)>, start: impl Fn(&Sim) -> Option<([
     let files = files()?;
     let mut sim = new_sim();
     sim.request_load(file_for(slot)?);
-    sim.tick(0.0, &Controls::default(), files);
+    sim.tick(Secs(0.0), &Controls::default(), files);
     let (pos, pan) = start(&sim)?;
     sim.debug.start = Some((pos, Some(pan)));
     sim.debug.ammo = ammo;
@@ -290,7 +291,7 @@ fn old_wasps_escape_on_type_switch() {
     let files = files().unwrap();
     let mut most = 0;
     for f in 0..(10.0 * FPS) as u64 {
-        sim.tick(if f == 0 { 0.0 } else { 1.0 / FPS }, &Controls::default(), files);
+        sim.tick(if f == 0 { Secs(0.0) } else { Secs(1.0 / FPS) }, &Controls::default(), files);
         sim.drain_events().for_each(drop);
         most = most.max(sim.world.escapees.len());
     }
@@ -308,7 +309,7 @@ fn wasp_hitting_a_lion_leaves_a_corpse() {
     let (mut most, mut puffs) = (0, 0);
     for f in 0..(20.0 * FPS) as u64 {
         let c = Controls { fire_hit: f % 60 == 30, ..Default::default() };
-        sim.tick(if f == 0 { 0.0 } else { 1.0 / FPS }, &c, files);
+        sim.tick(if f == 0 { Secs(0.0) } else { Secs(1.0 / FPS) }, &c, files);
         puffs += sim.drain_events().filter(|e| matches!(e, sammy_core::sim::Event::Effect(sammy_core::sim::Effect::HitStars { .. }))).count();
         most = most.max(sim.world.wasp_corpses.len());
     }
@@ -316,7 +317,7 @@ fn wasp_hitting_a_lion_leaves_a_corpse() {
     assert!(most > 0, "no corpse");
     assert!(puffs > 0, "no hit puffs");
     for _ in 0..(3.0 * FPS) as u64 {
-        sim.tick(1.0 / FPS, &Controls::default(), files);
+        sim.tick(Secs(1.0 / FPS), &Controls::default(), files);
     }
     assert!(sim.world.wasp_corpses.is_empty(), "corpses vanish after the recoil");
 }

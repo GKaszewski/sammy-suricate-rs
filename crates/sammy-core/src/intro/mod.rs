@@ -6,6 +6,7 @@
 use formats::wmb::Object;
 
 use crate::angle::ang;
+use crate::time::Ticks;
 
 mod logo;
 mod walker;
@@ -14,7 +15,8 @@ pub use self::{logo::*, walker::*};
 
 /// `MoveMenu` (interfac.wdl:625-653): position and angles ease 0.2 per tick toward the
 /// menu pose; true once within 2 quants in X and Z (then snap exactly).
-pub fn glide(pos: &mut [f32; 3], pan: &mut f32, tilt: &mut f32, to: ([f32; 3], f32, f32), t: f32) -> bool {
+pub fn glide(pos: &mut [f32; 3], pan: &mut f32, tilt: &mut f32, to: ([f32; 3], f32, f32), t: Ticks) -> bool {
+    let t = t.get();
     let k = (GLIDE_RATE * t).min(1.0);
     for (p, to) in pos.iter_mut().zip(to.0) {
         *p += (to - *p) * k;

@@ -7,7 +7,6 @@
 
 use sammy_core::flow::Phase;
 use sammy_core::sim::{Event, Sim};
-use sammy_core::time::TICKS_PER_SEC;
 
 use crate::particles::Particles;
 

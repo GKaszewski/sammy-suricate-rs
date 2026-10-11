@@ -4,6 +4,7 @@
 use crate::game::GameState;
 use crate::levels::{EXTRO_SLOT, LAST_OF_WORLD, MENU_FILE, file_for, next_slot};
 use crate::save::{LevelState, SaveGame};
+use crate::time::Ticks;
 
 /// `PartieEncours` / `PartieGagnee` reduced to the phases the port needs.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
@@ -41,7 +42,7 @@ pub struct LevelFlow {
 /// What the flow reads this frame.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FlowInput {
-    pub t: f32,
+    pub t: Ticks,
     /// Enter / Esc / pad: ends the sweep.
     pub skip: bool,
     /// Any key or button this frame.
@@ -67,7 +68,7 @@ impl LevelFlow {
     /// One frame.
     pub fn step(&mut self, input: FlowInput, game: &GameState, save: &mut SaveGame) -> FlowStep {
         let mut out = FlowStep::default();
-        let t = input.t;
+        let t = input.t.get();
         self.phase = match self.phase {
             Phase::Intro => {
                 self.intro_ticks += t;

@@ -4,8 +4,8 @@ use super::*;
 
 impl Sim {
     /// One frame: `secs` of game time (0 while paused) and this frame's input.
-    pub fn tick(&mut self, secs: f32, controls: &Controls, files: &dyn Files) {
-        let dt = Dt { t: secs * TICKS_PER_SEC, secs };
+    pub fn tick(&mut self, secs: Secs, controls: &Controls, files: &dyn Files) {
+        let dt = Dt { t: secs.ticks(), secs };
         if let Some(file) = self.pending_load.take() {
             self.load(&file, files);
         }
@@ -17,7 +17,7 @@ impl Sim {
             && let Some(left) = self.debug.give_up_after.as_mut()
         {
             *left -= secs;
-            if *left <= 0.0 {
+            if *left <= Secs::ZERO {
                 self.debug.give_up_after = None;
                 self.give_up();
             }
@@ -89,7 +89,7 @@ impl Sim {
         extro::titles(self, &controls, dt);
         self.fade_lights(dt);
         // `WarnScoreGoal`: the score panel's blink runs out.
-        self.game.warn_score = (self.game.warn_score - dt.t).max(0.0);
+        self.game.warn_score = (self.game.warn_score - dt.t).max(Ticks::ZERO);
 
         // After the frame: the camera, then what hangs on it.
         camera::follow(self, dt);

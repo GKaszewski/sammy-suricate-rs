@@ -61,7 +61,7 @@ pub(in crate::sim) fn run_eye(sim: &mut Sim, dt: Dt) {
                 events.push(Event::Sound("EyeTruth_Son"));
                 events.push(Event::Effect(Effect::TakeEye { at: b.pos }));
             }
-            EyeStage::Shrinking => b.shrink(crate::eye::SHRINK_RATE.powf(t)),
+            EyeStage::Shrinking => b.shrink(crate::eye::SHRINK_RATE.powf(t.get())),
             EyeStage::Hidden => b.hidden = true,
             EyeStage::Back => {
                 b.hidden = false;

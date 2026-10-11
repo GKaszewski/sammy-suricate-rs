@@ -1,11 +1,13 @@
 //! The frame's game controls from keys, mouse and pads.
 
 use super::*;
+use sammy_core::time::Secs;
 
 impl Input {
 
     /// This frame's controls; clears the frame's presses.
-    pub fn controls(&mut self, dt: f32) -> Controls {
+    pub fn controls(&mut self, dt: Secs) -> Controls {
+        let dt = dt.get();
         let key = |k: &[Keycode]| k.iter().any(|k| self.keys.contains(k));
         let hit = |k: &[Keycode]| k.iter().any(|k| self.pressed.contains(k));
         let btn = |b: Button| self.buttons.contains(&b);

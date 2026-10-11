@@ -1,6 +1,7 @@
 //! The exit tile.
 
 use super::*;
+use crate::time::Ticks;
 
 /// The exit tile: standing on it plays `Win_son`, and the level is won 8 ticks later.
 #[derive(Clone, Debug, Default)]
@@ -13,7 +14,8 @@ pub(super) const EXIT_DELAY: f32 = 8.0;
 
 impl ExitTile {
     /// One frame; returns the sound to play, if any.
-    pub fn step(&mut self, standing_on: bool, game: &mut GameState, t: f32) -> Option<&'static str> {
+    pub fn step(&mut self, standing_on: bool, game: &mut GameState, t: Ticks) -> Option<&'static str> {
+        let t = t.get();
         match self.countdown {
             None if standing_on && !game.won => {
                 self.countdown = Some(EXIT_DELAY);

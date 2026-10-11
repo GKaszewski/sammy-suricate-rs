@@ -5,6 +5,7 @@ use formats::wmb::Object;
 
 use crate::game::GameState;
 use crate::gems::HEIGHT_GEM;
+use crate::time::Ticks;
 
 /// Taken: shrinks for [`SHRINK_TICKS`], stays hidden [`HIDDEN_TICKS`], then grows back.
 pub const HIDDEN_TICKS: f32 = 128.0;
@@ -49,7 +50,8 @@ impl EyePickup {
     }
 
     /// Spins; true if it has a spin.
-    pub fn spin(&mut self, t: f32) -> bool {
+    pub fn spin(&mut self, t: Ticks) -> bool {
+        let t = t.get();
         let Some(spin) = self.spin else { return false };
         for (a, s) in self.angles.iter_mut().zip(spin) {
             *a += s * t;
@@ -58,7 +60,8 @@ impl EyePickup {
     }
 
     /// One frame: taken when Sammy (alive, playing) is within `radius`.
-    pub fn step(&mut self, game: &mut GameState, in_reach: bool, t: f32) -> EyeStage {
+    pub fn step(&mut self, game: &mut GameState, in_reach: bool, t: Ticks) -> EyeStage {
+        let t = t.get();
         match self.away {
             Some(left) => {
                 let left = left - t;
@@ -81,7 +84,8 @@ impl EyePickup {
 }
 
 /// The Eye's effect wears off; dying (`Player_Kaputt`) ends it at once.
-pub fn wear_off(game: &mut GameState, sammy_dead: bool, t: f32) {
+pub fn wear_off(game: &mut GameState, sammy_dead: bool, t: Ticks) {
+    let t = t.get();
     if sammy_dead {
         game.eye_ticks = 0.0;
     }

@@ -4,6 +4,7 @@
 //! HUD pixels; a frontend draws them scaled by [`ui_scale`].
 
 use sammy_core::game::{BOOST_MAX, GameState, MASTER_KEY, MAX_HEARTS, MAX_LIVES};
+use sammy_core::time::Ticks;
 
 /// Mode-6 canvas.
 pub const W: f32 = 640.0;
@@ -60,7 +61,7 @@ const GOAL_POS: (f32, f32) = (499.0, 36.0);
 const GOAL_FLASH_POS: (f32, f32) = (499.0, 34.0);
 const SCORE_DIGITS: u32 = 5;
 /// `WarnScoreGoal`: the goal shows in boink20 while more than this many ticks remain.
-const WARN_FLASH_TICKS: f32 = 4.0;
+const WARN_FLASH_TICKS: Ticks = Ticks(4.0);
 /// Key gem plate (half transparent, top-centre) and the window over the 8-slot strip.
 const GEM_PLATE: Slot = Slot::new(268.0, 5.0, 103.0, 89.0);
 const GEM_ICON: Slot = Slot::new(298.0, 29.0, 42.0, 42.0);
@@ -105,7 +106,8 @@ pub struct Hud {
 
 impl Hud {
     /// Advances by `t` ticks.
-    pub fn tick(&mut self, game: &GameState, t: f32) {
+    pub fn tick(&mut self, game: &GameState, t: Ticks) {
+        let t = t.get();
         self.blink = if game.goal_reached { self.blink + t } else { 0.0 };
     }
 

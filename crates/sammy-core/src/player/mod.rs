@@ -23,7 +23,7 @@ pub const DEFAULT_SPEED: f32 = 25.0;
 /// Skill5 `BlobZoneScan` default: pickup scan radius.
 pub const DEFAULT_SCAN_RADIUS: f32 = 104.0;
 /// A frame advances at most this many ticks (A4's `time_smooth` clamp).
-pub const MAX_STEP: f32 = 4.0;
+pub const MAX_STEP: Ticks = Ticks(4.0);
 
 mod animate;
 mod intent;
@@ -36,6 +36,7 @@ mod walk;
 pub use self::state::{State, Touch};
 pub use self::tuning::PlayerTuning;
 use self::intent::Intent;
+use crate::time::Ticks;
 
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -89,7 +90,7 @@ pub struct Frame<'a, S: Space> {
     /// Classifies an entity he bumped into.
     pub touch: &'a dyn Fn(Id) -> Touch,
     /// Ticks this frame (clamped to [`MAX_STEP`]).
-    pub t: f32,
+    pub t: Ticks,
 }
 
 /// What a step produced besides the new state.
@@ -148,7 +149,7 @@ impl Player {
 
     /// One frame of `HandleSpeedPlayer`.
     pub fn step<S: Space>(&mut self, game: &mut GameState, mut anim: Option<&mut Anim>, f: &Frame<S>, out: &mut StepOut) {
-        let t = f.t.min(MAX_STEP);
+        let t = f.t.min(MAX_STEP).get();
         let start_pos = self.pos;
         self.snap_once(f.space);
         let mut intent = Intent::read(f, self.state);

@@ -9,6 +9,7 @@ use sammy_core::input::Controls;
 use sammy_core::levels::LEVELS;
 use sammy_core::save::SaveGame;
 use sammy_core::sim::Sim;
+use sammy_core::time::{Secs, Ticks};
 
 mod common;
 
@@ -23,7 +24,7 @@ fn gems_stay_inside_the_level() {
         let mut sim = Sim::new(SaveGame { readonly: true, ..Default::default() }, 1);
         sim.request_load(file);
         for f in 0..3 {
-            sim.tick(if f == 0 { 0.0 } else { 1.0 / 60.0 }, &Controls::default(), files);
+            sim.tick(if f == 0 { Secs(0.0) } else { Secs(1.0 / 60.0) }, &Controls::default(), files);
         }
         sim.drain_events().for_each(drop);
         let mut starts: Vec<[f32; 3]> = sim.world.players.values().map(|p| p.pos).collect();
@@ -40,7 +41,7 @@ fn gems_stay_inside_the_level() {
                     let mut collectable = false;
                     for step in 0..2000 {
                         let before = g.pos;
-                        let s = g.step(collectable, &jump, &mut rng, 1.0, |a, b| sim.trace_static(Hull::Point, a, b).trace, &mut Vec::new());
+                        let s = g.step(collectable, &jump, &mut rng, Ticks(1.0), |a, b| sim.trace_static(Hull::Point, a, b).trace, &mut Vec::new());
                         collectable |= s.collectable;
                         let tr = sim.trace_static(Hull::Point, before, g.pos);
                         if tr.trace.hit() && !tr.trace.start_solid {

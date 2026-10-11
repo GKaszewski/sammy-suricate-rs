@@ -10,6 +10,7 @@ use formats::mdl::{Mdl, VertexBuffer};
 use sammy_core::anim::{Anim, Scenes};
 
 use crate::render::coords;
+use sammy_core::time::Secs;
 
 pub struct ModelPlugin;
 
@@ -131,7 +132,7 @@ impl ModelAnimator {
 
 pub fn animate_models(time: Res<Time>, mut meshes: ResMut<Assets<Mesh>>, mut q: Query<(&mut ModelAnimator, &Mesh3d)>) {
     for (mut anim, mesh) in &mut q {
-        let Some(blend) = anim.anim.advance(time.delta_secs()) else { continue };
+        let Some(blend) = anim.anim.advance(Secs(time.delta_secs())) else { continue };
         let Some(mut mesh) = meshes.get_mut(&mesh.0) else { continue };
         let (p, n) = anim.model.blend(blend);
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, VertexAttributeValues::Float32x3(p));

@@ -1,6 +1,7 @@
 //! A door's per-tick behaviour: opening, holding, bells, closing and gems.
 
 use super::*;
+use crate::time::Ticks;
 
 impl Door {
     pub fn from_object(obj: &Object) -> Self {
@@ -42,7 +43,8 @@ impl Door {
     }
 
     /// One frame (`t` ticks); `origin` is the door brush's position, moved here.
-    pub fn step(&mut self, origin: &mut [f32; 3], game: &mut GameState, view: &DoorView, t: f32, out: &mut Vec<DoorEvent>) {
+    pub fn step(&mut self, origin: &mut [f32; 3], game: &mut GameState, view: &DoorView, t: Ticks, out: &mut Vec<DoorEvent>) {
+        let t = t.get();
         let o = *origin;
         let p = view.sammy;
         let horiz = ((o[0] - p[0]).powi(2) + (o[1] - p[1]).powi(2)).sqrt();

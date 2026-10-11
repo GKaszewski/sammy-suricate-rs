@@ -1,6 +1,7 @@
 //! Hives and the wasps they launch.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A hive emitting wasps.
 #[derive(Clone, Debug)]
@@ -67,7 +68,8 @@ impl Hive {
     }
 
     /// One frame; returns a launch and whether the hive is now exhausted.
-    pub fn step(&mut self, game: &GameState, rng: &mut Rng, t: f32) -> Option<(HiveLaunch, bool)> {
+    pub fn step(&mut self, game: &GameState, rng: &mut Rng, t: Ticks) -> Option<(HiveLaunch, bool)> {
+        let t = t.get();
         if self.period <= 0.0 {
             return None;
         }
@@ -129,7 +131,8 @@ impl HiveWasp {
 
     /// One frame; `trace` sweeps a point through the level and map entities. Returns the
     /// pickup it settles into (and that pickup's lifetime, if any).
-    pub fn step(&mut self, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, rng: &mut Rng, t: f32, sounds: &mut Vec<&'static str>) -> Option<(AmmoPickup, Option<f32>)> {
+    pub fn step(&mut self, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, rng: &mut Rng, t: Ticks, sounds: &mut Vec<&'static str>) -> Option<(AmmoPickup, Option<f32>)> {
+        let t = t.get();
         if self.fate == FROZEN {
             return None;
         }

@@ -1,6 +1,7 @@
 //! Dying on hazards and respawning.
 
 use super::*;
+use crate::time::Ticks;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum DeathKind {
@@ -93,7 +94,8 @@ pub struct Dying {
 
 /// Which death (if any) starts this frame: a death tile under Sammy, or no health left
 /// (lava burns it meanwhile).
-pub fn check_death(game: &mut GameState, on_death_tile: bool, on_lava: bool, t: f32) -> Option<DeathKind> {
+pub fn check_death(game: &mut GameState, on_death_tile: bool, on_lava: bool, t: Ticks) -> Option<DeathKind> {
+    let t = t.get();
     if on_lava {
         game.hearts -= LAVA_DAMAGE * t;
     }
@@ -119,7 +121,8 @@ impl Dying {
     }
 
     /// One frame of `t` ticks.
-    pub fn step(&mut self, game: &mut GameState, anim: Option<&mut Anim>, victim: Victim, t: f32, out: &mut Vec<DeathEvent>) {
+    pub fn step(&mut self, game: &mut GameState, anim: Option<&mut Anim>, victim: Victim, t: Ticks, out: &mut Vec<DeathEvent>) {
+        let t = t.get();
         self.ticks += t;
         let mut anim = anim;
         match self.stage {

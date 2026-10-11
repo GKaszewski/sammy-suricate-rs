@@ -9,7 +9,7 @@ use crate::collision::{Hull, Space as _};
 use crate::gems::{FlyingGem, GemGravity, GemLifetime, HEIGHT_GEM, Launch, Rest};
 use crate::id::Id;
 use crate::player::Player;
-use crate::time::TICKS_PER_SEC;
+use crate::time::{TICKS_PER_SEC, Ticks};
 
 /// Gem sprite animation speed (frames per second), backwards for door gems.
 pub(super) const GEM_FPS: f32 = 48.0;
@@ -76,7 +76,7 @@ fn settle(sim: &mut Sim, id: Id, g: &FlyingGem) {
 
 pub(super) fn fly(sim: &mut Sim, dt: Dt) {
     // The original loops run per frame with `mintime = min(time, 1)`.
-    let t = dt.t.min(1.0);
+    let t = dt.t.min(Ticks(1.0));
     let mut settled = Vec::new();
     let mut sounds = Vec::new();
     {

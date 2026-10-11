@@ -1,6 +1,7 @@
 //! Gems flying, bouncing and coming to rest (thrown keys, launched gems).
 
 use super::*;
+use crate::time::Ticks;
 
 pub(super) const THROW_CEILING: f32 = 32.0;
 /// Bounce from which a flying gem can be picked up.
@@ -90,7 +91,8 @@ impl FlyingGem {
 
     /// One frame (`t` ticks, capped at 1 like the original `mintime`). `trace` sweeps a
     /// point against the level and map entities; sounds go to `sounds`.
-    pub fn step(&mut self, collectable: bool, jump: &JumpParams, rng: &mut Rng, t: f32, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, sounds: &mut Vec<&'static str>) -> FlightStep {
+    pub fn step(&mut self, collectable: bool, jump: &JumpParams, rng: &mut Rng, t: Ticks, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, sounds: &mut Vec<&'static str>) -> FlightStep {
+        let t = t.get();
         let mut out = FlightStep::default();
         let floor = {
             let tr = trace(self.pos, [self.pos[0], self.pos[1], self.pos[2] - FLOOR_PROBE]);

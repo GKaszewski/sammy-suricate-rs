@@ -11,6 +11,7 @@ use crate::anim::Anim;
 use crate::game::{GameState, MAX_HEARTS, MAX_LIVES};
 use crate::gems::{Fate, Launch};
 use crate::time::TICKS_PER_SEC;
+use crate::time::Ticks;
 
 mod death;
 mod pickups;
@@ -22,7 +23,7 @@ pub const LAVA_DAMAGE: f32 = 1.0;
 /// `InitSmallHeart` Skill2 default.
 const SMALL_HEART_DEFAULT: f32 = 12.0;
 /// A heart touched at full health ducks away for this long.
-pub const HEART_AWAY: f32 = 48.0;
+pub const HEART_AWAY: Ticks = Ticks(48.0);
 /// ... shrinking ×0.8 per tick, hidden below 0.1, then growing back ×1.5 per tick.
 pub const HEART_AWAY_SHRINK: f32 = 0.8;
 pub const HEART_HIDDEN_BELOW: f32 = 0.1;
@@ -31,8 +32,8 @@ pub const HEART_REGROW: f32 = 1.5;
 const BOOST_DEFAULT: f32 = 1.0;
 /// A boost pickup touched while the boost is full: shrinks ×0.9 per tick for 40 ticks,
 /// is hidden for 64, then comes back.
-pub const BOOST_HIDDEN: f32 = 64.0;
-pub const BOOST_AWAY: f32 = BOOST_HIDDEN + 40.0;
+pub const BOOST_HIDDEN: Ticks = Ticks(64.0);
+pub const BOOST_AWAY: Ticks = Ticks(BOOST_HIDDEN.get() + 40.0);
 pub const BOOST_AWAY_SHRINK: f32 = 0.9;
 /// A checkpoint respawns Sammy this far above it.
 pub const CHECKPOINT_RESPAWN_HEIGHT: f32 = 150.0;

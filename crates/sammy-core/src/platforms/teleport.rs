@@ -1,6 +1,7 @@
 //! Teleport pads and Sammy being teleported.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A teleport pad.
 #[derive(Clone, Debug)]
@@ -60,7 +61,8 @@ impl Teleporting {
         Self { dest: pad.dest, pan: pad.pan, stage: TeleportStage::Settle(SETTLE_TICKS), alpha: 100.0 }
     }
 
-    pub fn step(&mut self, t: f32) -> TeleportStep {
+    pub fn step(&mut self, t: Ticks) -> TeleportStep {
+        let t = t.get();
         let mut out = TeleportStep::Fading;
         self.stage = match self.stage {
             TeleportStage::Settle(left) if left - t > 0.0 => TeleportStage::Settle(left - t),

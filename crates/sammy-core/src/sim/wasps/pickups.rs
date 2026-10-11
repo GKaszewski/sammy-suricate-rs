@@ -1,6 +1,7 @@
 //! Ammo pickups: spawning, spinning, taking and expiring.
 
 use super::*;
+use crate::time::Ticks;
 
 /// `InitAmmo1`: the type's skin and size; the overlay look unless Flag3 (flare).
 pub(in crate::sim) fn init_ammo(w: &mut World, id: Id, obj: &mut Object) -> Presentation {
@@ -68,9 +69,9 @@ pub(in crate::sim) fn expire_pickups(sim: &mut Sim, dt: Dt) {
         *life -= dt.t;
         let Some(b) = w.bodies.get_mut(id) else { continue };
         if *life < PICKUP_FADE {
-            b.shrink(PICKUP_FADE_SHRINK.powf(dt.t));
+            b.shrink(PICKUP_FADE_SHRINK.powf(dt.t.get()));
         }
-        if *life <= 0.0 {
+        if *life <= Ticks::ZERO {
             // `InitWaspWed` countdown over: the wasp bursts (bullets.wdl:80-108).
             if let Some(a) = w.ammo_pickups.get(id) {
                 events.push(Event::Effect(Effect::WaspExplode { at: b.pos, kind: a.kind, spread: WASP_BURST_SPREAD }));

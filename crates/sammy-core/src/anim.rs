@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use formats::mdl::Mdl;
+use crate::time::Secs;
 
 /// A model's scenes: name → frame indices (from the MDL frame names).
 #[derive(Debug, Default)]
@@ -81,7 +82,8 @@ impl Anim {
 
     /// Advances by `secs`; returns the two model frames to blend and the blend factor,
     /// or `None` for a still scene (fewer than two frames).
-    pub fn advance(&mut self, secs: f32) -> Option<(usize, usize, f32)> {
+    pub fn advance(&mut self, secs: Secs) -> Option<(usize, usize, f32)> {
+        let secs = secs.get();
         if self.frames.len() < 2 {
             return None;
         }

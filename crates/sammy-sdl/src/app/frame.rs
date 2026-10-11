@@ -2,6 +2,7 @@
 
 use sammy_core::input::Controls;
 use sammy_core::sim::{Event, Files};
+use sammy_core::time::Secs;
 use sammy_present::options::{DisplayInfo, Effect};
 
 use super::App;
@@ -16,7 +17,7 @@ const SOUND_VOLUME: f32 = 100.0;
 
 /// The frame's input and window size.
 pub(super) struct FrameInput {
-    pub(super) dt: f32,
+    pub(super) dt: Secs,
     pub(super) controls: Controls,
     pub(super) pointer: Pointer,
     /// Drawable size in pixels.
@@ -62,7 +63,7 @@ impl App {
         }
         let now = self.clock.now();
         // The first frame has no elapsed time (as on the Bevy frontend's first update).
-        let dt = self.clock.last.map_or(0.0, |last| ((now - last) as f32).min(MAX_FRAME));
+        let dt = Secs(self.clock.last.map_or(0.0, |last| ((now - last) as f32).min(MAX_FRAME)));
         self.clock.last = Some(now);
         let size = self.video.window.drawable_size();
         let (w, h) = (size.0 as f32, size.1 as f32);
@@ -78,7 +79,7 @@ impl App {
         let screen = menu::Screen { scene: &self.scene, cam: self.last_cam.as_ref(), size: input.window_px() };
         self.menu.pick(&mut self.sim, &screen, &input.controls, &input.pointer, &mut self.audio);
         if self.frames < super::TRACED_FRAMES {
-            log::info!("frame {}: tick dt {:.3}", self.frames, input.dt);
+            log::info!("frame {}: tick dt {:.3}", self.frames, input.dt.get());
         }
         let t0 = self.clock.now();
         self.sim.tick(self.game_dt(input.dt), &input.controls, &self.files as &dyn Files);
@@ -91,14 +92,14 @@ impl App {
         effects.extend(self.options.update(&mut self.sim, &input.controls, &input.pointer, &self.painter, info.as_ref()));
         self.apply(effects);
         self.display.apply(&self.video.video, &mut self.video.window, &self.sim.save.display);
-        self.hud.tick(&self.sim.game, self.game_dt(input.dt) * sammy_core::time::TICKS_PER_SEC);
+        self.hud.tick(&self.sim.game, self.game_dt(input.dt).ticks());
         self.frames += 1;
         info
     }
 
     /// Game time of a frame: none while paused.
-    fn game_dt(&self, dt: f32) -> f32 {
-        if self.paused { 0.0 } else { dt }
+    fn game_dt(&self, dt: Secs) -> Secs {
+        if self.paused { Secs::ZERO } else { dt }
     }
 
     /// The game's events: effects, sounds, saves and the options it opens.

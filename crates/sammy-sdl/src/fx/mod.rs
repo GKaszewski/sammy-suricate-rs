@@ -63,7 +63,7 @@ impl Fx {
     }
 
     /// Advances `secs` of game time: the emitters, the extras, the particles.
-    pub fn update(&mut self, sim: &Sim, cam: Option<&Camera>, secs: f32) {
+    pub fn update(&mut self, sim: &Sim, cam: Option<&Camera>, secs: sammy_core::time::Secs) {
         self.particles.advance(secs);
         if sim.flow.phase != sammy_core::flow::Phase::Intro {
             sammy_present::effects::emit_trails(&mut self.particles, sim);

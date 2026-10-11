@@ -1,6 +1,7 @@
 //! Weak doors that wasps break, and their planks.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A door wasps can break (`InitDoorWeak`).
 #[derive(Clone, Copy, Debug)]
@@ -75,7 +76,8 @@ impl Plank {
     }
 
     /// One frame; returns (bounce sound, gone).
-    pub fn step(&mut self, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, t: f32) -> (bool, bool) {
+    pub fn step(&mut self, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, t: Ticks) -> (bool, bool) {
+        let t = t.get();
         self.v[2] -= PLANK_GRAVITY * t;
         let target = [0, 1, 2].map(|i| self.pos[i] + self.v[i] * t);
         let hit = trace(self.pos, target);

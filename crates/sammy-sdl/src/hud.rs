@@ -32,7 +32,7 @@ impl HudView {
         Self { hud: Hud::default(), images }
     }
 
-    pub fn tick(&mut self, game: &GameState, t: f32) {
+    pub fn tick(&mut self, game: &GameState, t: sammy_core::time::Ticks) {
         self.hud.tick(game, t);
     }
 

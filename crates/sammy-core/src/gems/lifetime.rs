@@ -1,6 +1,7 @@
 //! Runtime gems' lifetime, gravity and surprise colours.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Remaining lifetime (Skill9) of a runtime gem; counts down once it rests.
 #[derive(Clone, Debug)]
@@ -18,7 +19,8 @@ impl GemLifetime {
     }
 
     /// Counts down; true when the gem bursts (`GemExplose`).
-    pub fn tick(&mut self, t: f32) -> bool {
+    pub fn tick(&mut self, t: Ticks) -> bool {
+        let t = t.get();
         self.ticks -= t;
         self.ticks <= 0.0
     }
@@ -32,7 +34,8 @@ pub struct GemGravity {
 
 impl GemGravity {
     /// New height for a gem at `z` above `floor`.
-    pub fn fall(&self, z: f32, floor: f32, jump: &JumpParams, t: f32) -> f32 {
+    pub fn fall(&self, z: f32, floor: f32, jump: &JumpParams, t: Ticks) -> f32 {
+        let t = t.get();
         if z > floor + self.rest { (z + jump.gravity * t).max(floor + self.rest) } else { floor + self.rest }
     }
 }
@@ -59,7 +62,8 @@ impl Surprise {
     }
 
     /// Counts down; returns the new colour when it becomes collectable.
-    pub fn step(&mut self, color: u32, rng: &mut Rng, t: f32) -> Option<u32> {
+    pub fn step(&mut self, color: u32, rng: &mut Rng, t: Ticks) -> Option<u32> {
+        let t = t.get();
         if self.delay <= 0.0 {
             return None;
         }

@@ -1,6 +1,7 @@
 //! Hearts, boosts and checkpoints.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A small heart (health).
 #[derive(Clone, Debug)]
@@ -8,7 +9,7 @@ pub struct SmallHeart {
     /// Skill2: health restored.
     pub amount: f32,
     /// Health was full: ducked away for this many more ticks.
-    pub away: Option<f32>,
+    pub away: Option<Ticks>,
     /// Snap to the floor (Flag6 keeps the WED height).
     pub snap: bool,
 }
@@ -37,7 +38,7 @@ pub struct BoostPickup {
     /// Skill2: boost units refilled.
     pub amount: f32,
     /// Boost was full: away for this many more ticks.
-    pub away: Option<f32>,
+    pub away: Option<Ticks>,
 }
 
 impl BoostPickup {

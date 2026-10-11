@@ -3,6 +3,7 @@
 //! out, and can be dismissed with Enter. One-shot.
 
 use formats::wmb::Object;
+use crate::time::Ticks;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Phase {
@@ -53,7 +54,8 @@ impl Title {
     }
 
     /// One frame; `nearest` is the nearest scanner's distance. Returns whether shown.
-    pub fn step(&mut self, nearest: Option<f32>, enter: bool, t: f32) -> bool {
+    pub fn step(&mut self, nearest: Option<f32>, enter: bool, t: Ticks) -> bool {
+        let t = t.get();
         let near = nearest.is_some_and(|d| d <= self.range);
         self.phase = match self.phase {
             Phase::Waiting if near => Phase::FadeIn,

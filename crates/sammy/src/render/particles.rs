@@ -16,13 +16,14 @@ use crate::camera::MainCamera;
 use crate::game::{Game, GameEvent};
 use crate::render::coords;
 use crate::scene::Loader;
+use sammy_core::time::Secs;
 
 pub struct ParticlePlugin;
 
 impl Plugin for ParticlePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Particles>()
-            .add_systems(PreUpdate, |time: Res<Time>, mut ps: ResMut<Particles>| ps.advance(time.delta_secs()))
+            .add_systems(PreUpdate, |time: Res<Time>, mut ps: ResMut<Particles>| ps.advance(Secs(time.delta_secs())))
             .add_systems(
                 Update,
                 (play_effects, emit.run_if(|g: Res<Game>| g.flow.phase != sammy_core::flow::Phase::Intro)).chain().after(crate::game::GameSystems::Tick),

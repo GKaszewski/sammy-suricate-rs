@@ -34,9 +34,9 @@ impl Extras {
 
     /// Advances `secs` of game time seen from `view`; the lose title smokes into
     /// `particles` (once per particle tick).
-    pub fn update(&mut self, sim: &Sim, view: View, secs: f32, particles: &mut Particles) {
+    pub fn update(&mut self, sim: &Sim, view: View, secs: sammy_core::time::Secs, particles: &mut Particles) {
         self.view = view;
-        let t = secs * TICKS_PER_SEC;
+        let t = secs.ticks().get();
         self.wasp_pan += WASP_SPIN * t;
         if matches!(sim.flow.phase, Phase::Won(_) | Phase::Lost(_)) {
             self.sun[0] += SUN_SPIN_RATE * t;

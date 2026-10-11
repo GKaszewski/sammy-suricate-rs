@@ -1,6 +1,7 @@
 //! Camera zones (`SetCamera`) and the respawn reset.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A camera zone (`SetCamera`, camera.wdl:958-1173).
 #[derive(Clone, Debug)]
@@ -22,7 +23,8 @@ impl CameraZone {
 /// `SetCameraHit`: Sammy's per-tick id-25 scan (radius 500) arms a zone when the camera
 /// differs and the zone sees Sammy; a tick later, within Skill7, it blends distance,
 /// height, back angle and PlusTilt over Skill6+1 steps, snaps, and re-arms.
-pub fn camera_zones(t: f32, level: &Wmb, params: &mut CameraParams, rt: &mut CameraRuntime, scanners: &Scanners, zones: &mut [(Id, &mut CameraZone)]) {
+pub fn camera_zones(t: Ticks, level: &Wmb, params: &mut CameraParams, rt: &mut CameraRuntime, scanners: &Scanners, zones: &mut [(Id, &mut CameraZone)]) {
+    let t = t.get();
     rt.acc += t;
     while rt.acc >= 1.0 {
         rt.acc -= 1.0;

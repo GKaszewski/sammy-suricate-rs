@@ -1,6 +1,7 @@
 //! Wasps escaping when Sammy drops his ammo.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Escaping wasps on a type switch: at most this many, shown at half size, for this many
 /// ticks, turning `ESCAPE_SPIN` degrees per tick (bullets.wdl:749-921).
@@ -33,7 +34,8 @@ impl Escapee {
     }
 
     /// One frame; true when it is gone.
-    pub fn step(&mut self, t: f32) -> bool {
+    pub fn step(&mut self, t: Ticks) -> bool {
+        let t = t.get();
         let dir = forward(self.pan, self.tilt);
         for (p, d) in self.pos.iter_mut().zip(dir) {
             *p += d * self.speed * t;

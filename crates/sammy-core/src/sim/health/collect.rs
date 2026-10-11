@@ -1,6 +1,7 @@
 //! Taking hearts, boosts and checkpoints.
 
 use super::*;
+use crate::time::Ticks;
 
 /// A pickup that ducks away and grows back to its level size.
 #[derive(Clone, Debug)]
@@ -68,11 +69,11 @@ pub(in crate::sim) fn collect(sim: &mut Sim, dt: Dt) {
             // Ducked away because boost was full: shrink, hide, grow back.
             let left = left - dt.t;
             if left > BOOST_HIDDEN {
-                body.shrink(BOOST_AWAY_SHRINK.powf(dt.t));
+                body.shrink(BOOST_AWAY_SHRINK.powf(dt.t.get()));
             } else {
                 body.hidden = true;
             }
-            if left <= 0.0 {
+            if left <= Ticks::ZERO {
                 body.hidden = false;
                 body.scale = b.scale;
                 b.item.away = None;

@@ -21,6 +21,7 @@ mod world;
 
 pub(super) use self::{hud::*, world::*};
 use self::build::*;
+use sammy_core::time::Secs;
 
 /// The extras' state as a resource.
 #[derive(Resource, Default, Deref, DerefMut)]
@@ -57,5 +58,5 @@ pub(super) fn update(
         extras.event(&game, e);
     }
     let view = cam.single().map_or(View::default(), |g| View::looking(coords::native(g.translation()), coords::native(g.forward().as_vec3())));
-    extras.update(&game, view, time.delta_secs(), &mut particles);
+    extras.update(&game, view, Secs(time.delta_secs()), &mut particles);
 }

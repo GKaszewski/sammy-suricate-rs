@@ -1,6 +1,7 @@
 //! Hives and their wasps.
 
 use super::*;
+use crate::time::Ticks;
 
 pub(in crate::sim) fn hives(sim: &mut Sim, dt: Dt) {
     if !sim.playing() {
@@ -49,7 +50,7 @@ pub(in crate::sim) fn hive_wasps(sim: &mut Sim, dt: Dt) {
         w.ammo_pickups.insert(id, pickup);
         w.spinning.insert(id, angles);
         if let Some(l) = lifetime {
-            w.pickup_lifetimes.insert(id, l);
+            w.pickup_lifetimes.insert(id, Ticks(l));
         }
     }
 }
