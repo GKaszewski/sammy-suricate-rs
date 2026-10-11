@@ -135,7 +135,7 @@ pub fn is_passable(action: &str) -> bool {
 /// and hide the entity (mm1.wdl InitGame*, InitCamera*, ...).
 fn is_marker(action: &str) -> bool {
     const PREFIXES: &[&str] = &[
-        "initgame", "initcamera", "setcamera", "initextraballes", "initnextraballes", "initpublic", "initinvisible",
+        "initgame", "initcamera", "initextraballes", "initnextraballes", "initpublic", "initinvisible",
         "initset", "initprotection", "initlionskills", "initrangemdl",
     ];
     PREFIXES.iter().any(|p| action.starts_with(p))
@@ -192,6 +192,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
                 }
             });
         }
+        "initcamera3" => {
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<CameraParams>().apply_init_camera3(&o));
+        }
         "initcamera2" => {
             let o = obj.clone();
             entity.commands().queue(move |w: &mut World| w.resource_mut::<CameraParams>().apply_init_camera2(&o));
@@ -243,6 +247,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initboost" => {
             health::init_boost(obj, entity);
             ActionInit { anim: Some(("stand", 10.0)), ..default() }
+        }
+        "setcamera" => {
+            crate::camera::init_zone(obj, entity);
+            ActionInit { hidden_but_alive: true, ..default() }
         }
         "initeyeoftruth" => {
             fx::init_eye(obj, entity);
