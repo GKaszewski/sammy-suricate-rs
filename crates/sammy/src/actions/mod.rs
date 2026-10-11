@@ -62,6 +62,9 @@ impl Plugin for ActionsPlugin {
                         wasp::fly_wasps,
                         wasp::update_weak_doors,
                         wasp::fly_planks,
+                        wasp::run_hives.run_if(is_playing),
+                        wasp::fly_hive_wasps,
+                        wasp::expire_pickups,
                     )
                         .chain(),
                     (
@@ -119,7 +122,7 @@ fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
 /// Map entities the player walks through (pickups, triggers).
 pub fn is_passable(action: &str) -> bool {
     let a = action.to_ascii_lowercase();
-    ["initrestart", "initbonusvie", "initeyeoftruth", "initsmallheart"].contains(&a.as_str())
+    ["initrestart", "initbonusvie", "initeyeoftruth", "initsmallheart", "inithive"].contains(&a.as_str())
 }
 
 /// Config and marker entities: their actions only read skills into globals
@@ -250,6 +253,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initammo1" => {
             let (skin, anim) = wasp::init_ammo(obj, entity);
             ActionInit { skin: Some(skin), anim: Some(("stand", anim)), ..default() }
+        }
+        "inithive" => {
+            wasp::init_hive(obj, entity);
+            ActionInit::default()
         }
         "initdoorweak" => {
             wasp::init_door_weak(obj, entity);

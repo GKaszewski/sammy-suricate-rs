@@ -458,3 +458,221 @@ pub fn fly_planks(time: Res<Time>, world: CollisionWorld, mut sfx: Sfx, mut comm
         }
     }
 }
+
+/// Hive (`InitHive`/`EmitWasp`, bullets.wdl:1197-1321; docs/wasps.md §8).
+#[derive(Component)]
+pub struct Hive {
+    /// Skill1: launched wasp fate (0 decorative, 1-999 lifetime ticks, 1000 stays, 1001 frozen).
+    fate: f32,
+    /// Skill2: random pan spread.
+    spread: f32,
+    /// int(Skill3): wasps left (9990 = unlimited); frac×100: cap on Sammy's ammo.
+    total: f32,
+    cap: i32,
+    /// Skill4 / Skill7: vertical and horizontal launch speed.
+    vz: f32,
+    hspeed: f32,
+    /// Skill6: wasp type (999 = random 1-6).
+    kind: u32,
+    /// Skill8: emission period (0 = never).
+    period: f32,
+    timer: f32,
+    pan: f32,
+    pos: [f32; 3],
+}
+
+pub fn init_hive(obj: &Object, entity: &mut EntityCommands) {
+    let s = &obj.skills;
+    let cap = ((s[2] - s[2].trunc()) * 100.0 + 0.5).trunc() as i32;
+    let total = s[2].trunc();
+    entity.insert(Hive {
+        fate: s[0],
+        spread: s[1],
+        total: if total == 0.0 { 9990.0 } else { total },
+        cap: if cap == 0 { 10 } else { cap },
+        vz: s[3],
+        hspeed: s[6],
+        kind: s[5] as u32,
+        period: s[7],
+        timer: 32.0 + s[7], // `waitt 32` before the first period
+        pan: obj.angles[0],
+        pos: obj.origin,
+    });
+}
+
+/// A wasp launched by a hive, bouncing until it settles into a pickup.
+#[derive(Component)]
+pub struct HiveWasp {
+    kind: u32,
+    pos: [f32; 3],
+    pan: f32,
+    tilt: f32,
+    speed: f32,
+    vz: f32,
+    vz_org: f32,
+    bounces: f32,
+    fate: f32,
+}
+
+/// Remaining lifetime of a hive-emitted pickup (fades over its last 16 ticks).
+#[derive(Component)]
+pub struct PickupLifetime(f32);
+
+/// Hive wasp pickup table (`initSkinScaleWaspHive2`): (poison, scale).
+const HIVE_PICKUP: [(f32, f32); 7] = [(3.0, 1.0), (2.0, 1.0), (1.0, 0.8), (1.0, 0.8), (4.0, 1.0), (5.0, 1.0), (1.0, 0.8)];
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_hives(
+    time: Res<Time>,
+    mut commands: Commands,
+    game: Res<GameState>,
+    mut rng: ResMut<Rng>,
+    assets: Res<GameAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut hives: Query<(Entity, &mut Hive)>,
+) {
+    let t = time.delta_secs() * TICKS;
+    for (e, mut h) in &mut hives {
+        if h.period <= 0.0 {
+            continue;
+        }
+        h.timer -= t;
+        if h.timer > 0.0 {
+            continue;
+        }
+        h.timer += h.period;
+        if game.ammo >= h.cap && game.ammo_type == h.kind {
+            continue; // capped: the hive looks empty
+        }
+        let kind = if h.kind == 999 { rng.random(6.0) as u32 + 1 } else { h.kind.clamp(1, 7) };
+        let pan = if h.spread != 0.0 { h.pan + rng.random(h.spread) - rng.random(h.spread * 0.5) } else { h.pan };
+        let launch = [h.hspeed + rng.random(5.0), h.vz + rng.random(4.0)];
+        h.total -= 1.0;
+        let Some(model) = assets.model("wasp1.mdl") else { continue };
+        let mut anim = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
+        anim.play("walk", true, 0.0);
+        anim.set_speed_pct(20.0, TICKS);
+        let scale = HIVE_PICKUP[(kind - 1) as usize].1;
+        let tilt = rng.random(20.0) + 20.0;
+        commands.spawn((
+            Name::new("hive wasp"),
+            crate::flow::LevelScoped,
+            Mesh3d(meshes.add(model.build_mesh(0))),
+            MeshMaterial3d(model.skin(kind)),
+            Transform { translation: coords::pos(h.pos), rotation: coords::rotation([pan, tilt, 0.0]), scale: Vec3::splat(scale) },
+            anim,
+            HiveWasp {
+                kind,
+                pos: h.pos,
+                pan,
+                tilt,
+                speed: (launch[0].abs() + 5.0).max(15.0),
+                vz: launch[1],
+                vz_org: launch[1],
+                bounces: h.fate, // bounce counter shares the lifetime slot (original quirk)
+                fate: h.fate,
+            },
+        ));
+        if h.total <= 0.0 {
+            commands.entity(e).despawn(); // exhausted: the hive bursts (particles TBD)
+        }
+    }
+}
+
+/// `LaunchNewWasp` flight: ballistic hops with damped bounces until it settles,
+/// then it becomes a 1-ammo pickup with a lifetime of fate + bounces.
+pub fn fly_hive_wasps(
+    time: Res<Time>,
+    world: CollisionWorld,
+    mut commands: Commands,
+    mut sfx: Sfx,
+    mut rng: ResMut<Rng>,
+    mut q: Query<(Entity, &mut HiveWasp, &mut Transform)>,
+) {
+    let t = time.delta_secs() * TICKS;
+    for (e, mut w, mut tf) in &mut q {
+        if w.fate == 1001.0 {
+            continue; // frozen at spawn forever
+        }
+        let ground = {
+            let tr = world.trace_static(0, w.pos, [w.pos[0], w.pos[1], w.pos[2] - 2000.0]).trace;
+            if tr.hit() { tr.end[2] } else { w.pos[2] - 2000.0 }
+        };
+        if w.vz == 0.0 && w.pos[2] - ground > 26.0 {
+            w.vz = -2.0;
+        }
+        let mut vstep = 0.0;
+        if w.vz != 0.0 {
+            w.vz -= 1.5 * t;
+            if w.pos[2] < ground + 25.0 {
+                w.bounces += 1.0;
+                if w.speed > 0.5 {
+                    if w.vz_org > 15.0 {
+                        sfx.play(["WaspKaputt_son", "WaspKaputt2_son", "WaspKaputt3_son"][(rng.random(3.0) as usize).min(2)]);
+                    }
+                    w.vz_org *= 0.8;
+                    w.vz = w.vz_org - 1.5 * t;
+                    vstep = w.vz * t;
+                } else {
+                    vstep = ground + 25.0 - w.pos[2];
+                    w.vz = 0.0;
+                }
+            } else {
+                vstep = w.vz * t;
+            }
+        }
+        w.tilt -= if w.bounces == 0.0 { 2.0 * t } else { w.tilt * 0.1 * t };
+        let (s, c) = w.pan.to_radians().sin_cos();
+        let d = [c * w.speed * t.min(1.0), s * w.speed * t.min(1.0), vstep];
+        let hit = world.trace_static(0, w.pos, [w.pos[0] + d[0], w.pos[1] + d[1], w.pos[2] + d[2]]);
+        let before = w.pos;
+        w.pos = hit.trace.end;
+        if hit.trace.hit() && hit.trace.normal[2].abs() < 0.7 {
+            // Wasp_Bounce: turn off the wall, lose speed.
+            let n = hit.trace.normal;
+            w.pan = n[1].atan2(n[0]).to_degrees();
+            w.speed = (w.speed - 8.0).max(0.1);
+        }
+        w.speed -= 0.05 * t.min(1.0);
+        let moved = (w.pos[0] - before[0]).abs() + (w.pos[1] - before[1]).abs();
+        let mut settled = false;
+        if moved < 1.0 {
+            w.vz_org -= 0.5 * t.min(1.0);
+            settled |= w.vz_org.abs() < 1.5;
+        } else {
+            w.vz_org -= 0.02 * t.min(1.0);
+        }
+        if w.speed < 1.0 {
+            w.speed = 1.0;
+            settled |= w.vz_org.abs() < 1.5;
+        }
+        tf.translation = coords::pos(w.pos);
+        tf.rotation = coords::rotation([w.pan, w.tilt, 0.0]);
+        if settled {
+            let (poison, _) = HIVE_PICKUP[(w.kind - 1) as usize];
+            let mut ent = commands.entity(e);
+            ent.remove::<HiveWasp>().insert((
+                AmmoPickup { kind: w.kind, amount: 1, poison },
+                PickupPos(w.pos),
+                Spinning { angles: [w.pan, 20.0, 0.0] },
+            ));
+            if w.fate > 0.0 && w.fate < 1000.0 {
+                ent.insert(PickupLifetime(w.fate + w.bounces));
+            }
+        }
+    }
+}
+
+/// Hive pickups fade over their last 16 ticks, then disappear.
+pub fn expire_pickups(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mut PickupLifetime, &mut Transform)>) {
+    let t = time.delta_secs() * TICKS;
+    for (e, mut life, mut tf) in &mut q {
+        life.0 -= t;
+        if life.0 < 16.0 {
+            tf.scale *= 0.85f32.powf(t);
+        }
+        if life.0 <= 0.0 {
+            commands.entity(e).despawn();
+        }
+    }
+}
