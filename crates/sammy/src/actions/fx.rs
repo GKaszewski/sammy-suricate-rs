@@ -127,33 +127,24 @@ pub fn place_shadows(
     }
 }
 
-/// Eye of Truth pickup.
-#[derive(Component)]
+/// Eye of Truth pickup ([`sammy_core::eye::EyePickup`]) and its full size.
+#[derive(Component, Deref, DerefMut)]
 pub struct EyePickup {
+    #[deref]
+    eye: sammy_core::eye::EyePickup,
     scale: Vec3,
-    /// Taken: hidden for 128 ticks, then grows back.
-    away: Option<f32>,
-    spin: Option<[f32; 3]>,
-    angles: [f32; 3],
 }
 
-/// Extra hover height added when snapping to the ground (Eye of Truth: 2 × HeightGem).
+/// Extra hover height added when snapping to the ground.
 #[derive(Component)]
 pub struct ExtraHeight(pub f32);
 
 pub fn init_eye(obj: &Object, entity: &mut EntityCommands) {
-    let s = &obj.skills;
-    entity.insert((
-        EyePickup {
-            scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs(),
-            away: None,
-            spin: (obj.flags & (1 << 2) != 0).then_some([s[1], s[2], s[3]]),
-            angles: obj.angles,
-        },
-        PickupPos(obj.origin),
-    ));
-    if obj.flags & (1 << 5) == 0 {
-        entity.insert((SnapToGround, ExtraHeight(25.0)));
+    let eye = sammy_core::eye::EyePickup::from_object(obj);
+    let snap = eye.snap;
+    entity.insert((EyePickup { eye, scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs() }, PickupPos(obj.origin)));
+    if snap {
+        entity.insert((SnapToGround, ExtraHeight(sammy_core::eye::EXTRA_HEIGHT)));
     }
 }
 
@@ -166,46 +157,33 @@ pub fn run_eye(
     mut eyes: Query<(&mut EyePickup, &PickupPos, &mut Transform, &mut Visibility), Without<SnapToGround>>,
     mut particles: ResMut<crate::particles::Particles>,
 ) {
+    use sammy_core::eye::EyeStage;
     let t = time.delta_secs() * TICKS;
     let Ok(p) = player.single() else { return };
-    if p.state == State::Dead {
-        game.eye_ticks = 0.0; // Player_Kaputt clears it
-    }
-    game.eye_ticks = (game.eye_ticks - t).max(0.0);
+    sammy_core::eye::wear_off(&mut game, p.state == State::Dead, t);
     for (mut eye, pos, mut tf, mut vis) in &mut eyes {
-        if let Some(spin) = eye.spin {
-            for i in 0..3 {
-                eye.angles[i] += spin[i] * t;
-            }
+        if eye.spin(t) {
             tf.rotation = coords::rotation(eye.angles);
         }
-        match eye.away {
-            Some(left) => {
-                let left = left - t;
-                if left > 128.0 {
-                    tf.scale *= 0.8f32.powf(t);
-                } else {
-                    *vis = Visibility::Hidden;
-                }
-                if left <= 0.0 {
-                    *vis = Visibility::Inherited;
-                    tf.scale = eye.scale;
-                    eye.away = None;
-                } else {
-                    eye.away = Some(left);
-                }
-            }
-            None => {
+        let reach = crate::flow::playing(&current) && p.state != State::Dead && sammy_core::pickups::in_scan(p.pos, p.scan_radius, pos.0);
+        match eye.step(&mut game, reach, t) {
+            EyeStage::Idle => {
                 for _ in 0..particles.ticks {
                     crate::effects::eye_idle(&mut particles, pos.0);
                 }
-                let d = (0..3).map(|i| (pos.0[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt();
-                if crate::flow::playing(&current) && p.state != State::Dead && d <= p.scan_radius {
-                    game.eye_ticks = game.eye_duration;
-                    sfx.play("EyeTruth_Son");
-                    crate::effects::take_eye(&mut particles, pos.0);
-                    eye.away = Some(128.0 + 12.0); // shrink ~12 ticks, then 128 hidden
+            }
+            EyeStage::Taken => {
+                for _ in 0..particles.ticks {
+                    crate::effects::eye_idle(&mut particles, pos.0);
                 }
+                sfx.play("EyeTruth_Son");
+                crate::effects::take_eye(&mut particles, pos.0);
+            }
+            EyeStage::Shrinking => tf.scale *= sammy_core::eye::SHRINK_RATE.powf(t),
+            EyeStage::Hidden => *vis = Visibility::Hidden,
+            EyeStage::Back => {
+                *vis = Visibility::Inherited;
+                tf.scale = eye.scale;
             }
         }
     }
