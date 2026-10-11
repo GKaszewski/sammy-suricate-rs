@@ -9,7 +9,9 @@
 //! therefore negated (outward) and [`Mdl::vertex_buffer`] emits counter-clockwise
 //! triangles, so both follow the usual (glTF/Bevy) convention.
 
-use std::collections::HashMap;
+use alloc::{vec::Vec, string::String, string::ToString, format};
+
+use alloc::collections::BTreeMap;
 
 use crate::image::RgbaImage;
 use crate::reader::Reader;
@@ -120,7 +122,7 @@ impl Mdl {
     /// case-sensitive on the stored name; Acknex itself matches names case-insensitively.
     pub fn animations(&self) -> Vec<Animation> {
         let mut out: Vec<Animation> = Vec::new();
-        let mut by_name: HashMap<&str, usize> = HashMap::new();
+        let mut by_name: BTreeMap<&str, usize> = BTreeMap::new();
         for (i, f) in self.frames.iter().enumerate() {
             let key = frame_group(&f.name);
             let slot = *by_name.entry(key).or_insert_with(|| {
@@ -133,7 +135,7 @@ impl Mdl {
     }
 
     pub fn vertex_buffer(&self) -> VertexBuffer {
-        let mut map: HashMap<(u16, u16), u32> = HashMap::new();
+        let mut map: BTreeMap<(u16, u16), u32> = BTreeMap::new();
         let mut vb = VertexBuffer { xyz_index: Vec::new(), uvs: Vec::new(), indices: Vec::new() };
         for t in &self.triangles {
             // Reverse the stored (clockwise) order to get CCW front faces.
@@ -259,7 +261,7 @@ pub fn parse(data: &[u8]) -> Result<Mdl> {
 
     // Frames.
     check_fits(&r, num_frames, 4 + 8 + 16 + num_verts.saturating_mul(4))?;
-    let decode = |p: [u16; 3]| -> [f32; 3] { std::array::from_fn(|k| scale[k] * p[k] as f32 + translate[k]) };
+    let decode = |p: [u16; 3]| -> [f32; 3] { core::array::from_fn(|k| scale[k] * p[k] as f32 + translate[k]) };
     let mut frames = Vec::with_capacity(num_frames);
     for _ in 0..num_frames {
         let ty = r.u32()?;

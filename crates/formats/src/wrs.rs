@@ -4,6 +4,8 @@
 //! `name[32]` (XOR 0xA5, terminated by a raw 0x00), `u32be compressed_size`,
 //! `u32be uncompressed_size`, then `compressed_size` bytes of LZSS data.
 
+use alloc::{vec::Vec, string::String};
+
 use crate::reader::{cstr, Reader};
 use crate::{lzss, Error, Result};
 

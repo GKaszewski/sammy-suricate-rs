@@ -4,6 +4,8 @@
 //! flag bytes read LSB-first (1 = literal), back-references are 12-bit position
 //! plus 4-bit length (+3).
 
+use alloc::{vec::Vec};
+
 const N: usize = 4096;
 const F: usize = 18;
 const THRESHOLD: usize = 2;

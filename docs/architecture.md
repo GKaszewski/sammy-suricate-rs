@@ -46,7 +46,7 @@ position and a hash of all named entity transforms, and compares them with
 ## Steps
 
 1. Library + thin binary, replay harness. **(done)**
-2. `formats`: `no_std` + `alloc`.
+2. `formats`: `no_std` + `alloc` (verified with `--target thumbv7em-none-eabihf`). **(done)**
 3. `sammy-core` skeleton: units, coords, rng, constants tables, save model, game state.
 4. Move gameplay into the core one feature at a time (collision, player, pickups and
    gems, doors, platforms and teleports, health, enemies, wasps, extro, intro walker,

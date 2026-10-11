@@ -3,15 +3,17 @@
 //! then little-endian `Var_Info` records and named `Type Global` skills. Values are
 //! 22.10 fixed point.
 
-use std::collections::HashMap;
+use alloc::{vec::Vec, string::String};
+
+use alloc::collections::BTreeMap;
 
 use crate::{Error, Result};
 
 /// Decoded save: `Var_Info` arrays by engine var id and skills by name (x, y, z).
 #[derive(Debug, Default)]
 pub struct Save {
-    pub vars: HashMap<u32, Vec<f32>>,
-    pub skills: HashMap<String, [f32; 3]>,
+    pub vars: BTreeMap<u32, Vec<f32>>,
+    pub skills: BTreeMap<String, [f32; 3]>,
 }
 
 /// `Var_Info` ids (docs/hud-saves.md §4.4).

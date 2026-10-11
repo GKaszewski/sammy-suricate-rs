@@ -6,6 +6,8 @@
 //! [`parse`] decodes every lump into plain structs; [`Wmb::build_mesh`] turns the
 //! faces into renderable per-texture triangle batches with a packed lightmap atlas.
 
+use alloc::{vec::Vec, string::String, vec, format};
+
 use crate::image::RgbaImage;
 use crate::reader::Reader;
 use crate::{Error, Result};
@@ -419,7 +421,7 @@ fn parse_textures(b: &[u8], palette: Option<&[[u8; 3]; 256]>) -> Result<Vec<Text
         return Err(Error::Invalid(format!("texture count {count}")));
     }
     let offsets: Vec<u32> = (0..count).map(|_| r.u32()).collect::<Result<_>>()?;
-    let grey: [[u8; 3]; 256] = std::array::from_fn(|i| [i as u8; 3]);
+    let grey: [[u8; 3]; 256] = core::array::from_fn(|i| [i as u8; 3]);
     let palette = palette.unwrap_or(&grey);
     offsets
         .iter()
@@ -608,8 +610,8 @@ impl Wmb {
                 max[k] = max[k].max(st[k]);
             }
         }
-        let lo = [(min[0] / LUXEL_SIZE).floor(), (min[1] / LUXEL_SIZE).floor()];
-        let hi = [(max[0] / LUXEL_SIZE).ceil(), (max[1] / LUXEL_SIZE).ceil()];
+        let lo = [libm::floorf(min[0] / LUXEL_SIZE), libm::floorf(min[1] / LUXEL_SIZE)];
+        let hi = [libm::ceilf(max[0] / LUXEL_SIZE), libm::ceilf(max[1] / LUXEL_SIZE)];
         let w = (hi[0] - lo[0]) as u32 + 1;
         let h = (hi[1] - lo[1]) as u32 + 1;
         let offset = f.light_offset as usize;
@@ -639,7 +641,7 @@ impl Wmb {
             match *src.next()? {
                 0 => {
                     let n = *src.next()? as usize;
-                    out.extend(std::iter::repeat_n(0, n.min(row - out.len())));
+                    out.extend(core::iter::repeat_n(0, n.min(row - out.len())));
                 }
                 b => out.push(b),
             }
@@ -795,9 +797,9 @@ impl Atlas {
             return None;
         }
         let max_w = sizes.iter().flatten().map(|s| s.0 + 2).max().unwrap_or(1);
-        let width = ((area as f64 * 1.15).sqrt() as u32).next_power_of_two().max(max_w.next_power_of_two()).max(64);
+        let width = (libm::sqrt(area as f64 * 1.15) as u32).next_power_of_two().max(max_w.next_power_of_two()).max(64);
         let mut order: Vec<usize> = (0..sizes.len()).filter(|&i| sizes[i].is_some()).collect();
-        order.sort_by_key(|&i| std::cmp::Reverse((sizes[i].unwrap().1, sizes[i].unwrap().0)));
+        order.sort_by_key(|&i| core::cmp::Reverse((sizes[i].unwrap().1, sizes[i].unwrap().0)));
         let mut slots = vec![None; sizes.len()];
         let (mut x, mut y, mut shelf_h) = (0u32, 0u32, 0u32);
         for i in order {

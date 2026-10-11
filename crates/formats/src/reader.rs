@@ -1,5 +1,7 @@
 //! Little-endian cursor over a byte slice with bounds-checked reads.
 
+use alloc::{string::String};
+
 use crate::{Error, Result};
 
 #[derive(Clone)]

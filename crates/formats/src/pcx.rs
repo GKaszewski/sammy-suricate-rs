@@ -1,5 +1,7 @@
 //! ZSoft PCX reader (8-bit palettized with trailing 256-colour palette, or 24-bit planar).
 
+use alloc::{vec::Vec, format};
+
 use crate::image::RgbaImage;
 use crate::reader::Reader;
 use crate::{Error, Result};
@@ -37,7 +39,7 @@ pub fn parse(data: &[u8]) -> Result<Pcx> {
         let b = r.u8()?;
         if encoding == 1 && b >= 0xc0 {
             let v = r.u8()?;
-            raw.extend(std::iter::repeat_n(v, (b & 0x3f) as usize));
+            raw.extend(core::iter::repeat_n(v, (b & 0x3f) as usize));
         } else {
             raw.push(b);
         }

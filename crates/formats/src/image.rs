@@ -1,5 +1,7 @@
 //! Decoded RGBA8 image shared by all texture-producing parsers.
 
+use alloc::{vec::Vec, vec};
+
 #[derive(Clone, Debug)]
 pub struct RgbaImage {
     pub width: u32,
