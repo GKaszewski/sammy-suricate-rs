@@ -2,25 +2,23 @@
 //! (`InitKey`/`Key_Hit`/`EjectOldKey`/`LaunchYouKey`, gems.wdl:40-960).
 //! Both are picked up by Sammy's scan (id 1, radius `BlobZoneScan`).
 
-use crate::collision::Hull;
 use std::collections::HashMap;
 
 use bevy::prelude::*;
 use formats::wmb::Object;
+use sammy_core::gems::HEIGHT_GEM;
+use sammy_core::keys::{KeyOutcome, take_key};
+use sammy_core::pickups::{KeySpec, NARROW_FLOOR_OFFSET, SHRINK_GONE, SHRINK_PER_TICK, SNAP_START, in_scan};
 
 use super::player::{Player, TICKS};
 use crate::audio::Sfx;
-use crate::collision::CollisionWorld;
+use crate::collision::{CollisionWorld, Hull};
 use crate::coords;
-use crate::game::{GameState, ResetScan, MASTER_KEY};
+use crate::game::{GameState, MASTER_KEY, ResetScan};
 
-/// `HeightGem` (skills.wdl:697): gems float this far above the ground.
-const HEIGHT_GEM: f32 = 25.0;
-
-#[derive(Component)]
-pub struct Diamond {
-    pub points: i32,
-}
+/// A diamond ([`sammy_core::pickups::Diamond`]).
+#[derive(Component, Deref)]
+pub struct Diamond(pub sammy_core::pickups::Diamond);
 
 #[derive(Component)]
 pub struct KeyGem {
@@ -70,47 +68,36 @@ pub struct Respawnable;
 #[derive(Resource, Default)]
 pub struct GemSprites(pub HashMap<u32, (Handle<Mesh>, Handle<StandardMaterial>, u32)>);
 
-pub fn gem_file(color: u32) -> Option<&'static str> {
-    Some(match color {
-        1 => "gemre+17.pcx",
-        2 => "gemye+17.pcx",
-        3 => "gemor+17.pcx",
-        4 => "gembl+17.pcx",
-        5 => "gemma+17.pcx",
-        6 => "gemve+17.pcx",
-        MASTER_KEY => "gemmu+17.pcx",
-        _ => return None,
-    })
-}
+pub use sammy_core::keys::gem_sprite as gem_file;
 
 pub fn init_bonus3(obj: &Object, entity: &mut EntityCommands) {
-    entity.insert((Diamond { points: obj.skills[1] as i32 }, PickupPos(obj.origin)));
-    if obj.flags & (1 << 5) == 0 {
-        entity.insert(SnapToGround); // Flag6 keeps the WED height
+    let d = sammy_core::pickups::Diamond::from_object(obj);
+    entity.insert((Diamond(d), PickupPos(obj.origin)));
+    if d.snap {
+        entity.insert(SnapToGround);
     }
 }
 
 pub fn init_key(obj: &Object, entity: &mut EntityCommands) {
-    let flag = |n: u32| obj.flags & (1 << (n - 1)) != 0;
+    let spec = KeySpec::from_object(obj);
     entity.insert((
-        KeyGem { color: obj.skills[5] as u32 },
+        KeyGem { color: spec.color },
         PickupPos(obj.origin),
         LevelKey { home: None, scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs() },
         Respawnable,
     ));
-    if obj.skills[4] != 0.0 {
+    match spec.surprise {
         // Surprise gem: not collectable until its colour has been rolled.
-        entity.insert(super::gems::Surprise::new(obj.skills[4], obj.origin[0] + obj.origin[1]));
-    } else {
-        entity.insert(super::gems::Collectable);
-    }
-    if flag(7) {
+        Some(add) => entity.insert(super::gems::Surprise::new(add, obj.origin[0] + obj.origin[1])),
+        None => entity.insert(super::gems::Collectable),
+    };
+    if spec.gravity {
         entity.insert(super::gems::GemGravity::new(HEIGHT_GEM));
-        if flag(5) {
-            entity.insert(HoverFromWed);
-        }
     }
-    if !flag(6) {
+    if spec.hover_from_wed {
+        entity.insert(HoverFromWed);
+    }
+    if spec.snap {
         entity.insert(SnapToGround);
     }
 }
@@ -128,13 +115,14 @@ pub fn snap_pickups(
     }
     for (e, mut p, mut tf, extra, gravity, hover) in &mut q {
         let [x, y, z] = p.0;
-        let tr = world.trace(Hull::Narrow, [x, y, z + 8.0], [x, y, z - 2000.0], None).trace;
+        let tr = world.trace(Hull::Narrow, [x, y, z + SNAP_START], [x, y, z - 2000.0], None).trace;
+        let floor = tr.end[2] - NARROW_FLOOR_OFFSET;
         if hover && let Some(mut g) = gravity {
             // Flag5: keep the WED height above the floor (+HeightGem) as the rest height.
-            g.rest = z - (tr.end[2] - 16.0) + HEIGHT_GEM;
+            g.rest = z - floor + HEIGHT_GEM;
         }
         if tr.hit() && !tr.start_solid {
-            p.0[2] = tr.end[2] - 16.0 + HEIGHT_GEM + extra.map_or(0.0, |h| h.0);
+            p.0[2] = floor + HEIGHT_GEM + extra.map_or(0.0, |h| h.0);
             tf.translation = coords::pos(p.0);
         }
         commands.entity(e).remove::<SnapToGround>();
@@ -158,7 +146,7 @@ pub fn collect(
     if p.state == super::player::State::Dead {
         return;
     }
-    let near = |q: &[f32; 3]| (0..3).map(|i| (q[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt() <= p.scan_radius;
+    let near = |q: &[f32; 3]| in_scan(p.pos, p.scan_radius, *q);
 
     for (e, pos, d) in &diamonds {
         if near(&pos.0) {
@@ -166,7 +154,7 @@ pub fn collect(
             let at = pos.0;
             crate::effects::queue(&mut commands, move |ps| crate::effects::diamond_burst(ps, at));
             sfx.play("Diam_son");
-            if d.points == 50 || d.points == 100 {
+            if d.has_popup() {
                 sfx.play("clog3");
                 crate::hud3d::queue_popup(&mut commands, pos.0, d.points);
             }
@@ -218,34 +206,15 @@ pub fn collect(
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum KeyOutcome {
-    Taken,
-    /// Two different primaries combined (red+yellow=orange, red+blue=magenta, yellow+blue=green).
-    Mixed,
-    /// The previously held key is thrown back out.
-    Ejected(u32),
-}
-
-/// `Key_Hit` (gems.wdl:212-350): the key held after picking up `gem` while holding `held`.
-pub fn take_key(held: u32, gem: u32) -> (u32, KeyOutcome) {
-    let primary = |c: u32| matches!(c, 1 | 2 | 4);
-    match held {
-        0 => (gem, KeyOutcome::Taken),
-        _ if primary(held) && primary(gem) && held != gem => (held | gem, KeyOutcome::Mixed),
-        _ => (gem, KeyOutcome::Ejected(held)),
-    }
-}
-
 pub fn shrink(
     time: Res<Time>,
     mut commands: Commands,
     mut q: Query<(Entity, &mut Transform, Has<Respawnable>), With<Shrinking>>,
 ) {
-    let k = 0.8f32.powf(time.delta_secs() * TICKS);
+    let k = SHRINK_PER_TICK.powf(time.delta_secs() * TICKS);
     for (e, mut tf, respawnable) in &mut q {
         tf.scale *= k;
-        if tf.scale.x < 0.05 {
+        if tf.scale.x < SHRINK_GONE {
             if respawnable {
                 commands.entity(e).remove::<Shrinking>().insert((Collected, Visibility::Hidden));
             } else {
@@ -292,22 +261,5 @@ pub fn reset_keys(
                 commands.entity(e).despawn();
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn key_mixing_follows_key_hit() {
-        assert_eq!(take_key(0, 4), (4, KeyOutcome::Taken));
-        assert_eq!(take_key(1, 2), (3, KeyOutcome::Mixed));
-        assert_eq!(take_key(4, 1), (5, KeyOutcome::Mixed));
-        assert_eq!(take_key(2, 4), (6, KeyOutcome::Mixed));
-        // Same colour or a mixed key: the old one is ejected.
-        assert_eq!(take_key(2, 2), (2, KeyOutcome::Ejected(2)));
-        assert_eq!(take_key(3, 4), (4, KeyOutcome::Ejected(3)));
-        assert_eq!(take_key(1, MASTER_KEY), (MASTER_KEY, KeyOutcome::Ejected(1)));
     }
 }

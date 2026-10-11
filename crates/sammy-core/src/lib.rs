@@ -15,6 +15,7 @@ pub mod gems;
 pub mod keys;
 pub mod levels;
 pub mod physics;
+pub mod pickups;
 pub mod platforms;
 pub mod rng;
 pub mod save;
