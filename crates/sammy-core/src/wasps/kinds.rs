@@ -1,6 +1,7 @@
 //! The seven wasp kinds: pickup and firing tables, sounds and colours.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Wasp types 1..=7 (orange, yellow, blue, green, magenta, red, white).
 pub const KINDS: u32 = 7;
@@ -61,7 +62,7 @@ pub const WING_ANIM: f32 = 0.5;
 pub(super) const SPAWN_BEHIND: f32 = 40.0;
 pub(super) const SPAWN_HEIGHT: f32 = 50.0;
 /// Types that throw a 3-wasp fan: offsets (degrees) and 2-tick spacing.
-pub(super) const FAN_SPACING: f32 = 2.0;
+pub(super) const FAN_SPACING: Ticks = Ticks(2.0);
 /// Invisible until this far from Sammy (it starts behind him).
 pub(super) const SHOW_DISTANCE: f32 = 80.0;
 /// Burst sounds, picked at random.

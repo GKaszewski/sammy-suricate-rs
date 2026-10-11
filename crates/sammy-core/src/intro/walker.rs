@@ -83,7 +83,6 @@ impl Walker {
 
     /// `MoveSammyonPath` over `t` ticks (per frame, rates × `time` as in the script).
     pub fn step(&mut self, nodes: &[PathNode], t: Ticks) {
-        let t = t.get();
         // PlayerPatrol.
         match self.target {
             None => {

@@ -64,7 +64,6 @@ pub struct Subject {
 /// fly-in is running. `sammy` is needed by the type-2 camera.
 #[allow(clippy::too_many_arguments)]
 pub fn follow(st: &mut FollowState, params: &CameraParams, rt: &mut CameraRuntime, level: Option<&Wmb>, pov: Subject, sammy: Option<Subject>, sweep: bool, t: Ticks, dt: Secs) -> Option<CameraPose> {
-    let t = t.get();
     let dt = dt.get();
     if rt.cam_type == 0 {
         rt.cam_type = params.start_type;
@@ -140,7 +139,7 @@ pub fn follow(st: &mut FollowState, params: &CameraParams, rt: &mut CameraRuntim
     }
     let pos = *pos;
     // The sweep ends when the per-tick step (L1) falls to 4 quants (mm1.wdl:773-810).
-    st.converged = (step[0].abs() + step[1].abs() + step[2].abs()) / t.max(1e-3) <= 4.0;
+    st.converged = (step[0].abs() + step[1].abs() + step[2].abs()) / t.get().max(1e-3) <= 4.0;
 
     // 5. Look at Sammy + PlusTilt.
     Some(CameraPose::LookAt { pos, target: eye })

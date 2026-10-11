@@ -24,10 +24,9 @@ impl CameraZone {
 /// differs and the zone sees Sammy; a tick later, within Skill7, it blends distance,
 /// height, back angle and PlusTilt over Skill6+1 steps, snaps, and re-arms.
 pub fn camera_zones(t: Ticks, level: &Wmb, params: &mut CameraParams, rt: &mut CameraRuntime, scanners: &Scanners, zones: &mut [(Id, &mut CameraZone)]) {
-    let t = t.get();
     rt.acc += t;
-    while rt.acc >= 1.0 {
-        rt.acc -= 1.0;
+    while rt.acc >= Ticks(1.0) {
+        rt.acc -= Ticks(1.0);
         if rt.fric_cap > 0.0 {
             rt.fric_cap -= 1.0;
         }

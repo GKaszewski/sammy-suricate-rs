@@ -1,6 +1,7 @@
 //! Gems flying, bouncing and coming to rest (thrown keys, launched gems).
 
 use super::*;
+use crate::time::Ticks;
 
 pub(super) const THROW_CEILING: f32 = 32.0;
 /// Bounce from which a flying gem can be picked up.
@@ -8,7 +9,7 @@ pub(super) const COLLECTABLE_BOUNCE: u32 = 5;
 /// Floor search depth below a gem.
 pub(super) const FLOOR_PROBE: f32 = 2000.0;
 /// Ticks between "last good position" snapshots (escape when stuck in a wall).
-pub(super) const GOOD_POS_PERIOD: f32 = 16.0;
+pub(super) const GOOD_POS_PERIOD: Ticks = Ticks(16.0);
 /// Bounce sounds by bounce number (1..4, the 4th repeats).
 pub(super) const BOUNCE_SOUNDS: [&str; 4] = ["ding6", "ding5", "ding3", "ding7"];
 
@@ -38,7 +39,7 @@ pub struct FlyingGem {
     pub(super) ceiling: f32,
     pub(super) stuck: f32,
     pub(super) last_good: [f32; 3],
-    pub(super) good_timer: f32,
+    pub(super) good_timer: Ticks,
 }
 
 /// How a gem rests once its flight ends.
@@ -74,7 +75,7 @@ impl FlyingGem {
     }
 
     pub(super) fn new(kind: FlightKind, pos: [f32; 3], pan: f32, speed: f32, vz: f32, fric: f32, ceiling: f32) -> Self {
-        Self { kind, pos, pan, speed, vz, vz_org: vz, fric, bounces: 0, ceiling, stuck: 0.0, last_good: pos, good_timer: 0.0 }
+        Self { kind, pos, pan, speed, vz, vz_org: vz, fric, bounces: 0, ceiling, stuck: 0.0, last_good: pos, good_timer: Ticks(0.0) }
     }
 
     /// Its resting behaviour after the flight.

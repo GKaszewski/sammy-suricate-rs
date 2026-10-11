@@ -7,7 +7,7 @@ use crate::keys::KeyColor;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EngineState {
     Moving,
-    Paused(f32),
+    Paused(Ticks),
 }
 
 #[derive(Clone, Debug)]
@@ -58,14 +58,13 @@ impl Engine {
 
     /// One frame; `trace` sweeps a point through the level (the engine is a tiny sprite).
     pub fn step(&mut self, boosted: bool, t: Ticks, trace: impl Fn([f32; 3], [f32; 3]) -> Trace) {
-        let t = t.get();
         let speed = if boosted { self.speed * BOOST_FACTOR } else { self.speed };
         self.delta = [0.0; 3];
         if !self.unlocked {
             return;
         }
         self.state = match self.state {
-            EngineState::Paused(left) if left - t > 0.0 => EngineState::Paused(left - t),
+            EngineState::Paused(left) if left - t > Ticks(0.0) => EngineState::Paused(left - t),
             EngineState::Paused(_) => EngineState::Moving,
             EngineState::Moving => {
                 let dir = crate::angle::forward(self.angles[0], self.angles[1]);
@@ -90,7 +89,7 @@ impl Engine {
                         self.angles[0] = ang(self.angles[0] + self.turn[0]);
                         self.angles[1] = ang(self.angles[1] + self.turn[1]);
                         self.angles[2] = ang(self.angles[1] + self.turn[2]);
-                        if self.pause > 0.0 { EngineState::Paused(self.pause) } else { EngineState::Moving }
+                        if self.pause > 0.0 { EngineState::Paused(Ticks(self.pause)) } else { EngineState::Moving }
                     }
                 }
             }

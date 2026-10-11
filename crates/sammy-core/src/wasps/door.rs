@@ -55,11 +55,11 @@ pub struct Plank {
     pub(super) spin: [f32; 2],
     pub angles: [f32; 3],
     pub pos: [f32; 3],
-    pub(super) still: f32,
+    pub(super) still: Ticks,
 }
 
 pub(super) const PLANK_GRAVITY: f32 = 1.5;
-pub(super) const PLANK_STILL: f32 = 24.0;
+pub(super) const PLANK_STILL: Ticks = Ticks(24.0);
 
 impl Plank {
     /// One plank around a door at `origin`.
@@ -77,7 +77,6 @@ impl Plank {
 
     /// One frame; returns (bounce sound, gone).
     pub fn step(&mut self, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, t: Ticks) -> (bool, bool) {
-        let t = t.get();
         self.v[2] -= PLANK_GRAVITY * t;
         let target = [0, 1, 2].map(|i| self.pos[i] + self.v[i] * t);
         let hit = trace(self.pos, target);
@@ -97,6 +96,6 @@ impl Plank {
             self.angles[1] += self.spin[0] * t;
             self.angles[2] += self.spin[1] * t;
         }
-        (sound, self.still <= 0.0)
+        (sound, self.still <= Ticks(0.0))
     }
 }

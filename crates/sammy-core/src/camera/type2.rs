@@ -2,10 +2,11 @@
 
 use super::*;
 use crate::angle::Angles;
+use crate::time::Ticks;
 
 /// Camera type 2 (`HandleCamera`, camera.wdl:13-136) with `SetPosCamera` placement.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn follow_type2(params: &CameraParams, level: Option<&Wmb>, p: Subject, st: &mut FollowState, t: f32, dt: f32) -> CameraPose {
+pub(super) fn follow_type2(params: &CameraParams, level: Option<&Wmb>, p: Subject, st: &mut FollowState, t: Ticks, dt: f32) -> CameraPose {
     let me = p.pos;
     if st.pos.is_none() || st.set_pos {
         // SetPosCamera: camera at Sammy's back (pan − back), height HautCamPerso; the proxy

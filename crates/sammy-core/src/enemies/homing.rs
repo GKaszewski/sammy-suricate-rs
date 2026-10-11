@@ -6,7 +6,6 @@ use crate::time::Ticks;
 /// Wasp homing and fear tagging (`Wasp_Hit` EVENT_DETECT, docs/wasps.md §4.4): the
 /// wasp steers toward every living target in its cone, nearest first.
 pub fn home_wasp(w: &mut crate::wasps::Wasp, enemies: &mut [&mut Enemy], t: Ticks) {
-    let t = t.get();
     if !w.can_home() {
         return;
     }

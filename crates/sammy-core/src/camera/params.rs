@@ -1,6 +1,7 @@
 //! Per-level camera settings and their runtime state.
 
 use super::*;
+use crate::time::Ticks;
 
 /// Per-level follow-camera settings (`InitCamera1`/`InitCamera2`, mm1.wdl:2719-2851).
 #[derive(Clone, Copy, Debug)]
@@ -141,7 +142,7 @@ pub struct CameraRuntime {
     pub(super) tween: Option<ZoneTween>,
     /// Ticks left of the 0.25 friction cap after a zone transition.
     pub(super) fric_cap: f32,
-    pub(super) acc: f32,
+    pub(super) acc: Ticks,
 }
 
 #[derive(Clone, Debug)]

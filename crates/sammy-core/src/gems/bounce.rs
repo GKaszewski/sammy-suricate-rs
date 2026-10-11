@@ -7,7 +7,6 @@ impl FlyingGem {
     /// One frame (`t` ticks, capped at 1 like the original `mintime`). `trace` sweeps a
     /// point against the level and map entities; sounds go to `sounds`.
     pub fn step(&mut self, collectable: bool, jump: &JumpParams, rng: &mut Rng, t: Ticks, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, sounds: &mut Vec<&'static str>) -> FlightStep {
-        let t = t.get();
         let mut out = FlightStep::default();
         let floor = {
             let tr = trace(self.pos, [self.pos[0], self.pos[1], self.pos[2] - FLOOR_PROBE]);
@@ -52,7 +51,7 @@ impl FlyingGem {
             }
         }
         self.good_timer -= t;
-        if self.good_timer <= 0.0 {
+        if self.good_timer <= Ticks(0.0) {
             self.good_timer = GOOD_POS_PERIOD;
             self.last_good = self.pos;
         }

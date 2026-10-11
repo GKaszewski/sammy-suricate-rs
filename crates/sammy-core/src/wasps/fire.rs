@@ -6,7 +6,7 @@ use crate::time::Ticks;
 /// Shots still to fire in a fan: (ticks left, pan offset), from one spawn point.
 #[derive(Clone, Debug)]
 pub struct PendingShots {
-    pub(super) shots: Vec<(f32, f32)>,
+    pub(super) shots: Vec<(Ticks, f32)>,
     pub(super) spawn: [f32; 3],
 }
 
@@ -47,7 +47,7 @@ pub fn fire(p: &mut Player, anim: &mut Anim, game: &mut GameState, trigger: bool
         let spawn = [p.pos[0] + c * SPAWN_BEHIND, p.pos[1] + s * SPAWN_BEHIND, p.pos[2] + SPAWN_HEIGHT];
         game.ammo -= 1;
         let shots = if matches!(kind, 3 | 4) {
-            let mut shots = vec![(0.0, -5.0)];
+            let mut shots = vec![(Ticks::ZERO, -5.0)];
             for (i, off) in [0.0, 5.0].into_iter().enumerate() {
                 game.ammo -= 1;
                 if game.ammo < 0 {
@@ -57,7 +57,7 @@ pub fn fire(p: &mut Player, anim: &mut Anim, game: &mut GameState, trigger: bool
             }
             shots
         } else {
-            vec![(0.0, 0.0)]
+            vec![(Ticks::ZERO, 0.0)]
         };
         if game.ammo <= 0 {
             game.ammo = 0;
@@ -78,11 +78,10 @@ impl PendingShots {
     /// Releases due shots (type as of the frame's start, poison at least 1); true once
     /// the fan is done.
     pub fn release(&mut self, kind: u32, poison: f32, pan: f32, t: Ticks, out: &mut Vec<Shot>) -> bool {
-        let t = t.get();
         let spawn = self.spawn;
         self.shots.retain_mut(|(left, off)| {
             *left -= t;
-            if *left > 0.0 {
+            if *left > Ticks(0.0) {
                 return true;
             }
             out.push(Shot { kind, poison: poison.max(1.0), pos: spawn, pan: pan + *off });

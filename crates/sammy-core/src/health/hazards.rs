@@ -14,7 +14,6 @@ pub enum DeathKind {
 /// Which death (if any) starts this frame: a death tile under Sammy, or no health left
 /// (lava burns it meanwhile).
 pub fn check_death(game: &mut GameState, on_death_tile: bool, on_lava: bool, t: Ticks) -> Option<DeathKind> {
-    let t = t.get();
     if on_lava {
         game.hearts -= LAVA_DAMAGE * t;
     }

@@ -120,7 +120,7 @@ pub(super) fn start_triggers(sim: &mut Sim) {
 /// Boxes follow their owners (dead enemies stop colliding); opacity; the render pose
 /// between AI ticks.
 pub(super) fn place(sim: &mut Sim) {
-    let a = sim.ai.acc.clamp(0.0, 1.0);
+    let a = sim.ai.acc.get().clamp(0.0, 1.0);
     let w = &mut sim.world;
     for (id, e) in &w.enemies {
         if let (Some(c), Some((center, _, solid))) = (w.boxes.get_mut(id), e.collider()) {

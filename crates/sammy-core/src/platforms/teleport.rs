@@ -24,13 +24,13 @@ impl Teleport {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum TeleportStage {
     /// `waitt 4` while Sammy settles onto the pad.
-    Settle(f32),
+    Settle(Ticks),
     FadeOut,
     FadeIn,
 }
 
 /// Ticks Sammy settles on a pad before fading.
-pub(super) const SETTLE_TICKS: f32 = 4.0;
+pub(super) const SETTLE_TICKS: Ticks = Ticks(4.0);
 /// Fade speed in alpha percent per tick.
 pub(super) const FADE_SPEED: f32 = 10.0;
 /// After the jump the camera is put this far from the destination (x, y, z).
@@ -62,10 +62,9 @@ impl Teleporting {
     }
 
     pub fn step(&mut self, t: Ticks) -> TeleportStep {
-        let t = t.get();
         let mut out = TeleportStep::Fading;
         self.stage = match self.stage {
-            TeleportStage::Settle(left) if left - t > 0.0 => TeleportStage::Settle(left - t),
+            TeleportStage::Settle(left) if left - t > Ticks(0.0) => TeleportStage::Settle(left - t),
             TeleportStage::Settle(_) => TeleportStage::FadeOut,
             TeleportStage::FadeOut => {
                 self.alpha = (self.alpha - FADE_SPEED * t).max(0.0);

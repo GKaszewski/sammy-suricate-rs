@@ -50,7 +50,6 @@ impl Bob {
 
     /// One frame; returns the position.
     pub fn step(&mut self, t: Ticks) -> [f32; 3] {
-        let t = t.get();
         self.z += (self.target - self.z) * self.damping * t;
         for i in 0..3 {
             self.angles[i] += self.spin[i] * t;
