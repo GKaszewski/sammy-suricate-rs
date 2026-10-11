@@ -1,6 +1,6 @@
 //! Which song plays when.
 
-use sammy_core::levels::EXTRO_SLOT;
+use sammy_core::levels::{EXTRO_SLOT, LevelSlot};
 use sammy_core::sim::Sim;
 
 use super::FILES;
@@ -41,7 +41,7 @@ pub struct Playlist {
     test: bool,
     loads: u32,
     /// The last load's slot (None: menu), once a level was seen.
-    last: Option<Option<u32>>,
+    last: Option<Option<LevelSlot>>,
     /// The music slider while the options are open.
     slider: Option<f32>,
 }
@@ -85,8 +85,8 @@ impl Playlist {
     }
 
     /// `PlayCurrentMusique`: only musique1..7 are handled, so an 8 keeps the old song [Q].
-    fn play_level(&mut self, slot: u32) -> Option<Request> {
-        let n = self.order.get(slot as usize).copied().unwrap_or(1);
+    fn play_level(&mut self, slot: LevelSlot) -> Option<Request> {
+        let n = self.order.get(slot.index()).copied().unwrap_or(1);
         (1..=FILES.len() as u8).contains(&n).then(|| self.play(n, true, FULL_VOLUME))
     }
 

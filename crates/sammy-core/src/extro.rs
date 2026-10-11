@@ -7,6 +7,7 @@ use formats::wmb::Object;
 use crate::anim::Anim;
 use crate::id::Id;
 use crate::time::TICKS_PER_SEC;
+use crate::levels::LevelSlot;
 
 /// `IdPlayer` (Sammy's Skill1 in scans).
 pub const ID_PLAYER: f32 = 3333.0;
@@ -19,7 +20,7 @@ pub const START_POV_DELAY: f32 = 2.0;
 /// `SetFinExtro`: fog grows 6 % per tick; at 100 the extro ends.
 pub const FADE_SPEED: f32 = 6.0;
 /// After the extro "Play" resumes this level (Extro.wdl:114).
-pub const RESUME_LEVEL: u32 = 20;
+pub const RESUME_LEVEL: LevelSlot = LevelSlot(20);
 /// The "salut" scene (SetAnimPlayer Skill3 = 12) waves once; others loop "loopjambes".
 const SALUT: f32 = 12.0;
 

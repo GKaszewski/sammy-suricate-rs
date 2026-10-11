@@ -27,7 +27,7 @@ impl Args {
     pub fn level_file(&self) -> String {
         match self.level.as_deref() {
             None | Some("menu") => sammy_core::levels::MENU_FILE.to_owned(),
-            Some(l) => l.parse::<u32>().ok().and_then(sammy_core::levels::file_for).map_or_else(|| l.to_owned(), str::to_owned),
+            Some(l) => l.parse::<u32>().ok().map(sammy_core::levels::LevelSlot).and_then(sammy_core::levels::file_for).map_or_else(|| l.to_owned(), str::to_owned),
         }
     }
 }

@@ -3,7 +3,7 @@
 
 use formats::wmb::Object;
 
-use crate::levels::file_for;
+use crate::levels::{LevelSlot, file_for};
 use crate::save::{LevelState, SaveGame};
 
 mod bob;

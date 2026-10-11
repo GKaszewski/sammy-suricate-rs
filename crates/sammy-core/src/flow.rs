@@ -5,6 +5,7 @@ use crate::game::GameState;
 use crate::levels::{EXTRO_SLOT, LAST_OF_WORLD, MENU_FILE, file_for, next_slot};
 use crate::save::{LevelState, SaveGame};
 use crate::time::Ticks;
+use crate::levels::LevelSlot;
 
 /// `PartieEncours` / `PartieGagnee` reduced to the phases the port needs.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
@@ -32,7 +33,7 @@ pub const LOSE_TICKS: f32 = 320.0;
 /// The level being played and where it is in its flow.
 #[derive(Clone, Debug, Default)]
 pub struct LevelFlow {
-    pub slot: Option<u32>,
+    pub slot: Option<LevelSlot>,
     pub file: String,
     pub phase: Phase,
     /// Ticks of the level-start sweep so far.
@@ -107,7 +108,7 @@ impl LevelFlow {
 /// After a win (mm1.wdl:988-1123): the last level of a world returns to the menu, unless
 /// the last jump and think levels are both reached, which starts the extro; otherwise
 /// the next level starts.
-pub fn after_win(slot: u32, save: &SaveGame) -> &'static str {
+pub fn after_win(slot: LevelSlot, save: &SaveGame) -> &'static str {
     let [_, last_jump, last_think] = LAST_OF_WORLD;
     let both = save.state(last_jump) == LevelState::Unlocked && save.state(last_think) == LevelState::Unlocked;
     if (slot == last_jump || slot == last_think) && both {

@@ -142,7 +142,7 @@ fn setup(
 
     // A slot number (1-49) or a WMB file name.
     let file = match args.level.parse::<u32>() {
-        Ok(slot) => sammy_core::levels::file_for(slot).map(str::to_owned).unwrap_or_else(|| panic!("no level in slot {slot}")),
+        Ok(slot) => sammy_core::levels::file_for(sammy_core::levels::LevelSlot(slot)).map(str::to_owned).unwrap_or_else(|| panic!("no level in slot {slot}")),
         Err(_) if args.level == "menu" => sammy_core::levels::MENU_FILE.to_owned(),
         Err(_) => args.level.clone(),
     };

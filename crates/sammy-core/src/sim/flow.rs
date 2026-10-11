@@ -11,9 +11,10 @@ use crate::input::Controls;
 use crate::levels::{EXTRO_SLOT, MENU_FILE, slot_for};
 use crate::physics::JumpParams;
 use crate::player::PlayerTuning;
+use crate::levels::LevelSlot;
 
 /// Level 10 hard-codes 4 lives (Loads.wdl:80).
-const FIXED_LIVES_SLOT: u32 = 10;
+const FIXED_LIVES_SLOT: LevelSlot = LevelSlot(10);
 const FIXED_LIVES: i32 = 4;
 /// Debug eye: Eye of Truth ticks for the whole level.
 const DEBUG_EYE_TICKS: f32 = 1.0e9;
@@ -53,7 +54,7 @@ impl Sim {
             self.emit(Event::Saved);
         }
         // AfterLoadInitLevel: start at the checkpoint saved for this level (InitLvl.wdl:232-237).
-        if let Some(cp) = slot.and_then(|s| self.save.checkpoints.get(s as usize).copied().flatten()) {
+        if let Some(cp) = slot.and_then(|s| self.save.checkpoints.get(s.index()).copied().flatten()) {
             let mut pan = 0.0;
             for p in self.world.players.values_mut() {
                 pan = p.pan;

@@ -10,7 +10,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use sammy_core::input::Controls;
-use sammy_core::levels::{LEVELS, MENU_FILE, file_for};
+use sammy_core::levels::{LEVELS, LevelSlot, MENU_FILE, file_for};
 use sammy_core::time::Secs;
 use sammy_core::save::{LevelState, SaveGame};
 use sammy_core::sim::Sim;
@@ -84,7 +84,7 @@ fn play(level: &str, seconds: f32, mut script: impl FnMut(u64) -> Controls) -> O
     let files = files()?;
     let mut sim = new_sim();
     let file = match level.parse::<u32>() {
-        Ok(slot) => file_for(slot)?.to_owned(),
+        Ok(slot) => file_for(LevelSlot(slot))?.to_owned(),
         Err(_) => MENU_FILE.to_owned(),
     };
     sim.request_load(file);
@@ -200,7 +200,7 @@ fn menu_intro() {
 #[test]
 fn all_levels_sweep() {
     for (slot, _) in LEVELS {
-        if *slot == 49 {
+        if *slot == LevelSlot(49) {
             continue; // the extro has its own scenario
         }
         run(&format!("sweep{slot:02}"), &slot.to_string(), 20.0, sweep);
@@ -224,7 +224,7 @@ fn compare_with_engine_port() {
         ("extro".into(), "49".into(), 60.0, |_| Controls::default()),
         ("intro".into(), "menu".into(), 50.0, |_| Controls::default()),
     ];
-    for (slot, _) in LEVELS.iter().filter(|(s, _)| *s != 49) {
+    for (slot, _) in LEVELS.iter().filter(|(s, _)| *s != LevelSlot(49)) {
         cases.push((format!("sweep{slot:02}"), slot.to_string(), 20.0, sweep));
     }
     for (name, level, secs, script) in cases {
@@ -250,11 +250,11 @@ fn compare_with_engine_port() {
 fn lions_hurt_sammy() {
     let Some(files) = files() else { return };
     let mut sim = new_sim();
-    sim.request_load(file_for(4).unwrap());
+    sim.request_load(file_for(LevelSlot(4)).unwrap());
     sim.tick(Secs(0.0), &Controls::default(), files);
     let lion = sim.world.enemies.values().map(|e| e.pos).next().expect("a lion");
     sim.debug.start = Some(([lion[0] + 150.0, lion[1], lion[2] + 40.0], Some(180.0)));
-    sim.request_load(file_for(4).unwrap());
+    sim.request_load(file_for(LevelSlot(4)).unwrap());
     let (mut min_hearts, mut lives_lost, mut hits) = (f32::MAX, false, 0);
     let mut last = 48.0;
     for f in 0..(180.0 * FPS) as u64 {
@@ -271,7 +271,7 @@ fn lions_hurt_sammy() {
 }
 
 /// A level loaded with Sammy at `start` (found from a first load) and the debug ammo.
-fn sim_at(slot: u32, ammo: Option<(i32, u32)>, start: impl Fn(&Sim) -> Option<([f32; 3], f32)>) -> Option<Sim> {
+fn sim_at(slot: LevelSlot, ammo: Option<(i32, u32)>, start: impl Fn(&Sim) -> Option<([f32; 3], f32)>) -> Option<Sim> {
     let files = files()?;
     let mut sim = new_sim();
     sim.request_load(file_for(slot)?);
@@ -287,7 +287,7 @@ fn sim_at(slot: u32, ammo: Option<(i32, u32)>, start: impl Fn(&Sim) -> Option<([
 #[test]
 fn old_wasps_escape_on_type_switch() {
     // Slot 5 has type 1 and type 7 pickups; Sammy holds 20 of type 7 on a type-1 pickup.
-    let Some(mut sim) = sim_at(5, Some((20, 7)), |s| s.world.ammo_pickups.iter().find(|(_, a)| a.kind == 1).and_then(|(id, _)| s.world.pos(*id)).map(|p| (p, 0.0))) else { return };
+    let Some(mut sim) = sim_at(LevelSlot(5), Some((20, 7)), |s| s.world.ammo_pickups.iter().find(|(_, a)| a.kind == 1).and_then(|(id, _)| s.world.pos(*id)).map(|p| (p, 0.0))) else { return };
     let files = files().unwrap();
     let mut most = 0;
     for f in 0..(10.0 * FPS) as u64 {
@@ -304,7 +304,7 @@ fn old_wasps_escape_on_type_switch() {
 #[test]
 fn wasp_hitting_a_lion_leaves_a_corpse() {
     // Facing the first lion of level 4 from 250 quants with type-2 wasps (straight, fast).
-    let Some(mut sim) = sim_at(4, Some((30, 2)), |s| s.world.enemies.values().next().map(|e| ([e.pos[0] + 250.0, e.pos[1], e.pos[2] + 40.0], 180.0))) else { return };
+    let Some(mut sim) = sim_at(LevelSlot(4), Some((30, 2)), |s| s.world.enemies.values().next().map(|e| ([e.pos[0] + 250.0, e.pos[1], e.pos[2] + 40.0], 180.0))) else { return };
     let files = files().unwrap();
     let (mut most, mut puffs) = (0, 0);
     for f in 0..(20.0 * FPS) as u64 {

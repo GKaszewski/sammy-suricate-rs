@@ -4,7 +4,7 @@
 use formats::sav::{self, ids};
 use serde::{Deserialize, Serialize};
 
-use crate::levels::{FIRST_OF_WORLD, LAST_OF_WORLD, LEVELS, NBR_LEVELS};
+use crate::levels::{FIRST_OF_WORLD, LAST_OF_WORLD, LEVELS, LevelSlot, NBR_LEVELS};
 
 mod display;
 mod level_state;
@@ -22,8 +22,8 @@ pub struct SaveGame {
     /// `Player1RestartX/Y/Z`: checkpoint to start from (A4 coords).
     pub checkpoints: Vec<Option<[f32; 3]>>,
     /// `LevelEnCours`: the level "Play" resumes.
-    pub last_level: u32,
-    pub previous_level: u32,
+    pub last_level: LevelSlot,
+    pub previous_level: LevelSlot,
     /// `NbrLevelsReach`.
     pub levels_reached: u32,
     /// `NeverPlayed`: games started (0 hides "Play").
@@ -33,7 +33,7 @@ pub struct SaveGame {
     /// `BonusState` / `BonusActif`.
     pub bonus_state: u8,
     /// `NumberLastTut/Jump/ThinkLevel` (12 / 28 / 44 as shipped).
-    pub last_levels: [u32; 3],
+    pub last_levels: [LevelSlot; 3],
     /// Option sliders 0..100.
     pub music: f32,
     pub sound: f32,
@@ -51,18 +51,18 @@ impl Default for SaveGame {
         // A fresh install: every shipped level present but locked, the first of each world open.
         let mut level_state = vec![LevelState::Absent; NBR_LEVELS];
         for (slot, _) in LEVELS {
-            level_state[*slot as usize] = LevelState::Locked;
+            level_state[slot.index()] = LevelState::Locked;
         }
         for first in FIRST_OF_WORLD {
-            level_state[first as usize] = LevelState::Unlocked;
+            level_state[first.index()] = LevelState::Unlocked;
         }
         Self {
             version: 1,
             level_state,
             best_scores: vec![0; NBR_LEVELS],
             checkpoints: vec![None; NBR_LEVELS],
-            last_level: 1,
-            previous_level: 0,
+            last_level: FIRST_OF_WORLD[0],
+            previous_level: LevelSlot::default(),
             levels_reached: 0,
             games_started: 0,
             extro_seen: false,
@@ -78,30 +78,30 @@ impl Default for SaveGame {
 }
 
 impl SaveGame {
-    pub fn state(&self, slot: u32) -> LevelState {
-        self.level_state.get(slot as usize).copied().unwrap_or(LevelState::Absent)
+    pub fn state(&self, slot: LevelSlot) -> LevelState {
+        self.level_state.get(slot.index()).copied().unwrap_or(LevelState::Absent)
     }
 
     /// Playable from the menu. Registered builds also open 21 / 37 once 20 / 36 are
     /// open (interfac.wdl:103-131); the port counts as registered.
-    pub fn playable(&self, slot: u32) -> bool {
+    pub fn playable(&self, slot: LevelSlot) -> bool {
         use LevelState::*;
-        self.state(slot) == Unlocked
-            || (slot == 21 && self.state(20) == Unlocked && self.state(21) != Absent)
-            || (slot == 37 && self.state(36) == Unlocked && self.state(37) != Absent)
+        // A registered extra opens with the level before it.
+        let extra = |s: u32| slot == LevelSlot(s) && self.state(LevelSlot(s - 1)) == Unlocked && self.state(slot) != Absent;
+        self.state(slot) == Unlocked || extra(21) || extra(37)
     }
 
     /// `ValideLevel` (InitLvl.wdl:239-258).
-    pub fn validate(&mut self, slot: u32) {
-        if let Some(s) = self.level_state.get_mut(slot as usize) {
+    pub fn validate(&mut self, slot: LevelSlot) {
+        if let Some(s) = self.level_state.get_mut(slot.index()) {
             *s = LevelState::Unlocked;
         }
     }
 
     /// End of a game (mm1.wdl:972-997): checkpoint (`StoreCurrentSkills`), best score,
     /// and on a win the level and the next one become playable.
-    pub fn record_game(&mut self, slot: u32, score: i32, checkpoint: Option<[f32; 3]>, won: bool, next: Option<u32>) {
-        let i = slot as usize;
+    pub fn record_game(&mut self, slot: LevelSlot, score: i32, checkpoint: Option<[f32; 3]>, won: bool, next: Option<LevelSlot>) {
+        let i = slot.index();
         if i >= NBR_LEVELS {
             return;
         }
@@ -144,7 +144,7 @@ impl SaveGame {
         if let Some(ver) = find("Ver1.SAV").and_then(|d| sav::parse(&d).ok()) {
             let get = |id| ver.var(id).map(|v| v as u32);
             if let (Some(t), Some(j), Some(k)) = (get(ids::LAST_TUT), get(ids::LAST_JUMP), get(ids::LAST_THINK)) {
-                s.last_levels = [t, j, k];
+                s.last_levels = [t, j, k].map(LevelSlot);
             }
         }
         for (i, v) in best.array(ids::BEST_SCORES).iter().enumerate().take(NBR_LEVELS) {
@@ -157,8 +157,8 @@ impl SaveGame {
             }
         }
         let skill = |n: &str| best.skill(n).unwrap_or(0.0);
-        s.last_level = (skill("LevelEnCours") as u32).clamp(1, 49);
-        s.previous_level = skill("PreviousLevel") as u32;
+        s.last_level = LevelSlot((skill("LevelEnCours") as u32).clamp(1, 49));
+        s.previous_level = LevelSlot(skill("PreviousLevel") as u32);
         s.levels_reached = skill("NbrLevelsReach") as u32;
         s.games_started = skill("NeverPlayed") as u32;
         s.extro_seen = best.var(ids::EXTRO_VUE).unwrap_or(0.0) != 0.0;

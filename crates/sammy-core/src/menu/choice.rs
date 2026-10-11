@@ -53,7 +53,7 @@ pub enum Choice {
     /// 20: back to the root view.
     Back,
     /// 100 + N: level icon.
-    Level(u32),
+    Level(LevelSlot),
 }
 
 /// Level icons are `LEVEL_ICON + slot`.
@@ -66,7 +66,7 @@ impl Choice {
             5 => Choice::Options,
             6 => Choice::Quit,
             20 => Choice::Back,
-            c if c > LEVEL_ICON => Choice::Level(c - LEVEL_ICON),
+            c if c > LEVEL_ICON => Choice::Level(LevelSlot(c - LEVEL_ICON)),
             c => View::from_code(c).filter(|v| *v != View::Root).map_or(Choice::Decor, Choice::Grid),
         }
     }
@@ -98,7 +98,7 @@ pub fn act(choice: Choice, save: &mut SaveGame) -> MenuAction {
 }
 
 /// `GestionPartie2` (mm1.wdl:531-540): `NeverPlayed += 1`, then `DebutPartie`.
-pub fn start_level(save: &mut SaveGame, slot: u32) -> MenuAction {
+pub fn start_level(save: &mut SaveGame, slot: LevelSlot) -> MenuAction {
     let Some(file) = file_for(slot) else { return MenuAction::Nothing };
     save.games_started += 1;
     save.last_level = slot;

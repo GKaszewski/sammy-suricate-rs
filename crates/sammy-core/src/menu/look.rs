@@ -17,8 +17,8 @@ pub enum Look {
 pub(super) const LOCKED_ALPHA: f32 = 50.0;
 
 /// Slots that have an icon in the three worlds' grids.
-pub(super) fn in_world(slot: u32) -> bool {
-    matches!(slot, 1..=12 | 17..=28 | 33..=44)
+pub(super) fn in_world(slot: LevelSlot) -> bool {
+    matches!(slot.0, 1..=12 | 17..=28 | 33..=44)
 }
 
 /// `InitMainMenu`'s visibility rules: Play only once a level was ever started, Bonus

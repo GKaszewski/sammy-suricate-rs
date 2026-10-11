@@ -96,7 +96,7 @@ pub fn tooltip(item: &MenuItem, save: &SaveGame, strings: &WdlStrings, at: [f32;
     if !item.is_icon() {
         return None;
     }
-    let n = item.code - LEVEL_ICON;
+    let n = sammy_core::levels::LevelSlot(item.code - LEVEL_ICON);
     let title = strings.get(&format!("level{n}_Str")).to_vec();
     let dx = if item.locked { TOOLTIP_DX_LOCKED } else { TOOLTIP_DX };
     let message = item.locked.then(|| {
