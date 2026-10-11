@@ -4,4 +4,4 @@
 *.glb
 *.gltf
 .claude/*.lock
-crates/sammy/tests/golden/*.actual.txt
+crates/*/tests/golden/*.actual.txt

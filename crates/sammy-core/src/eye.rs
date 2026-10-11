@@ -43,6 +43,11 @@ impl EyePickup {
         Self { away: None, spin: obj.flag(3).then_some([obj.skill(2), obj.skill(3), obj.skill(4)]), angles: obj.angles, snap: !obj.flag(6) }
     }
 
+    /// Waiting to be taken (shown, sparkling).
+    pub fn idle(&self) -> bool {
+        self.away.is_none()
+    }
+
     /// Spins; true if it has a spin.
     pub fn spin(&mut self, t: f32) -> bool {
         let Some(spin) = self.spin else { return false };

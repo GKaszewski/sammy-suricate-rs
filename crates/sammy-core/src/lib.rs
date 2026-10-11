@@ -32,6 +32,7 @@ pub mod platforms;
 pub mod player;
 pub mod rng;
 pub mod save;
+pub mod sim;
 pub mod time;
 pub mod titles;
 pub mod wasps;

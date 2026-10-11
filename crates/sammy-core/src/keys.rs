@@ -58,6 +58,24 @@ pub fn gem_sprite(color: u32) -> Option<&'static str> {
     })
 }
 
+/// Full-strength light colour channel of a key light.
+const LIGHT_FULL: f32 = 250.0;
+/// Orange key light green channel.
+const LIGHT_ORANGE_G: f32 = 100.0;
+
+/// Light colour (0..255) of a key colour (`GemLight` / `DoorLight`, gems.wdl:454-477).
+pub fn light_color(key: u32) -> [f32; 3] {
+    match key {
+        1 => [LIGHT_FULL, 0.0, 0.0],
+        2 => [LIGHT_FULL, LIGHT_FULL, 0.0],
+        3 => [LIGHT_FULL, LIGHT_ORANGE_G, 0.0],
+        4 => [0.0, 0.0, LIGHT_FULL],
+        5 => [LIGHT_FULL, 0.0, LIGHT_FULL],
+        6 => [0.0, LIGHT_FULL, 0.0],
+        _ => [LIGHT_FULL, LIGHT_FULL, LIGHT_FULL],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
