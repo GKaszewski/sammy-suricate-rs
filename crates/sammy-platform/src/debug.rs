@@ -54,3 +54,18 @@ pub fn options() -> DebugOptions {
         no_intro: ["SAMMY_MENU_VIEW", "SAMMY_MENU_CAM", "SAMMY_OPTIONS", "SAMMY_MENU_CHOICE", "SAMMY_NOINTRO"].iter().any(|v| var(v).is_some()),
     }
 }
+
+/// Debug overrides kept as `KEY=VALUE` lines in the storage's `env.txt`, for platforms
+/// without an environment or command line (the PS Vita); real environment variables
+/// win. Call before anything reads the environment.
+pub fn load_env_file(storage: &crate::Storage) {
+    let Some(text) = storage.read("env.txt").and_then(|d| String::from_utf8(d).ok()) else { return };
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        if let Some((k, v)) = line.split_once('=')
+            && std::env::var_os(k.trim()).is_none()
+        {
+            // SAFETY: called at start-up, before any other thread exists.
+            unsafe { std::env::set_var(k.trim(), v.trim()) };
+        }
+    }
+}

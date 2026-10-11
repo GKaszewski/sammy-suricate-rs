@@ -12,8 +12,6 @@ mod input;
 mod scene;
 mod shot;
 
-use std::time::Instant;
-
 use glow::HasContext;
 use sammy_core::sim::{Event, Files};
 
@@ -21,10 +19,16 @@ use sammy_core::sim::{Event, Files};
 const SCREEN: (u32, u32) = (960, 544);
 /// Longest frame step (seconds): a hitch does not jump the game ahead.
 const MAX_FRAME: f32 = 0.25;
+/// Progress is logged every this many frames.
+const LOG_FRAMES: u64 = 60;
 /// Effects volume of `play_sound` without one (WDL percent).
 const SOUND_VOLUME: f32 = 100.0;
 
-struct Log;
+/// Logs to stderr, and on the Vita also to `log.txt` in the game's storage (opened per
+/// line, so nothing is lost if the app is killed).
+struct Log {
+    file: Option<std::sync::Mutex<std::path::PathBuf>>,
+}
 
 impl log::Log for Log {
     fn enabled(&self, m: &log::Metadata) -> bool {
@@ -32,14 +36,33 @@ impl log::Log for Log {
     }
     fn log(&self, r: &log::Record) {
         if self.enabled(r.metadata()) {
-            eprintln!("{} {}: {}", r.level(), r.target(), r.args());
+            let line = format!("{} {}: {}", r.level(), r.target(), r.args());
+            eprintln!("{line}");
+            if let Some(path) = &self.file
+                && let Ok(path) = path.lock()
+                && let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(&*path)
+            {
+                use std::io::Write;
+                let _ = writeln!(f, "{line}");
+            }
         }
     }
     fn flush(&self) {}
 }
 
 fn main() {
-    let _ = log::set_logger(&Log).map(|_| log::set_max_level(log::LevelFilter::Info));
+    let file = if cfg!(target_os = "vita") {
+        let storage = sammy_platform::Storage::user();
+        storage.dir().map(|d| {
+            let path = d.join("log.txt");
+            let _ = std::fs::write(&path, b"");
+            path
+        })
+    } else {
+        None
+    };
+    let logger: &'static Log = Box::leak(Box::new(Log { file: file.map(std::sync::Mutex::new) }));
+    let _ = log::set_logger(logger).map(|_| log::set_max_level(log::LevelFilter::Info));
     if let Err(e) = run() {
         log::error!("{e:#}");
         eprintln!("{e:#}");
@@ -55,6 +78,7 @@ fn run() -> anyhow::Result<()> {
         std::path::PathBuf::from(dir)
     });
     let storage = sammy_platform::Storage::user();
+    sammy_platform::debug::load_env_file(&storage);
     let files = sammy_platform::game_files(data, &storage)?;
     let mut sim = sammy_platform::debug::new_sim(sammy_platform::save::load(&storage, &files));
     let level = match argv.first().map(String::as_str) {
@@ -81,20 +105,28 @@ fn run() -> anyhow::Result<()> {
     let mut hud = hud::HudView::new(&gfx, &files);
     let mut shots = shot::Shots::from_env();
     let mut events = sdl.event_pump().map_err(anyhow::Error::msg)?;
-
-    let start = Instant::now();
+    // SDL's clock (std's monotonic clock is not reliable on every handheld).
+    let timer = sdl.timer().map_err(anyhow::Error::msg)?;
+    let secs = || timer.ticks64() as f64 / 1000.0;
+    let start = secs();
     let mut last = start;
     let mut first = true;
+    let mut frames = 0u64;
+    // Debug: SAMMY_DRAW lists what to draw (scene,level,sky,entities,hud).
+    let draw = std::env::var("SAMMY_DRAW").unwrap_or_else(|_| "scene,level,sky,entities,hud".into());
     while !input.quit {
         for e in events.poll_iter() {
             input.event(&e, &sdl);
         }
-        let now = Instant::now();
+        let now = secs();
         // The first frame has no elapsed time (as on the Bevy frontend's first update).
-        let dt = if first { 0.0 } else { (now - last).as_secs_f32().min(MAX_FRAME) };
+        let dt = if first { 0.0 } else { ((now - last) as f32).min(MAX_FRAME) };
         first = false;
         last = now;
         let controls = input.controls(dt);
+        if frames < 6 {
+            log::info!("frame {frames}: tick dt {dt:.3}");
+        }
         sim.tick(dt, &controls, &files as &dyn Files);
         audio.set_volume(sim.save.sound);
         let drained: Vec<Event> = sim.drain_events().collect();
@@ -109,7 +141,18 @@ fn run() -> anyhow::Result<()> {
             }
         }
         hud.tick(&sim.game, dt * sammy_core::time::TICKS_PER_SEC);
+        frames += 1;
+        if frames % LOG_FRAMES == 0 {
+            log::info!("frame {frames} at {:.1} s", secs() - start);
+        }
+        let trace = |what: &str| {
+            if frames < 6 {
+                log::info!("frame {frames}: {what} {:.2}", secs() - start);
+            }
+        };
+        trace("sync");
         scene.sync(&gfx, &files, &sim);
+        trace("synced");
 
         let (w, h) = window.drawable_size();
         unsafe {
@@ -118,20 +161,23 @@ fn run() -> anyhow::Result<()> {
             gfx.gl.depth_mask(true);
             gfx.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
-        if let Some(pose) = sim.camera.pose {
+        if let Some(pose) = sim.camera.pose.filter(|_| draw.contains("scene")) {
             let cam = scene::Camera::from_pose(&pose, sim.camera.params.arc, w as f32 / h.max(1) as f32);
-            scene.draw(&gfx, &sim, &cam);
+            scene.draw(&gfx, &sim, &cam, &draw);
+            trace("scene drawn");
         }
-        if sim.flow.phase != sammy_core::flow::Phase::Menu {
+        if sim.flow.phase != sammy_core::flow::Phase::Menu && draw.contains("hud") {
             hud.draw(&gfx, &sim.game, w as f32, h as f32, sim.save.display.ui_size as u32);
         }
-        if shots.due(start.elapsed().as_secs_f32()) {
+        if shots.due((secs() - start) as f32) {
             shots.save(&gfx.gl, w, h);
             if shots.done() {
                 break;
             }
         }
+        trace("swap");
         window.gl_swap_window();
+        trace("swapped");
     }
     Ok(())
 }

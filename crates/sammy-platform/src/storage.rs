@@ -49,7 +49,10 @@ impl Storage {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let Some(dir) = &self.dir else { return Err(std::io::ErrorKind::NotFound.into()) };
-            std::fs::create_dir_all(dir)?;
+            // Only when missing: the Vita reports an existing folder as an error.
+            if !dir.is_dir() {
+                std::fs::create_dir_all(dir)?;
+            }
             std::fs::write(dir.join(key), data)
         }
         #[cfg(target_arch = "wasm32")]

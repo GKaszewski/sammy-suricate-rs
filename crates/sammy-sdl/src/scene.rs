@@ -251,7 +251,7 @@ impl Scene {
     }
 
     /// Draws the world from the game's camera.
-    pub fn draw(&self, gfx: &Gfx, sim: &Sim, cam: &Camera) {
+    pub fn draw(&self, gfx: &Gfx, sim: &Sim, cam: &Camera, parts: &str) {
         let gl = &gfx.gl;
         let w = &sim.world;
         let lights = nearest_lights(sim, cam.pos);
@@ -263,7 +263,7 @@ impl Scene {
             gl.front_face(glow::CCW);
         }
         // Sky domes first, then a fresh depth buffer for the world.
-        let sky: Vec<Id> = w.looks.iter().filter(|(_, l)| l.sky).map(|(id, _)| *id).collect();
+        let sky: Vec<Id> = w.looks.iter().filter(|(_, l)| l.sky && parts.contains("sky")).map(|(id, _)| *id).collect();
         if !sky.is_empty() {
             unsafe { gl.disable(glow::CULL_FACE) };
             for id in &sky {
@@ -274,7 +274,7 @@ impl Scene {
                 gl.enable(glow::CULL_FACE);
             }
         }
-        if let Some(level) = &self.level {
+        if let Some(level) = self.level.as_ref().filter(|_| parts.contains("level")) {
             for (mesh, tex, lit) in &level.batches {
                 gfx.draw_world(mesh, &cam.view_proj, *tex, level.lightmap.filter(|_| *lit), &lights);
             }
@@ -282,7 +282,7 @@ impl Scene {
         // Models face both ways like Bevy's skinned meshes (some are open shells).
         unsafe { gl.disable(glow::CULL_FACE) };
         let mut translucent = Vec::new();
-        for (id, look) in &w.looks {
+        for (id, look) in w.looks.iter().filter(|_| parts.contains("entities")) {
             if look.sky || look.near {
                 continue;
             }
