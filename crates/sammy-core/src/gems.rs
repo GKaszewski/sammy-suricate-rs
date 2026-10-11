@@ -212,9 +212,11 @@ impl FlyingGem {
                     self.vz = GEM_VSPEED;
                     self.vz_org = GEM_VSPEED;
                     self.pan = rng.random(360.0);
-                    self.pos[2] += 8.0;
+                    // Port: the hop and the snap to rest height are swept too, so a gem
+                    // under a low ceiling can't be set inside it (and fall out of the level).
+                    self.pos = trace(self.pos, [self.pos[0], self.pos[1], self.pos[2] + STUCK_HOP]).end;
                 } else {
-                    self.pos[2] = floor + HEIGHT_GEM;
+                    self.pos = trace(self.pos, [self.pos[0], self.pos[1], floor + HEIGHT_GEM]).end;
                     out.done = true;
                 }
             }
@@ -420,6 +422,9 @@ enum DoorGemPhase {
     Final,
     Return,
 }
+
+/// A thrown gem stuck in the air hops this far up.
+const STUCK_HOP: f32 = 8.0;
 
 /// The gem aims this high above the door's origin.
 const DOOR_AIM_HEIGHT: f32 = 100.0;
