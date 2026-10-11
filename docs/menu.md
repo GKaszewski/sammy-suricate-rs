@@ -192,6 +192,8 @@ Positions are in the root view (camera at (1,-369,115), pan 90): screen-x grows 
 | 50 | **Bonus** | `titbonus.wmb` (256, 668, 96); `titbonu2.wmb` (256, 668, 32) pan-spin 4. Hidden when `BonusActif == 0`, or `BonusActif == 1 && ExtroVue == 0` (`:40-55`). Always hidden in shipped data (§3.7). |
 | 20 | **Back** (sub-menus) | 4x `mflechA1.pcx` (82x37 sprite, scale 1.25, Flag3 alpha 80), one per sub-menu, at (-2539.8, 1224.1, -4512.2) Jump, (6100.2, 4824.1, -9168.2) Think, (1124.2, 1224.1, -6576.2) Tutorial, (-5963.8, 1224.1, -4512.2) Bonus |
 
+**Prefab placement [U, verified visually]:** A4 places a `.wmb` map entity with its bounding-box **bottom** at the entity z (the geometry is stored centred). Only then do the titles line up with their diamond halves: each `*2.wmb` diamond is two pyramids with a 48-quant gap for the plate, and e.g. `titjump` (z 344, ±24) and `titjum2` (z 280, ±88) both end up centred at 368. `titquit` (z -136, -320..72) then stands on its post instead of being buried. The port applies this to every prefab whose geometry goes below z 0 (`level.rs` `spawn_object`); doors and platforms already start at z ≥ 0.
+
 Placement in the root view (x right, z up): Jump left (-384, 344), Tutorial centre (0, 432), Think right (328, 344), Play centre (4, 96), Options left (-396, 40), Quit right (512, -136), Bonus (256, 96). Depth Y ranges 452..668.
 
 Sub-menu heading sprites (Skill1 = 0, Flag3 alpha 80, scale 1.5, 256x32): `titlearn.pcx` (1123, 1346.3, -6136) Tutorial, `titjump.pcx` (-2541, 1346.3, -4072) Jump, `titthink.pcx` (6099, 4946.3, -8696) Think, `titbonus.pcx` (99x31) (-5965, 1346.3, -4072) Bonus.

@@ -224,6 +224,16 @@ impl Spawner<'_, '_, '_> {
         if std::env::var("SAMMY_SKIP").is_ok_and(|v| v.split(',').any(|a| a.eq_ignore_ascii_case(&obj.action))) {
             return;
         }
+        // A4 drops a map-entity prefab onto its origin: the bounding-box bottom sits at
+        // the entity z (menu titles only line up with their diamonds this way) [U].
+        if obj.file.to_lowercase().ends_with(".wmb")
+            && let Some((wmb, _)) = self.load_prefab(&obj.file)
+        {
+            let min_z = wmb.vertices.iter().map(|v| v[2]).fold(f32::MAX, f32::min);
+            if min_z < 0.0 {
+                obj.origin[2] -= min_z * obj.scale[2].abs();
+            }
+        }
         let mut entity = self.commands.spawn_empty();
         let init = actions::init(&mut obj, pov_z, &mut entity);
         let id = entity.id();
