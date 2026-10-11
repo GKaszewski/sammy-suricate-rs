@@ -5,6 +5,7 @@ mod decor;
 pub mod door;
 pub mod enemy;
 pub mod fx;
+pub mod gems;
 pub mod health;
 pub mod pickups;
 pub mod platform;
@@ -46,7 +47,11 @@ impl Plugin for ActionsPlugin {
                     (
                         pickups::snap_pickups,
                         pickups::collect.run_if(is_playing),
-                        pickups::bounce_keys,
+                        gems::fly_gems,
+                        gems::gem_lifetimes,
+                        gems::gem_gravity,
+                        gems::surprise_gems,
+                        door::run_door_gems,
                         pickups::shrink,
                         door::run_exits.run_if(is_playing),
                         health::collect_health.run_if(is_playing),
@@ -63,6 +68,7 @@ impl Plugin for ActionsPlugin {
                         wasp::update_weak_doors,
                         wasp::fly_planks,
                         wasp::run_hives.run_if(is_playing),
+                        gems::run_boulders.run_if(is_playing),
                         wasp::fly_hive_wasps,
                         wasp::expire_pickups,
                     )
@@ -253,6 +259,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initammo1" => {
             let (skin, anim) = wasp::init_ammo(obj, entity);
             ActionInit { skin: Some(skin), anim: Some(("stand", anim)), ..default() }
+        }
+        "initboulder" => {
+            gems::init_boulder(obj, entity);
+            ActionInit::default()
         }
         "inithive" => {
             wasp::init_hive(obj, entity);

@@ -12,7 +12,6 @@ use crate::audio::Sfx;
 use crate::collision::CollisionWorld;
 use crate::coords;
 use crate::game::{GameState, ResetScan, MASTER_KEY};
-use crate::level::{Billboard, SpriteAnim};
 
 /// `HeightGem` (skills.wdl:697): gems float this far above the ground.
 const HEIGHT_GEM: f32 = 25.0;
@@ -52,16 +51,19 @@ pub struct LevelKey {
     scale: Vec3,
 }
 
+impl LevelKey {
+    pub fn at(home: [f32; 3], scale: Vec3) -> Self {
+        Self { home: Some(home), scale }
+    }
+}
+
+/// Flag5 gems hover at their WED height above the floor (+HeightGem) instead of 25.
+#[derive(Component)]
+pub struct HoverFromWed;
+
 /// Restored by the reset scan instead of being despawned after shrinking.
 #[derive(Component)]
 pub struct Respawnable;
-
-/// An ejected key in flight (`LaunchYouKey`): collectable after it settles.
-#[derive(Component)]
-pub struct Bouncing {
-    vel: [f32; 3],
-    bounces: u32,
-}
 
 /// Gem sprite assets by colour, for keys created at runtime (ejected/mixed keys).
 #[derive(Resource, Default)]
@@ -88,14 +90,26 @@ pub fn init_bonus3(obj: &Object, entity: &mut EntityCommands) {
 }
 
 pub fn init_key(obj: &Object, entity: &mut EntityCommands) {
-    // Skill5 "surprise" gems pick a random colour; not ported yet (uses Skill6).
+    let flag = |n: u32| obj.flags & (1 << (n - 1)) != 0;
     entity.insert((
         KeyGem { color: obj.skills[5] as u32 },
         PickupPos(obj.origin),
         LevelKey { home: None, scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs() },
         Respawnable,
     ));
-    if obj.flags & (1 << 5) == 0 {
+    if obj.skills[4] != 0.0 {
+        // Surprise gem: not collectable until its colour has been rolled.
+        entity.insert(super::gems::Surprise::new(obj.skills[4], obj.origin[0] + obj.origin[1]));
+    } else {
+        entity.insert(super::gems::Collectable);
+    }
+    if flag(7) {
+        entity.insert(super::gems::GemGravity::new(HEIGHT_GEM));
+        if flag(5) {
+            entity.insert(HoverFromWed);
+        }
+    }
+    if !flag(6) {
         entity.insert(SnapToGround);
     }
 }
@@ -103,14 +117,21 @@ pub fn init_key(obj: &Object, entity: &mut EntityCommands) {
 pub fn snap_pickups(
     world: CollisionWorld,
     mut commands: Commands,
-    mut q: Query<(Entity, &mut PickupPos, &mut Transform, Option<&super::fx::ExtraHeight>), With<SnapToGround>>,
+    mut q: Query<
+        (Entity, &mut PickupPos, &mut Transform, Option<&super::fx::ExtraHeight>, Option<&mut super::gems::GemGravity>, Has<HoverFromWed>),
+        With<SnapToGround>,
+    >,
 ) {
     if !world.ready() {
         return;
     }
-    for (e, mut p, mut tf, extra) in &mut q {
+    for (e, mut p, mut tf, extra, gravity, hover) in &mut q {
         let [x, y, z] = p.0;
         let tr = world.trace(1, [x, y, z + 8.0], [x, y, z - 2000.0], None).trace;
+        if hover && let Some(mut g) = gravity {
+            // Flag5: keep the WED height above the floor (+HeightGem) as the rest height.
+            g.set_rest(z - (tr.end[2] - 16.0) + HEIGHT_GEM);
+        }
         if tr.hit() && !tr.start_solid {
             p.0[2] = tr.end[2] - 16.0 + HEIGHT_GEM + extra.map_or(0.0, |h| h.0);
             tf.translation = coords::pos(p.0);
@@ -127,8 +148,8 @@ pub fn collect(
     player: Query<&Player>,
     diamonds: Query<(Entity, &PickupPos, &Diamond), (Without<Shrinking>, Without<SnapToGround>)>,
     mut keys: Query<
-        (Entity, &PickupPos, &KeyGem, Option<&mut LevelKey>),
-        (Without<Shrinking>, Without<Bouncing>, Without<SnapToGround>, Without<Collected>),
+        (Entity, &PickupPos, &KeyGem, Option<&mut LevelKey>, Option<&super::gems::GemLifetime>, Has<super::gems::Collectable>),
+        (Without<Shrinking>, Without<SnapToGround>, Without<Collected>),
     >,
     sprites: Res<GemSprites>,
 ) {
@@ -151,17 +172,20 @@ pub fn collect(
 
     // All key gems vanish once the goal is reached (gems.wdl:77).
     if game.goal_reached {
-        for (e, ..) in &keys {
-            commands.entity(e).insert(Shrinking);
+        for (e, _, _, _, _, collectable) in &keys {
+            if collectable {
+                commands.entity(e).insert(Shrinking);
+            }
         }
         return;
     }
+    // A gem flying into a door blocks pickups (`PlayerOldKey == 999`).
     if game.key_in_flight {
         return;
     }
     // Key_Hit: take the gem; mix primaries, otherwise throw the old key back out.
-    for (e, pos, gem, level_key) in &mut keys {
-        if !near(&pos.0) {
+    for (e, pos, gem, level_key, life, collectable) in &mut keys {
+        if !collectable || !near(&pos.0) {
             continue;
         }
         commands.entity(e).insert((Shrinking, crate::lights::flash(crate::lights::key_color(gem.color), 300.0, 15.0, 100.0)));
@@ -173,7 +197,7 @@ pub fn collect(
         game.key = key;
         match outcome {
             KeyOutcome::Mixed => sfx.play("GemMixing_son"),
-            KeyOutcome::Ejected(old) => eject_key(&mut commands, &mut game, &sprites, old, p, 30.0),
+            KeyOutcome::Ejected(old) => super::gems::throw_back_key(&mut commands, &sprites, old, p, life.map_or(0.0, |l| l.ticks())),
             KeyOutcome::Taken => {}
         }
         break; // one gem per scan
@@ -196,59 +220,6 @@ pub fn take_key(held: u32, gem: u32) -> (u32, KeyOutcome) {
         0 => (gem, KeyOutcome::Taken),
         _ if primary(held) && primary(gem) && held != gem => (held | gem, KeyOutcome::Mixed),
         _ => (gem, KeyOutcome::Ejected(held)),
-    }
-}
-
-/// `EjectOldKey` + `LaunchYouKey`: the old key pops out behind Sammy and bounces.
-/// `EjectNewKey` (on death) launches it with vz 40.
-pub fn eject_key(commands: &mut Commands, game: &mut GameState, sprites: &GemSprites, color: u32, p: &Player, vz: f32) {
-    let Some((mesh, mat, frames)) = sprites.0.get(&color).cloned() else { return };
-    game.key_in_flight = true;
-    let pos = [p.pos[0], p.pos[1], p.pos[2] + 50.0];
-    let back = (p.pan + 180.0).to_radians();
-    commands.spawn((
-        Name::new("ejected key"),
-        crate::flow::LevelScoped,
-        Transform::from_translation(coords::pos(pos)),
-        Mesh3d(mesh),
-        MeshMaterial3d(mat),
-        Billboard,
-        SpriteAnim { frames, frame: 0.0, fps: 48.0 },
-        KeyGem { color },
-        PickupPos(pos),
-        Bouncing { vel: [back.cos() * 12.0, back.sin() * 12.0, vz], bounces: 0 },
-    ));
-}
-
-pub fn bounce_keys(
-    time: Res<Time>,
-    world: CollisionWorld,
-    mut game: ResMut<GameState>,
-    mut commands: Commands,
-    mut q: Query<(Entity, &mut PickupPos, &mut Transform, &mut Bouncing)>,
-) {
-    let t = time.delta_secs() * TICKS;
-    for (e, mut p, mut tf, mut b) in &mut q {
-        b.vel[2] -= 4.0 * t;
-        let target = [0, 1, 2].map(|i| p.0[i] + b.vel[i] * t);
-        let hit = world.trace(1, p.0, target, None).trace;
-        p.0 = hit.end;
-        if hit.hit() {
-            // Reflect off the surface, losing energy.
-            let n = hit.normal;
-            let d = b.vel[0] * n[0] + b.vel[1] * n[1] + b.vel[2] * n[2];
-            b.vel = [0, 1, 2].map(|i| (b.vel[i] - 2.0 * d * n[i]) * 0.6);
-            if n[2] > 0.7 {
-                b.bounces += 1;
-            }
-        }
-        // Collectable again after the 5th bounce (docs/gameplay.md §4.2).
-        if b.bounces >= 5 {
-            p.0[2] = hit.end[2] - 16.0 + HEIGHT_GEM;
-            commands.entity(e).remove::<Bouncing>();
-            game.key_in_flight = false;
-        }
-        tf.translation = coords::pos(p.0);
     }
 }
 
@@ -275,14 +246,14 @@ pub fn shrink(
 pub fn reset_keys(
     mut reset: MessageReader<ResetScan>,
     mut commands: Commands,
-    mut game: ResMut<GameState>,
-    mut keys: Query<(Entity, &mut PickupPos, &mut Transform, Option<&LevelKey>), With<KeyGem>>,
+    game: Res<GameState>,
+    mut rng: ResMut<crate::game::Rng>,
+    mut keys: Query<(Entity, &mut PickupPos, &mut Transform, Option<&LevelKey>, Option<&mut super::gems::Surprise>), With<KeyGem>>,
 ) {
     if reset.read().count() == 0 {
         return;
     }
-    game.key_in_flight = false;
-    for (e, mut pos, mut tf, level_key) in &mut keys {
+    for (e, mut pos, mut tf, level_key, surprise) in &mut keys {
         match level_key {
             Some(lk) if game.key != MASTER_KEY => {
                 if let Some(home) = lk.home {
@@ -290,7 +261,18 @@ pub fn reset_keys(
                 }
                 tf.translation = coords::pos(pos.0);
                 tf.scale = lk.scale;
-                commands.entity(e).remove::<(Collected, Shrinking)>().insert(Visibility::Inherited);
+                let mut ent = commands.entity(e);
+                ent.remove::<(Collected, Shrinking)>().insert(Visibility::Inherited);
+                // InitKey runs again: a surprise gem re-rolls (its colour keeps climbing).
+                match surprise {
+                    Some(mut s) => {
+                        s.rearm(&mut rng);
+                        ent.remove::<super::gems::Collectable>();
+                    }
+                    None => {
+                        ent.insert(super::gems::Collectable);
+                    }
+                }
             }
             _ => {
                 commands.entity(e).despawn();

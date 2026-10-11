@@ -20,6 +20,8 @@ enum DoorState {
     Down,
     Rising,
     Up { hold: f32 },
+    /// Hold over: wait until nobody is under the door, then lower.
+    Clearing,
     Lowering,
     /// Stays open for good (one-shot doors, validated permanent doors).
     Open,
@@ -45,6 +47,18 @@ pub struct Door {
     state: DoorState,
     /// Ticks left of the "wrong key" flash.
     flash: f32,
+    /// Skill2: rise height (for the closing clearance radius).
+    rise: f32,
+    /// Skill14: a gem is flying in (or a keyless Flag5 door is engaged).
+    pub gem_flying: bool,
+    /// Skill15: the gem arrived / Sammy walked under: the door stays open for good.
+    pub validated: bool,
+    /// Sammy came back into reach during the hold (`Skill9 = 4`).
+    refreshed: bool,
+    /// Bell/blink timer (Skill16).
+    bell: f32,
+    /// Closing clearance check: first pass uses Skill2 + 100, later passes 250.
+    clear_pass: u8,
 }
 
 const fn flag(n: u32) -> u32 {
@@ -66,6 +80,12 @@ pub fn init_door(obj: &Object, entity: &mut EntityCommands) {
         flags: obj.flags,
         state: DoorState::Down,
         flash: 0.0,
+        rise,
+        gem_flying: false,
+        validated: false,
+        refreshed: false,
+        bell: 0.0,
+        clear_pass: 0,
     });
 }
 
@@ -89,82 +109,197 @@ impl Door {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run_doors(
     time: Res<Time>,
     mut commands: Commands,
     mut game: ResMut<GameState>,
     mut sfx: Sfx,
+    sprites: Res<super::pickups::GemSprites>,
+    assets: Res<crate::level::GameAssets>,
     player: Query<&Player>,
-    mut doors: Query<(Entity, &mut Door, &mut Brush, &mut Transform)>,
+    enemies: Query<&super::enemy::Enemy>,
+    mut doors: Query<(Entity, &mut Door, &mut Brush, &mut Transform, Option<&Children>)>,
 ) {
     let Ok(p) = player.single() else { return };
     let t = time.delta_secs() * TICKS;
-    for (ent, mut door, mut brush, mut tf) in &mut doors {
+    for (ent, mut door, mut brush, mut tf, children) in &mut doors {
         let o = brush.origin;
         let horiz = ((o[0] - p.pos[0]).powi(2) + (o[1] - p.pos[1]).powi(2)).sqrt();
         let dist = (horiz.powi(2) + (o[2] - p.pos[2]).powi(2)).sqrt();
-        let scanned = door.scan_id == DOOR_SCAN_ID && dist <= RANGE_SCAN_DOOR;
-        let in_reach = scanned && horiz < door.open_dist - 4.0;
+        // Sammy's per-tick door scan (id 25, radius 500) drives `movePortail`.
+        let scanned = door.scan_id == DOOR_SCAN_ID && dist <= RANGE_SCAN_DOOR && p.state != super::player::State::Dead;
         let accepts = door.accepts(game.key);
         door.flash = (door.flash - t).max(0.0);
 
-        door.state = match door.state {
-            DoorState::Down if scanned && !accepts => {
-                // Wrong or no key: flash (and blink the score for the exit door).
-                if door.flash == 0.0 {
-                    door.flash = 3.0;
-                    if door.color == 7 && !game.goal_reached {
-                        game.warn_score = 8.0;
+        // OuvrePortail, reached with the right key (or while a gem is flying).
+        if scanned && (accepts || door.gem_flying) {
+            if horiz > door.open_dist - 4.0 {
+                if door.down_speed != 0.0 {
+                    door.gem_flying = false; // recall the flying gem
+                }
+            } else if horiz < 128.0 && door.gem_flying {
+                door.validated = true; // walking under the door validates it
+            } else if matches!(door.state, DoorState::Up { .. }) {
+                door.refreshed = true;
+            } else if accepts && matches!(door.state, DoorState::Down) {
+                if door.permanent() && !door.gem_flying {
+                    // CreateGemKeyAnim: the held gem flies into the door (none for key 0).
+                    door.gem_flying = true;
+                    door.validated = false;
+                    if game.key != 0 {
+                        super::gems::spawn_door_gem(&mut commands, &sprites, ent, game.key, p.pos);
+                        game.key_in_flight = true;
+                        if !game.goal_reached {
+                            game.key = 0;
+                        }
                     }
                 }
-                DoorState::Down
-            }
-            DoorState::Down if in_reach && accepts => {
                 sfx.play("DoorOpen_son");
-                // DoorLight: the door glows in its colour (600 → 100 at -50/tick).
                 if (1..=6).contains(&door.color) {
                     commands.entity(ent).insert(crate::lights::flash(crate::lights::key_color(door.color), 600.0, 50.0, 100.0));
                 }
-                if door.permanent() && game.key != MASTER_KEY {
-                    // Permanent doors "catch" the gem: the key is spent (AnimGemKey).
-                    game.key = 0;
-                }
-                DoorState::Rising
+                door.state = DoorState::Rising;
             }
+        } else if scanned && !accepts && door.flash == 0.0 && matches!(door.state, DoorState::Down) {
+            // Wrong or no key: flash (and blink the score for the exit door).
+            door.flash = 3.0;
+            if door.color == 7 && !game.goal_reached {
+                game.warn_score = 8.0;
+            }
+        }
+
+        door.state = match door.state {
             DoorState::Rising => {
                 brush.origin[2] = (o[2] + door.up_speed * t).min(door.top);
-                if brush.origin[2] >= door.top {
-                    if door.permanent() || door.down_speed == 0.0 {
-                        DoorState::Open
-                    } else {
-                        DoorState::Up { hold: door.hold }
-                    }
-                } else {
+                if brush.origin[2] < door.top {
                     DoorState::Rising
+                } else if door.down_speed == 0.0 && !door.permanent() {
+                    DoorState::Open // burn door
+                } else {
+                    door.refreshed = false;
+                    door.bell = 0.0;
+                    DoorState::Up { hold: door.hold }
                 }
             }
             DoorState::Up { hold } => {
-                // Sammy staying in range keeps it open (+4 ticks per scan).
-                let hold = if in_reach && accepts { hold.max(4.0) } else { hold } - t;
-                if hold > 0.0 {
-                    DoorState::Up { hold }
-                } else if horiz < 250.0 {
-                    DoorState::Up { hold: 0.0 } // DoorScanEntities: never close on Sammy
+                if door.permanent() && door.validated {
+                    morph(&mut commands, ent, &mut brush, children, &assets, "doordark.wmb");
+                    door.gem_flying = false;
+                    DoorState::Open
                 } else {
-                    if door.hold > 4.0 {
-                        sfx.play("Bell2");
+                    let hold = hold - t;
+                    // Bells: long holds blink every 12 ticks, Bell1 in the last 48 ticks.
+                    if door.hold > 48.0 {
+                        door.bell -= t;
+                        if door.bell <= 0.0 {
+                            door.bell = 12.0;
+                            if hold < 48.0 && hold > 4.0 {
+                                sfx.play("Bell1");
+                            }
+                        }
                     }
-                    sfx.play("DoorClose_son");
-                    DoorState::Lowering
+                    if hold > 0.0 {
+                        DoorState::Up { hold }
+                    } else if door.refreshed || door.gem_flying {
+                        door.refreshed = false;
+                        DoorState::Up { hold: 4.0 }
+                    } else {
+                        if door.hold > 4.0 {
+                            sfx.play("Bell2");
+                        }
+                        door.clear_pass = 0;
+                        DoorState::Clearing
+                    }
+                }
+            }
+            DoorState::Clearing => {
+                if door.down_speed == 0.0 {
+                    DoorState::Up { hold: 4.0 } // never lowers (Skill5 = 0)
+                } else {
+                    // DoorScanEntities: Sammy or a lion within range keeps the door up.
+                    let r = if door.clear_pass == 0 { door.rise + 100.0 } else { 250.0 };
+                    let d3 = |q: [f32; 3]| ((q[0] - o[0]).powi(2) + (q[1] - o[1]).powi(2) + (q[2] - o[2]).powi(2)).sqrt();
+                    let blocked = d3(p.pos) < r || enemies.iter().any(|e| e.alive() && d3(e.pos) < r);
+                    door.clear_pass = 1;
+                    if blocked {
+                        DoorState::Clearing
+                    } else {
+                        sfx.play("DoorClose_son");
+                        DoorState::Lowering
+                    }
                 }
             }
             DoorState::Lowering => {
                 brush.origin[2] = (o[2] - door.down_speed * t).max(door.z0);
-                if brush.origin[2] <= door.z0 { DoorState::Down } else { DoorState::Lowering }
+                if brush.origin[2] <= door.z0 {
+                    door.gem_flying = false;
+                    DoorState::Down
+                } else {
+                    DoorState::Lowering
+                }
             }
             s => s,
         };
         tf.translation = coords::pos(brush.origin);
+    }
+}
+
+/// `morph`: swap a map entity's prefab (model and collision hull).
+pub fn morph(
+    commands: &mut Commands,
+    e: Entity,
+    brush: &mut Brush,
+    children: Option<&Children>,
+    assets: &crate::level::GameAssets,
+    file: &str,
+) {
+    let Some((wmb, parts)) = assets.prefab(file) else { return };
+    brush.wmb = wmb;
+    for c in children.into_iter().flatten() {
+        commands.entity(*c).despawn();
+    }
+    commands.entity(e).with_children(|c| {
+        for (mesh, mat) in parts {
+            c.spawn((Mesh3d(mesh), MeshMaterial3d(mat)));
+        }
+    });
+}
+
+/// Moves gems flying into permanent doors; arrival validates the door, a recall
+/// returns the key to Sammy.
+pub fn run_door_gems(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut game: ResMut<GameState>,
+    mut sfx: Sfx,
+    player: Query<&Player>,
+    mut doors: Query<(&mut Door, &Brush)>,
+    mut gems: Query<(Entity, &mut super::gems::DoorGem, &mut Transform)>,
+) {
+    let Ok(p) = player.single() else { return };
+    let t = time.delta_secs() * TICKS;
+    for (e, mut g, mut tf) in &mut gems {
+        let Ok((mut door, brush)) = doors.get_mut(g.door) else {
+            commands.entity(e).despawn();
+            continue;
+        };
+        let target = (brush.origin, door.gem_flying, door.validated);
+        match super::gems::fly_door_gem(&mut g, target, p.pos, t) {
+            Some(true) => {
+                sfx.play("broken4");
+                door.validated = true;
+                game.key_in_flight = false;
+                commands.entity(e).despawn();
+            }
+            Some(false) => {
+                // Back with Sammy: the key is returned (even over a master key, original quirk).
+                game.key = g.color;
+                game.key_in_flight = false;
+                commands.entity(e).despawn();
+            }
+            None => tf.translation = coords::pos(super::gems::door_gem_pos(&g)),
+        }
     }
 }
 

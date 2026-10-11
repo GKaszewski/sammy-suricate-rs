@@ -7,7 +7,7 @@
 use bevy::prelude::*;
 use formats::wmb::Object;
 
-use super::pickups::{eject_key, Collected, GemSprites, PickupPos, Respawnable, Shrinking, SnapToGround};
+use super::pickups::{Collected, GemSprites, PickupPos, Respawnable, Shrinking, SnapToGround};
 use super::player::{Player, State, TICKS};
 use crate::audio::Sfx;
 use crate::camera::FollowState;
@@ -168,6 +168,7 @@ pub fn run_death(
     mut game: ResMut<GameState>,
     mut sfx: Sfx,
     sprites: Res<GemSprites>,
+    jump: Res<super::player::JumpParams>,
     mut reset: MessageWriter<ResetScan>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut follow: Query<&mut FollowState>,
@@ -182,9 +183,12 @@ pub fn run_death(
                 // ResetSammy: input off; the held key is dropped unless the goal is reached.
                 p.state = State::Dead;
                 if game.key != 0 && !game.goal_reached {
+                    // EjectNewKey: a decorative gem pops out (fate 0, never collectable).
                     let key = game.key;
                     game.key = 0;
-                    eject_key(&mut commands, &mut game, &sprites, key, &p, 40.0);
+                    let pos = [p.pos[0], p.pos[1], p.pos[2] + 30.0];
+                    let hs = p.vel[0].abs() + p.vel[1].abs();
+                    super::gems::launch_gem(&mut commands, &sprites, &jump, key, pos, p.pan, hs, 40.0, 0.0);
                 }
                 if d.kind == DeathKind::Kaputt
                     && let Some(a) = anim.as_deref_mut()

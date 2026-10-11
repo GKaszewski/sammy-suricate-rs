@@ -199,10 +199,14 @@ pub fn follow_engines(engines: Query<&Engine>, mut platforms: Query<(&mut Platfo
 
 /// Riders move with the platform under them (`PlayerForce` = platform motion);
 /// standing on a locked platform with the right key starts its engine.
+#[allow(clippy::too_many_arguments)]
 pub fn ride_platforms(
     game: Res<GameState>,
     mut sfx: Sfx,
+    mut commands: Commands,
+    assets: Res<crate::level::GameAssets>,
     platforms: Query<&Platform>,
+    mut bodies: Query<(&mut Brush, Option<&Children>)>,
     mut engines: Query<&mut Engine>,
     mut player: Query<&mut Player>,
 ) {
@@ -223,6 +227,12 @@ pub fn ride_platforms(
         if ok {
             eng.unlocked = true;
             sfx.play("platform1_son");
+            // The platform turns into the plain wooden one (`morph <platfor1.wmb>`).
+            if let Some(g) = p.ground_entity
+                && let Ok((mut brush, children)) = bodies.get_mut(g)
+            {
+                super::door::morph(&mut commands, g, &mut brush, children, &assets, "platfor1.wmb");
+            }
         }
     }
 }
