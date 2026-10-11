@@ -139,6 +139,10 @@ impl Default for Rng {
 }
 
 impl Rng {
+    pub fn seeded(seed: u64) -> Self {
+        Self(seed | 1)
+    }
+
     pub fn random(&mut self, x: f32) -> f32 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 7;

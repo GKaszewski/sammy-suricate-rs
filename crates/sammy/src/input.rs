@@ -21,7 +21,7 @@ const DEADZONE: f32 = 0.25;
 const NAV_DELAY: f32 = 0.4;
 const NAV_REPEAT: f32 = 0.15;
 
-#[derive(Resource, Default, Debug)]
+#[derive(Resource, Default, Debug, Clone)]
 pub struct Controls {
     /// Right(+)/left(-) and forward(+)/back(-), -1..1 (analog on a stick).
     pub turn: f32,
@@ -47,6 +47,13 @@ pub struct Controls {
     pub pad: bool,
 }
 
+/// Replaces the devices (tests, replays): `frame -> controls`, called once per frame.
+#[derive(Resource)]
+pub struct ScriptedInput {
+    pub frame: u64,
+    pub script: Box<dyn FnMut(u64) -> Controls + Send + Sync>,
+}
+
 #[derive(Default)]
 struct NavRepeat {
     dir: Option<IVec2>,
@@ -61,7 +68,14 @@ fn read_controls(
     pads: Query<&Gamepad>,
     mut c: ResMut<Controls>,
     mut repeat: Local<NavRepeat>,
+    scripted: Option<ResMut<ScriptedInput>>,
 ) {
+    if let Some(mut s) = scripted {
+        let f = s.frame;
+        s.frame += 1;
+        *c = (s.script)(f);
+        return;
+    }
     let key = |k: &[KeyCode]| k.iter().any(|k| keys.pressed(*k));
     let hit = |k: &[KeyCode]| k.iter().any(|k| keys.just_pressed(*k));
     let axis = |pos: KeyCode, neg: KeyCode| keys.pressed(pos) as i32 as f32 - keys.pressed(neg) as i32 as f32;

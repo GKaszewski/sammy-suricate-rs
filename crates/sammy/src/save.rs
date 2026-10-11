@@ -46,6 +46,9 @@ pub struct SaveGame {
     /// Port additions: window mode, resolutions and UI size.
     #[serde(default)]
     pub display: DisplaySettings,
+    /// Never written to disk (tests, replays).
+    #[serde(skip)]
+    pub readonly: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -100,6 +103,7 @@ impl Default for SaveGame {
             sound: 100.0,
             joypad: false,
             display: DisplaySettings::default(),
+            readonly: false,
         }
     }
 }
@@ -233,7 +237,7 @@ pub fn load(game_dir: &Path) -> SaveGame {
 
 pub fn write(save: &SaveGame) {
     // Scripted debug runs never touch the player's save.
-    if std::env::var_os("SAMMY_SCREENSHOT").is_some() || std::env::var_os("SAMMY_NOSAVE").is_some() {
+    if save.readonly || std::env::var_os("SAMMY_SCREENSHOT").is_some() || std::env::var_os("SAMMY_NOSAVE").is_some() {
         return;
     }
     let path = save_path();
