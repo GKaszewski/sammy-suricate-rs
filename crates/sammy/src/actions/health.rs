@@ -135,7 +135,8 @@ pub fn detect_deaths(
     tiles: Query<(Has<DeathTile>, Has<LavaTile>)>,
 ) {
     let Ok((e, p)) = player.single() else { return };
-    if p.state == State::Dead {
+    // `Player_Kaputt` returns at once while `PlayerEtat == 3` (extro scripted Sammy).
+    if matches!(p.state, State::Dead | State::Scripted) {
         return;
     }
     let (death, lava) = p.ground_entity.filter(|_| p.grounded && p.vz == 0.0).and_then(|g| tiles.get(g).ok()).unwrap_or_default();

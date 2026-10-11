@@ -1962,6 +1962,8 @@ fn set_fin_extro(you) {                            // :5546
 
 #### Port checklist (extro)
 
+**Status (port):** items 1-7 done in `actions/extro.rs` (Pov, Scanners, triggers, fade), `enemy::init_wasp_ennemy` (Flag8 flight, passable, Win model) and `flow.rs` (`EXTRO_SLOT`: no lose check; the end loads slot 1 until the menu exists). Not done: wasp trails, `Particle_Win` sparkle, ambient buzz sounds.
+
 1. Add `PovTarget` and use it in the camera and in enemy distance/LOS.
 2. Implement `InitSetPovSyn` (hard camera cut), `InitSetAnimPlayer` (forced anim 11/12 and `PlayerEtat` 2/3 lock and immunity) and `InitSetFinExtro` (fog fade → menu).
 3. `StartExtro` → `InitWaspExtro`.

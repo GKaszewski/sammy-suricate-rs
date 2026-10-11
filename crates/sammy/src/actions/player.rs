@@ -154,6 +154,8 @@ pub enum State {
     /// Throwing a wasp: "TirA" wind-up, then "TirB" follow-through (`PlayerEtat == 2`).
     FireA,
     FireB,
+    /// Extro `SetAnimPlayer` (`PlayerEtat` 2/3): no input, cannot die, animation scripted.
+    Scripted,
     /// Quick 180° turn (`RetourneSammy`, `PlayerEtat == 6`).
     UTurn,
 }
@@ -556,7 +558,7 @@ pub fn move_player(
             let floor = floor_below(&world, p.pos);
             let floor_z = floor.map(|(f, ..)| f);
             // A real fall (more than 64 below the normal height) shows the jump animation.
-            if !matches!(p.state, State::Air | State::Dead) && floor_z.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
+            if !matches!(p.state, State::Air | State::Dead | State::Scripted) && floor_z.is_none_or(|f| p.pos[2] - f > BLOB_HAUT + 64.0) {
                 p.state = State::Air;
                 if let Some(a) = anim.as_deref_mut() {
                     a.play("sautB", false, 50.0);

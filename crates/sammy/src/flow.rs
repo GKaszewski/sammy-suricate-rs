@@ -63,6 +63,8 @@ pub fn slot_for(file: &str) -> Option<u32> {
 /// `SearchNextLevel`: the next existing slot. The last level of each world
 /// (12 / 28 / 44) returns to the menu in the original; with no menu yet we
 /// continue with the next world, and 44 leads to the extro.
+pub const EXTRO_SLOT: u32 = 49;
+
 pub fn next_slot(slot: u32) -> u32 {
     match slot {
         12 => 17,
@@ -146,6 +148,8 @@ fn load_pending(
     commands.insert_resource(crate::actions::player::PlayerTuning::default());
     commands.insert_resource(crate::camera::CameraRuntime::default());
     commands.insert_resource(crate::actions::enemy::LionGlobals::default());
+    commands.insert_resource(crate::actions::extro::Pov::default());
+    commands.remove_resource::<crate::actions::extro::FinExtro>();
     for mut f in &mut follow {
         *f = FollowState::default();
     }
@@ -220,7 +224,8 @@ fn run_flow(
             }
         }
         Phase::Playing if game.won => Phase::Won(0.0),
-        Phase::Playing if game.lost => Phase::Lost(0.0),
+        // The extro's own loop has no lose check (Extro.wdl:121-145).
+        Phase::Playing if game.lost && current.slot != Some(EXTRO_SLOT) => Phase::Lost(0.0),
         Phase::Won(ticks) | Phase::Lost(ticks) if ticks >= 320.0 || (ticks > 16.0 && any_key(&keys)) => {
             let won = matches!(current.phase, Phase::Won(_));
             pending.0 = match current.slot {

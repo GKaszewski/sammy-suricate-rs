@@ -216,10 +216,10 @@ pub fn camera_zones(
     level: Option<Res<LevelCollision>>,
     mut params: ResMut<CameraParams>,
     mut rt: ResMut<CameraRuntime>,
-    player: Query<&Player>,
+    scanners: Res<crate::actions::extro::Scanners>,
     mut zones: Query<(Entity, &mut CameraZone)>,
 ) {
-    let (Ok(p), Some(level)) = (player.single(), level) else { return };
+    let Some(level) = level else { return };
     if current.phase != Phase::Playing {
         return;
     }
@@ -255,7 +255,7 @@ pub fn camera_zones(
                 continue;
             }
             z.pending = false;
-            let d = (0..3).map(|i| (z.pos[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt();
+            let d = scanners.nearest(z.pos).map_or(f32::MAX, |(_, d)| d);
             if started || d > z.s[6] {
                 continue;
             }
@@ -275,20 +275,20 @@ pub fn camera_zones(
         if started || rt.bouge {
             continue;
         }
-        // Synchronous part of SetCameraHit, during Sammy's scan.
+        // Synchronous part of SetCameraHit, during an id-25 scan (Sammy or a Flag5 enemy).
         for (_, mut z) in &mut zones {
             if !z.armed {
                 continue;
             }
-            let d = (0..3).map(|i| (z.pos[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt();
-            if d > 500.0 {
+            let Some((sp, d)) = scanners.nearest(z.pos) else { continue };
+            if d > crate::actions::extro::RANGE_SCAN_25 {
                 continue;
             }
             let ty = if z.s[0] == 3.0 { 3 } else { 2 };
             if rt.cam_type == ty && params.dist == z.s[1] && params.height == z.s[2] && params.plus_tilt == z.s[4] {
                 continue;
             }
-            if level.0.trace(0, 0, z.pos, p.pos).hit() {
+            if level.0.trace(0, 0, z.pos, sp).hit() {
                 continue;
             }
             z.pending = true;
@@ -381,6 +381,7 @@ fn follow(
     current: Res<CurrentLevel>,
     level: Option<Res<LevelCollision>>,
     player: Query<&Player>,
+    pov: Res<crate::actions::extro::Pov>,
     mut cam: Query<(&mut Transform, &mut FollowState), With<MainCamera>>,
 ) {
     let (Ok(p), Ok((mut tf, mut st))) = (player.single(), cam.single_mut()) else { return };
@@ -394,10 +395,11 @@ fn follow(
         return;
     }
 
+    // Type 3 follows `pov_Syn` (Sammy, or the extro's retargeted wasp/lion).
     let intro = current.phase == Phase::Intro;
     // 1. Yaw follows Sammy's pan (4/AverageFps per frame = 4 per second).
     if st.pos.is_none() {
-        st.ang = p.pan;
+        st.ang = pov.pan;
         // The level-start sweep flies in from `CameraPosOrigine`.
         if intro && let Some((o, ..)) = params.origin {
             st.pos = Some(o);
@@ -406,7 +408,7 @@ fn follow(
     if st.orbit {
         st.ang += 3.0 * t;
     } else {
-        st.ang += angle_diff(p.pan - st.ang) * (4.0 * time.delta_secs()).min(1.0);
+        st.ang += angle_diff(pov.pan - st.ang) * (4.0 * time.delta_secs()).min(1.0);
     }
 
     // 2. Ideal position: `dist` behind at `height` above.
@@ -415,8 +417,8 @@ fn follow(
         st.height = params.height;
     }
     let a = (st.ang + params.back).to_radians();
-    let eye = [p.pos[0], p.pos[1], p.pos[2] + params.plus_tilt * st.tilt_scale.unwrap_or(1.0)];
-    let ideal_at = |d: f32, h: f32| [p.pos[0] + a.cos() * d, p.pos[1] + a.sin() * d, p.pos[2] + h];
+    let eye = [pov.pos[0], pov.pos[1], pov.pos[2] + params.plus_tilt * st.tilt_scale.unwrap_or(1.0)];
+    let ideal_at = |d: f32, h: f32| [pov.pos[0] + a.cos() * d, pov.pos[1] + a.sin() * d, pov.pos[2] + h];
     let blocked = |to: [f32; 3]| level.as_ref().map(|l| l.0.trace(0, 1, eye, to)).filter(|tr| tr.hit() && !tr.start_solid);
 
     // 4. Emergency camera (camera.wdl `Camera2_Syn`): while a wall hides Sammy, zoom in

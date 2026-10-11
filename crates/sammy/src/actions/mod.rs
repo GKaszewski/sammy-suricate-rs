@@ -2,6 +2,7 @@
 //! action name is dispatched here when the level is spawned.
 
 pub mod decor;
+pub mod extro;
 pub mod door;
 pub mod enemy;
 pub mod fx;
@@ -104,6 +105,10 @@ impl Plugin for ActionsPlugin {
                     .chain(),
             )
             .add_systems(Update, decor::snap_sprites)
+            .init_resource::<extro::Pov>()
+            .init_resource::<extro::Scanners>()
+            .add_systems(PreUpdate, extro::update_pov)
+            .add_systems(Update, (extro::run_triggers.after(enemy::tick_enemies), extro::scripted_anims, extro::fade_out))
             .add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
     }
 }
@@ -156,7 +161,9 @@ fn is_marker(action: &str) -> bool {
         "initgame", "initcamera", "initextraballes", "initnextraballes", "initpublic", "initinvisible",
         "initset", "initprotection", "initlionskills", "initrangemdl",
     ];
-    PREFIXES.iter().any(|p| action.starts_with(p))
+    // The extro's `InitSetPovSyn` / `InitSetAnimPlayer` / `InitSetFinExtro` are live triggers.
+    let extro_trigger = ["initsetpovsyn", "initsetanimplayer", "initsetfinextro"].contains(&action);
+    PREFIXES.iter().any(|p| action.starts_with(p)) && !extro_trigger
 }
 
 /// Runs the synchronous part of an entity action (the code before its first
@@ -285,6 +292,19 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initlion" => {
             let skin = enemy::init_lion(obj, entity);
             ActionInit { skin, anim: Some(("stand", 3.0)), ..default() }
+        }
+        "initwaspennemy" => {
+            let skin = enemy::init_wasp_ennemy(obj, entity, false);
+            ActionInit { skin, anim: Some(("stand", 3.0)), ..default() }
+        }
+        "startextro" => {
+            let skin = enemy::init_wasp_ennemy(obj, entity, true);
+            extro::start_extro(entity);
+            ActionInit { skin, anim: Some(("walk", 3.0)), ..default() }
+        }
+        "initsetpovsyn" | "initsetanimplayer" | "initsetfinextro" => {
+            extro::init_trigger(&action, obj, entity);
+            ActionInit { hidden_but_alive: true, ..default() }
         }
         "initstartennemy" => {
             enemy::init_start_ennemy(obj, entity);

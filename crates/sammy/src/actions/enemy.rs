@@ -20,6 +20,8 @@ use crate::model::ModelAnimator;
 
 /// Class ids (`IdEnnemy` after init).
 const LION: u32 = 8888;
+/// `Win.MDL` in the extro (`IdEnnemy == 99`): stand cycle at 6 %/tick, never a target.
+const WIN_MODEL: u32 = 99;
 const ELEPHANT: u32 = 1111;
 /// Enemies collide with the fat hull.
 const HULL: usize = 2;
@@ -263,6 +265,12 @@ pub struct Enemy {
     teleport: Option<(Entity, [f32; 3], bool)>,
     /// Opacity in percent (teleport fades).
     pub alpha: f32,
+    /// Editor/script `passable` (wasp enemies): never blocks movers.
+    passable: bool,
+    /// Wasp enemy: keeps its editor height instead of snapping to the floor.
+    flying_init: bool,
+    /// `IdWaspSpec` of wasp enemies (`InitWaspEnnemy`), 0 for ground enemies.
+    pub wasp_spec: u32,
 }
 
 impl Enemy {
@@ -317,6 +325,21 @@ impl Enemy {
 
     pub fn alive(&self) -> bool {
         !matches!(self.etat, 6 | 7) && (self.class == LION || self.class == ELEPHANT)
+    }
+
+    /// `IdEnnemy`.
+    pub fn class(&self) -> u32 {
+        self.class
+    }
+
+    /// `IdEnnemySpec` (1-3 ground enemies, 101-107 wasps).
+    pub fn spec_id(&self) -> u32 {
+        self.spec
+    }
+
+    /// Flag5: scans id 25 every tick (camera zones, credit titles).
+    pub fn scans_25(&self) -> bool {
+        self.flag(5) && self.initialised && !self.gone()
     }
 
     pub fn is_class_target(&self) -> bool {
@@ -395,18 +418,24 @@ pub fn init_lion(obj: &mut Object, entity: &mut EntityCommands) -> Option<u32> {
     let resistance = if res == 0.0 { def_res } else { res };
     let push = (frc(s[1]) * 100.0 + 0.5).trunc();
     let patrol = obj.flags & (1 << 2) != 0;
-    let (path_id, path_range, random_org, random_org2) = if s[3] != 0.0 {
-        if patrol {
-            (s[3].trunc(), (frc(s[3]) * 10000.0 + 0.5).trunc(), 0.0, 0.0)
-        } else {
-            (0.0, 0.0, s[3].trunc(), (frc(s[3]) * 1000.0 + 0.5).trunc())
-        }
-    } else {
-        (0.0, 0.0, 0.0, 0.0)
-    };
+    let (path_id, path_range, random_org, random_org2) = unpack_path(&s, patrol);
     let attack = if s[2] == 0.0 { 500.0 } else { s[2] };
     let react = if s[5] == 0.0 { 1000.0 } else { s[5] };
-    entity.insert(Enemy {
+    entity.insert(build_enemy(obj, &s, (class, spec, weight, head, resistance), push, attack, react, (path_id, path_range, random_org, random_org2)));
+    skin
+}
+
+#[allow(clippy::type_complexity)]
+fn build_enemy(
+    obj: &Object,
+    s: &[f32],
+    (class, spec, weight, head, resistance): (u32, u32, f32, usize, f32),
+    push: f32,
+    attack: f32,
+    react: f32,
+    (path_id, path_range, random_org, random_org2): (f32, f32, f32, f32),
+) -> Enemy {
+    Enemy {
         class,
         spec,
         weight,
@@ -466,7 +495,79 @@ pub fn init_lion(obj: &mut Object, entity: &mut EntityCommands) -> Option<u32> {
         floor_entity: None,
         teleport: None,
         alpha: 100.0,
-    });
+        passable: false,
+        flying_init: false,
+        wasp_spec: 0,
+    }
+}
+
+/// Patrol path / random mode unpacking shared by lions and wasp enemies.
+fn unpack_path(s: &[f32], patrol: bool) -> (f32, f32, f32, f32) {
+    if s[3] == 0.0 {
+        (0.0, 0.0, 0.0, 0.0)
+    } else if patrol {
+        (s[3].trunc(), (frc(s[3]) * 10000.0 + 0.5).trunc(), 0.0, 0.0)
+    } else {
+        (0.0, 0.0, s[3].trunc(), (frc(s[3]) * 1000.0 + 0.5).trunc())
+    }
+}
+
+/// `InitWaspEnnemy` (bullets.wdl:1502-1677) and `InitWaspExtro` (`:1849-1938`, `extro`):
+/// a lion with the hive wasp's skin and scale (`initSkinScaleWaspHive2`, `:1411-1478`),
+/// flying (Flag8) and passable. Types 0-7 become 8888; others (the "You Win" model, 99)
+/// keep their id. Returns the skin.
+pub fn init_wasp_ennemy(obj: &mut Object, entity: &mut EntityCommands, extro: bool) -> Option<u32> {
+    let mut s = obj.skills.clone();
+    if extro {
+        s[0] = 6.0;
+    }
+    let kind = s[0].trunc() as i32;
+    // (scale, WaspPoison) by IdWaspSpec; the poison overwrites Skill3 = LionAttackRange.
+    let (scale, poison) = match kind {
+        0 | 1 => (None, 3.0),
+        2 => (Some(1.0), 2.0),
+        3 | 4 | 7 => (Some(0.8), 1.0),
+        5 => (Some(1.0), 4.0),
+        6 => (Some(1.0), 5.0),
+        _ => (None, s[2]),
+    };
+    if let Some(k) = scale {
+        obj.scale = [k; 3];
+    }
+    let skin = match kind {
+        2..=7 => Some(kind as u32),
+        _ => Some(s[6].max(1.0) as u32),
+    };
+    s[2] = poison;
+    if s[5] == 0.0 {
+        s[5] = 1.0;
+    }
+    let (class, weight, wasp_spec, def_res) = match (extro, kind) {
+        (true, _) => (LION, 0.3, 101, 18.0),
+        (_, 0 | 1) => (LION, 0.3, 101, 18.0),
+        (_, 2) => (LION, 0.8, 102, 12.0),
+        (_, 3) => (LION, 0.9, 103, 3.0),
+        (_, 4) => (LION, 0.9, 104, 3.0),
+        (_, 5) => (LION, 0.6, 105, 9.0),
+        (_, 6) => (LION, 0.6, 106, 12.0),
+        (_, 7) => (LION, 0.8, 107, 3.0),
+        (_, k) => (k as u32, 0.0, k as u32, 0.0),
+    };
+    let res = if extro { 0.0 } else { (frc(s[0]) * 100.0 + 0.5).trunc() };
+    let resistance = if res == 0.0 { def_res } else { res };
+    let push = (frc(s[1]) * 100.0 + 0.5).trunc();
+    let attack = if s[2] == 0.0 { 500.0 } else { s[2] };
+    let react = if s[5] == 0.0 { 1000.0 } else { s[5] };
+    let path = unpack_path(&s, obj.flags & (1 << 2) != 0);
+    let mut e = build_enemy(obj, &s, (class, wasp_spec, weight, 0, resistance), push, attack, react, path);
+    e.passable = true;
+    e.wasp_spec = wasp_spec;
+    e.flying_init = true;
+    if extro {
+        e.etat = 1;
+        e.anim_speed = 3.0;
+    }
+    entity.insert(e);
     skin
 }
 
@@ -529,14 +630,15 @@ pub fn tick_enemies(
     mut calls: ResMut<FriendCalls>,
     mut warnings: MessageWriter<WarningAttack>,
     mut commands: Commands,
-    platforms: Query<&super::platform::Platform>,
-    mut pads: Query<&mut super::platform::Teleport>,
+    (platforms, mut pads, pov): (Query<&super::platform::Platform>, Query<&mut super::platform::Teleport>, Res<super::extro::Pov>),
 ) {
     let mut warn = false;
     let mut call_rings = Vec::new();
     let touched: Vec<Entity> = touches.read().map(|t| t.0).collect();
     let hits: Vec<WaspHit> = wasp_hits.read().copied().collect();
-    let sammy = player.single().ok().map(|(e, p)| (e, p.pos, p.vel));
+    // Distances and line of sight are measured to `pov_Syn` (lion.wdl:948-950).
+    let sammy = pov.entity.map(|e| (e, pov.pos, pov.vel));
+    let sammy_entity = player.single().ok().map(|(e, _)| e);
     let sammy_alive = player.single().is_ok_and(|(_, p)| p.state != PlayerState::Dead);
     let nodes: Vec<&PathNode> = nodes.iter().collect();
 
@@ -596,7 +698,7 @@ pub fn tick_enemies(
                 }
             }
             // Contacts with Sammy (either mover): the swipe rules (§4.1).
-            let touching = sammy.is_some_and(|(s, _, _)| touched.contains(&me) || e_touches(&world, &e, me, s));
+            let touching = sammy_entity.is_some_and(|s| touched.contains(&me) || e_touches(&world, &e, me, s));
             if touching && sammy_alive && e.class == LION {
                 if let Ok((_, mut p)) = player.single_mut() {
                     contact_sammy(&mut e, &mut p, &mut game, &globals, &mut sfx, &mut rng);
@@ -653,7 +755,7 @@ fn init_runtime(e: &mut Enemy, anim: &ModelAnimator, world: &CollisionWorld, me:
     if tr.hit() {
         e.floor = tr.end[2];
     }
-    let h = if e.spec == 3 { 15.0 } else { 28.0 } * e.scale;
+    let h = if e.flying_init { e.pos[2] - e.floor } else if e.spec == 3 { 15.0 * e.scale } else { 28.0 * e.scale };
     e.pos[2] = e.floor + h;
     e.prev_pos = e.pos;
     e.hover = h;
@@ -852,7 +954,20 @@ fn enemy_behavior(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, nodes: &[&Pa
     // Suite0 (:2172): rotation toward the destination heading.
     e.random_time -= 1.0;
     e.delta_pan = ang(e.dest_pan - e.pan) * rotation;
-    if e.pos[2] - e.floor < 128.0 {
+    if e.flag(8) {
+        // Flyers turn anywhere and pitch toward the patrol target height (:2176-2198).
+        e.pan = ang(e.pan + e.delta_pan);
+        if e.flag(3) && e.target[2] != f32::MAX {
+            let tz = e.target[2];
+            if (e.pos[2] - tz).abs() < 16.0 {
+                e.tilt -= e.tilt * 0.25;
+            } else if e.pos[2] > tz {
+                e.tilt -= rotation;
+            } else {
+                e.tilt += rotation;
+            }
+        }
+    } else if e.pos[2] - e.floor < 128.0 {
         e.pan = ang(e.pan + e.delta_pan);
     }
     e.enable_block = e.delta_pan.abs() <= 6.0;
@@ -1001,6 +1116,14 @@ fn gravity(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) {
     } else {
         e.vertical = 0.0;
         e.vspeed = 0.0;
+    }
+    if e.flag(8) {
+        // Flyers: no gravity, only kept 64 above the floor (lion.wdl:1394-1403).
+        if e.pos[2] < e.floor + 64.0 {
+            e.vertical = (e.floor + 64.0) - e.pos[2];
+            e.vspeed = 0.0;
+        }
+        return;
     }
     if e.vspeed == 0.0 {
         if e.pos[2] - e.floor > e.hover + 0.5 {
@@ -1347,6 +1470,13 @@ fn anim_lion(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, vis: &mut Visibil
 
 /// Maps the WDL state + step onto the model animator.
 fn sync_anim(e: &Enemy, anim: &mut ModelAnimator) {
+    if e.class == WIN_MODEL {
+        if anim.scene() != "stand" {
+            anim.play("stand", true, 0.0);
+            anim.set_speed_pct(6.0, TICKS);
+        }
+        return;
+    }
     let (scene, looping) = match e.etat {
         0 | 8 => ("stand", true),
         4 | 9 => ("AltStand", true),
@@ -1363,6 +1493,12 @@ fn sync_anim(e: &Enemy, anim: &mut ModelAnimator) {
         11 => ("Hit", false),
         6 | 7 => ("death", false),
         _ => ("stand", true),
+    };
+    // Wasp models only have stand/walk/death.
+    let (scene, looping) = if e.wasp_spec != 0 && !matches!(scene, "stand" | "walk" | "death") {
+        (if matches!(e.etat, 4 | 9) { "stand" } else { "walk" }, true)
+    } else {
+        (scene, looping)
     };
     if anim.scene() != scene {
         anim.play(scene, looping, e.anim_step.min(100.0));
@@ -1420,7 +1556,7 @@ pub fn home_wasps(time: Res<Time>, mut wasps: Query<&mut Wasp>, mut enemies: Que
 pub fn sync_enemy_colliders(mut q: Query<(&Enemy, &mut BoxCollider)>) {
     for (e, mut c) in &mut q {
         c.center = [e.pos[0], e.pos[1], e.pos[2] + e.center_z];
-        c.solid = e.class != 0 && e.teleport.is_none() && !matches!(e.etat, 7) && !(e.etat == 6 && e.anim_step > 50.0);
+        c.solid = e.class != 0 && !e.passable && e.teleport.is_none() && !matches!(e.etat, 7) && !(e.etat == 6 && e.anim_step > 50.0);
     }
 }
 
