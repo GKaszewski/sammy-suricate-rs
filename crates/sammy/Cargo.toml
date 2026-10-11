@@ -17,7 +17,7 @@ anyhow.workspace = true
 [features]
 default = ["music", "intro", "debug-tools"]
 # MIDI music through a SoundFont (rustysynth).
-music = ["dep:rustysynth"]
+music = ["dep:rustysynth", "sammy-platform/music"]
 # The boot intro (logos and the scripted walk) before the menu.
 intro = []
 # Screenshot runs and the debug log.

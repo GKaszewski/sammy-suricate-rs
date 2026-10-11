@@ -11,6 +11,7 @@ mod gfx;
 mod hud;
 mod input;
 mod menu;
+mod music;
 mod options;
 mod scene;
 mod shot;
@@ -110,6 +111,7 @@ fn run() -> anyhow::Result<()> {
     let gfx = gfx::Gfx::new(gl)?;
     let mut input = input::Input::new(&sdl);
     let mut audio = audio::Audio::new(&sdl, &files);
+    let mut music = music::Music::new(&storage, &files);
     let mut scene = scene::Scene::default();
     let mut hud = hud::HudView::new(&gfx, &files);
     let mut fx = fx::Fx::new(&gfx);
@@ -165,6 +167,7 @@ fn run() -> anyhow::Result<()> {
         sim.tick(if paused { 0.0 } else { dt }, &controls, &files as &dyn Files);
         prof.tick += secs() - t0;
         audio.set_volume(sim.save.sound);
+        music.update(&sim, options.model.mode.is_some(), &mut audio, &files);
         menu.act(&mut sim);
         let drained: Vec<Event> = sim.drain_events().collect();
         for e in drained {
@@ -199,7 +202,7 @@ fn run() -> anyhow::Result<()> {
         hud.tick(&sim.game, if paused { 0.0 } else { dt * sammy_core::time::TICKS_PER_SEC });
         frames += 1;
         if frames.is_multiple_of(LOG_FRAMES) {
-            prof.log(frames, secs() - start, scene.stats.get());
+            prof.log(frames, secs() - start, scene.stats.get(), audio.music_cost());
         }
         let trace = |what: &str| {
             if frames < 6 {
@@ -267,7 +270,7 @@ fn run() -> anyhow::Result<()> {
 }
 
 /// Where the frame time goes, logged every [`LOG_FRAMES`] frames: SDL events and input,
-/// the game tick, scene
+/// the game tick, the music's share of real time (audio thread), scene
 /// sync (animated meshes), draw submission, and the buffer swap (waiting on the GPU
 /// and vsync), with the scene's counts.
 #[derive(Default)]
@@ -281,17 +284,18 @@ struct Profile {
 }
 
 impl Profile {
-    fn log(&mut self, frames: u64, now: f64, s: scene::Stats) {
+    fn log(&mut self, frames: u64, now: f64, s: scene::Stats, music: f64) {
         let n = LOG_FRAMES as f64;
         let ms = |v: f64| v / n * 1000.0;
         let fps = n / (now - self.since).max(1e-6);
         log::info!(
-            "frame {frames} at {now:.1} s: {fps:.0} fps | ms tick {:.1} sync {:.1} draw {:.1} swap {:.1} input {:.1} | drawn {} culled {} animated {} lights {}",
+            "frame {frames} at {now:.1} s: {fps:.0} fps | ms tick {:.1} sync {:.1} draw {:.1} swap {:.1} input {:.1} | music {:.1}% | drawn {} culled {} animated {} lights {}",
             ms(self.tick),
             ms(self.sync),
             ms(self.draw),
             ms(self.swap),
             ms(self.input),
+            music * 100.0,
             s.drawn,
             s.culled,
             s.animated,

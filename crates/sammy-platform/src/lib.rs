@@ -1,10 +1,13 @@
 //! Sammy Suricate on a machine, for any frontend: the original game's files
 //! ([`vfs::GameFiles`]), the player's storage and saves ([`storage`], [`save`]), finding
-//! the game on a desktop ([`locate`]) and the sound table ([`sounds`]).
+//! the game on a desktop ([`locate`]), the sound table ([`sounds`]) and the music
+//! (`music`, with the `music` feature).
 
 pub mod debug;
 #[cfg(not(any(target_arch = "wasm32", target_os = "vita")))]
 pub mod locate;
+#[cfg(feature = "music")]
+pub mod music;
 pub mod save;
 pub mod sounds;
 pub mod storage;

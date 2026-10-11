@@ -1,5 +1,6 @@
-//! Sound effects: the game's WAVs (by WDL name, `sons.wdl`) resampled once to the output
-//! rate and mixed in SDL's audio callback.
+//! Sound effects and music: the game's WAVs (by WDL name, `sons.wdl`) resampled once to
+//! the output rate, and the current song rendered as it plays, mixed in SDL's audio
+//! callback.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,6 +26,15 @@ pub struct Mixer {
     voices: Vec<Voice>,
     /// Effects volume (0..1).
     pub volume: f32,
+    music: Option<sammy_platform::music::Song>,
+    music_volume: f32,
+    /// Song blocks rendered here (left, right).
+    left: Vec<f32>,
+    right: Vec<f32>,
+    /// Seconds spent rendering the song, and of audio produced, since last asked.
+    music_busy: f64,
+    audio_secs: f64,
+    rate: f64,
 }
 
 impl AudioCallback for Mixer {
@@ -32,6 +42,22 @@ impl AudioCallback for Mixer {
 
     fn callback(&mut self, out: &mut [f32]) {
         out.fill(0.0);
+        let frames = out.len() / 2;
+        self.audio_secs += frames as f64 / self.rate;
+        if let Some(song) = &mut self.music {
+            let t0 = now();
+            self.left.resize(frames, 0.0);
+            self.right.resize(frames, 0.0);
+            if song.render(&mut self.left, &mut self.right) {
+                for (i, frame) in out.chunks_exact_mut(2).enumerate() {
+                    frame[0] = self.left[i] * self.music_volume;
+                    frame[1] = self.right[i] * self.music_volume;
+                }
+            } else {
+                self.music = None;
+            }
+            self.music_busy += now() - t0;
+        }
         for v in &mut self.voices {
             for frame in out.chunks_exact_mut(2) {
                 let Some(s) = v.data.get(v.at) else { break };
@@ -56,7 +82,17 @@ pub struct Audio {
 impl Audio {
     pub fn new(sdl: &sdl2::Sdl, files: &GameFiles) -> Self {
         let device = sdl.audio().and_then(|a| {
-            a.open_playback(None, &AudioSpecDesired { freq: Some(RATE), channels: Some(2), samples: Some(BUFFER) }, |_| Mixer { voices: Vec::new(), volume: 1.0 })
+            a.open_playback(None, &AudioSpecDesired { freq: Some(RATE), channels: Some(2), samples: Some(BUFFER) }, |spec| Mixer {
+                voices: Vec::new(),
+                volume: 1.0,
+                music: None,
+                music_volume: 1.0,
+                left: Vec::new(),
+                right: Vec::new(),
+                music_busy: 0.0,
+                audio_secs: 0.0,
+                rate: spec.freq as f64,
+            })
         });
         let device = match device {
             Ok(d) => {
@@ -89,12 +125,50 @@ impl Audio {
         m.voices.push(Voice { data: data.clone(), at: 0, volume: (vol / FULL).clamp(0.0, 2.0) });
     }
 
+    /// The output rate (Hz).
+    pub fn rate(&self) -> u32 {
+        self.device.as_ref().map_or(RATE, |d| d.spec().freq) as u32
+    }
+
+    /// Starts a song (or stops with `None`).
+    pub fn set_music(&mut self, song: Option<sammy_platform::music::Song>) {
+        if let Some(dev) = &mut self.device {
+            dev.lock().music = song;
+        }
+    }
+
+    /// A song is playing.
+    pub fn music_playing(&mut self) -> bool {
+        self.device.as_mut().is_some_and(|d| d.lock().music.is_some())
+    }
+
+    /// The music volume (0..1).
+    pub fn set_music_volume(&mut self, v: f32) {
+        if let Some(dev) = &mut self.device {
+            dev.lock().music_volume = v.clamp(0.0, 1.0);
+        }
+    }
+
+    /// The share of real time spent rendering music since the last call (0..1).
+    pub fn music_cost(&mut self) -> f64 {
+        let Some(dev) = &mut self.device else { return 0.0 };
+        let mut m = dev.lock();
+        let share = if m.audio_secs > 0.0 { m.music_busy / m.audio_secs } else { 0.0 };
+        (m.music_busy, m.audio_secs) = (0.0, 0.0);
+        share
+    }
+
     /// The effects volume (the save's percentage).
     pub fn set_volume(&mut self, percent: f32) {
         if let Some(dev) = &mut self.device {
             dev.lock().volume = (percent / FULL).clamp(0.0, 1.0);
         }
     }
+}
+
+/// Seconds on SDL's high-resolution clock (usable on the audio thread).
+fn now() -> f64 {
+    unsafe { sdl2::sys::SDL_GetPerformanceCounter() as f64 / sdl2::sys::SDL_GetPerformanceFrequency() as f64 }
 }
 
 /// Mono samples (-1..1) at `rate`, linearly resampled.
