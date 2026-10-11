@@ -2,7 +2,6 @@
 //! particles.
 
 pub mod coords;
-pub mod effects;
 pub mod image;
 pub mod lights;
 pub mod material;

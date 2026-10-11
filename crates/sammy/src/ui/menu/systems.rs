@@ -81,7 +81,7 @@ pub(crate) fn pick(
         for _ in 0..particles.ticks {
             let off = sammy_present::menu::sparkle(&mut state.sparkle);
             let c = coords::native(gt.translation());
-            crate::render::effects::menu_sparkle(&mut particles, [c[0] + off[0], c[1] + off[1], c[2] + off[2]]);
+            sammy_present::effects::menu_sparkle(&mut particles, [c[0] + off[0], c[1] + off[1], c[2] + off[2]]);
         }
     }
     if (mouse.just_pressed(MouseButton::Left) || (controls.pad && controls.accept && before == game.menu.hovered))

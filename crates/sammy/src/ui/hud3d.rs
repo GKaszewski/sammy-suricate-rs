@@ -313,7 +313,7 @@ fn end_titles(
         tf.scale = Vec3::splat(LOSE_SCALE);
         for _ in 0..particles.ticks {
             let at = coords::native(tf.translation);
-            crate::render::effects::tile_smoke(&mut particles, at);
+            sammy_present::effects::tile_smoke(&mut particles, at);
         }
     }
 }
