@@ -1,13 +1,14 @@
 //! The intro's walking Sammy and his path nodes.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::time::Ticks;
 
 /// The scripted Sammy (`InitPlayerPatrol` :231-329, `MoveSammyonPath` :412-456).
 #[derive(Clone, Debug)]
 pub struct Walker {
     pub pos: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
     pub vel: [f32; 3],
     pub(super) dest_pan: f32,
     /// Skill2 `SpeedBalle` (15) and Skill5 `BlobZoneScan` (600).
@@ -37,7 +38,7 @@ impl Walker {
     pub fn from_object(obj: &Object) -> Self {
         Self {
             pos: obj.origin,
-            pan: obj.angles[0],
+            pan: Degrees(obj.angles[0]),
             vel: [0.0; 3],
             dest_pan: obj.angles[0],
             speed: if obj.skill(2) != 0.0 { obj.skill(2) } else { WALKER_SPEED },
@@ -86,7 +87,7 @@ impl Walker {
         // PlayerPatrol.
         match self.target {
             None => {
-                if let Some(n) = scan(nodes, self.pos, self.pan, 30.0, self.range) {
+                if let Some(n) = scan(nodes, self.pos, self.pan.get(), 30.0, self.range) {
                     self.hit(n);
                 }
             }
@@ -115,13 +116,13 @@ impl Walker {
             }
         }
         // Heading, then full speed ahead (`VitesseRaq.X = SpeedBalle`).
-        self.pan += ang(self.dest_pan - self.pan) * (0.25 * t).min(1.0);
-        let a = self.pan.to_radians();
+        self.pan += Degrees(ang(self.dest_pan - self.pan.0) * (0.25 * t).min(1.0));
+        let a = self.pan.radians();
         self.vel = [a.cos() * self.speed, a.sin() * self.speed, 0.0];
         self.pos[0] += self.vel[0] * t;
         self.pos[1] += self.vel[1] * t;
         // The per-tick path scan (cone 60, range BlobZoneScan, id 30).
-        if let Some(n) = scan(nodes, self.pos, self.pan, 30.0, self.range) {
+        if let Some(n) = scan(nodes, self.pos, self.pan.get(), 30.0, self.range) {
             self.hit(n);
         }
     }

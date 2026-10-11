@@ -1,6 +1,7 @@
 //! Sammy firing wasps, and the queued shots of a fan.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::time::Ticks;
 
 /// Shots still to fire in a fan: (ticks left, pan offset), from one spawn point.
@@ -16,7 +17,7 @@ pub struct Shot {
     pub kind: u32,
     pub poison: f32,
     pub pos: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
 }
 
 /// Result of a firing step.
@@ -84,7 +85,7 @@ impl PendingShots {
             if *left > Ticks(0.0) {
                 return true;
             }
-            out.push(Shot { kind, poison: poison.max(1.0), pos: spawn, pan: pan + *off });
+            out.push(Shot { kind, poison: poison.max(1.0), pos: spawn, pan: Degrees(pan + *off) });
             false
         });
         self.shots.is_empty()

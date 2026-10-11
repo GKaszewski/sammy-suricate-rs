@@ -4,6 +4,7 @@
 
 use formats::wmb::Object;
 
+use crate::angle::Degrees;
 use crate::anim::Anim;
 use crate::id::Id;
 use crate::levels::LevelSlot;
@@ -33,7 +34,7 @@ pub struct Pov {
     /// Resolved this frame.
     pub entity: Option<Id>,
     pub pos: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
     pub vel: [f32; 3],
 }
 
@@ -47,10 +48,10 @@ impl Pov {
         if sammy.is_none()
             && let Some((e, pos, pan, vel)) = walker
         {
-            (self.entity, self.pos, self.pan, self.vel) = (Some(e), pos, pan, vel);
+            (self.entity, self.pos, self.pan, self.vel) = (Some(e), pos, Degrees(pan), vel);
         }
         if let Some((e, pos, pan, vel)) = target.or(sammy) {
-            (self.entity, self.pos, self.pan, self.vel) = (Some(e), pos, pan, vel);
+            (self.entity, self.pos, self.pan, self.vel) = (Some(e), pos, Degrees(pan), vel);
         }
     }
 }

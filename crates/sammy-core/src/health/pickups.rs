@@ -1,6 +1,7 @@
 //! Hearts, boosts and checkpoints.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::space::Placement;
 use crate::time::Ticks;
 
@@ -53,7 +54,7 @@ impl BoostPickup {
 pub struct Checkpoint {
     pub home: [f32; 3],
     /// Skill8: Sammy's pan after respawning here.
-    pub pan: f32,
+    pub pan: Degrees,
     /// Skill2-4 spin speeds (Flag3).
     pub spin: Option<[f32; 3]>,
     pub angles: [f32; 3],
@@ -61,12 +62,12 @@ pub struct Checkpoint {
 
 impl Checkpoint {
     pub fn from_object(obj: &Object) -> Self {
-        Self { home: obj.origin, pan: obj.skill(8), spin: obj.flag(3).then_some([obj.skill(2), obj.skill(3), obj.skill(4)]), angles: obj.angles }
+        Self { home: obj.origin, pan: Degrees(obj.skill(8)), spin: obj.flag(3).then_some([obj.skill(2), obj.skill(3), obj.skill(4)]), angles: obj.angles }
     }
 
     /// Where Sammy restarts once it is taken.
     pub fn respawn(&self) -> Placement {
-        Placement::new([self.home[0], self.home[1], self.home[2] + CHECKPOINT_RESPAWN_HEIGHT], self.pan)
+        Placement::new([self.home[0], self.home[1], self.home[2] + CHECKPOINT_RESPAWN_HEIGHT], self.pan.get())
     }
 }
 

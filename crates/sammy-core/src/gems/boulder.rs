@@ -1,6 +1,7 @@
 //! Boulders that launch gems when hit.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::keys::KeyColor;
 use crate::time::Ticks;
 
@@ -9,7 +10,7 @@ use crate::time::Ticks;
 pub struct Launch {
     pub color: KeyColor,
     pub pos: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
     pub hspeed: f32,
     pub vz: f32,
     pub fate: Fate,
@@ -76,7 +77,7 @@ impl Boulder {
         let hspeed = (wasp_disp[0] * self.hspeed).abs() + (wasp_disp[1] * self.hspeed).abs();
         let color = self.color(rng);
         let pos = [self.pos[0] + wasp_disp[0], self.pos[1] + wasp_disp[1], self.pos[2] + IMPACT_HEIGHT];
-        Some(Launch { color: KeyColor(color), pos, pan, hspeed, vz: self.vz, fate: self.fate })
+        Some(Launch { color: KeyColor(color), pos, pan: Degrees(pan), hspeed, vz: self.vz, fate: self.fate })
     }
 
     /// Auto mode: a gem every Skill8 ticks.
@@ -94,6 +95,6 @@ impl Boulder {
         let vz = self.vz + rng.random(4.0);
         let color = self.color(rng);
         let pos = [self.pos[0], self.pos[1], self.pos[2] + AUTO_HEIGHT];
-        Some(Launch { color: KeyColor(color), pos, pan, hspeed, vz, fate: self.fate })
+        Some(Launch { color: KeyColor(color), pos, pan: Degrees(pan), hspeed, vz, fate: self.fate })
     }
 }

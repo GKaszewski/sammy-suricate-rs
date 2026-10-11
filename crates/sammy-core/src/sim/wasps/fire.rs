@@ -54,7 +54,7 @@ pub(super) fn spawn_wasp(sim: &mut Sim, shot: Shot, shooter: Id) {
     let w = Wasp::new(shot, Some(shooter));
     sim.sound("Wasp_son");
     // Type 1, the "queen", has the colour-keyed overlay look.
-    let id = spawn_wasp_body(sim, "wasp", shot.pos, [shot.pan, 0.0, 0.0], FIRED[(shot.kind - 1) as usize].scale, shot.kind, shot.kind == QUEEN, WING_ANIM * w.speed());
+    let id = spawn_wasp_body(sim, "wasp", shot.pos, [shot.pan.get(), 0.0, 0.0], FIRED[(shot.kind - 1) as usize].scale, shot.kind, shot.kind == QUEEN, WING_ANIM * w.speed());
     if let Some(b) = sim.world.bodies.get_mut(&id) {
         b.hidden = true;
     }

@@ -1,6 +1,7 @@
 //! Dying on hazards and respawning.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::game::Lives;
 use crate::keys::KeyColor;
 use crate::space::Placement;
@@ -51,7 +52,7 @@ pub(super) const DROP_VZ: f32 = 40.0;
 #[derive(Clone, Copy, Debug)]
 pub struct Victim {
     pub pos: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
     /// Movement this frame (quants per tick).
     pub vel: [f32; 3],
 }

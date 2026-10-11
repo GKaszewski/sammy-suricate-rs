@@ -3,6 +3,7 @@
 
 use super::{Dt, Sim};
 use crate::angle::Angles;
+use crate::angle::Degrees;
 use crate::camera::{CameraParams, CameraPose, CameraRuntime, FollowState, Subject};
 use crate::flow::Phase;
 use crate::id::Id;
@@ -57,14 +58,14 @@ pub(super) fn follow(sim: &mut Sim, dt: Dt) {
         return;
     }
     let subject = Subject { pos: sim.pov.pos, pan: sim.pov.pan };
-    let sammy = sim.world.player().map(|(_, p)| Subject { pos: p.pos, pan: p.pan.get() });
+    let sammy = sim.world.player().map(|(_, p)| Subject { pos: p.pos, pan: Degrees(p.pan.get()) });
     let sweep = sim.flow.phase == Phase::Intro;
     let c = &mut sim.camera;
     if let Some(pose) = crate::camera::follow(&mut c.follow, &c.params, &mut c.runtime, sim.level.as_deref(), subject, sammy, sweep, dt.t, dt.secs) {
         c.pose = Some(pose);
     }
     if let (Some([dist, z, angle]), Some(s)) = (sim.debug.portrait, sammy) {
-        let a = (s.pan + angle).to_radians();
+        let a = (s.pan + Degrees(angle)).radians();
         let target = [s.pos[0], s.pos[1], s.pos[2] + z];
         sim.camera.pose = Some(CameraPose::LookAt { pos: [target[0] + a.cos() * dist, target[1] + a.sin() * dist, target[2]], target });
     }

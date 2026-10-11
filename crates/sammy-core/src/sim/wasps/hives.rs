@@ -18,7 +18,7 @@ pub(in crate::sim) fn hives(sim: &mut Sim, dt: Dt) {
             continue;
         }
         // Hive wasps have the overlay look (their Flag3 is never set).
-        let wid = spawn_wasp_body(sim, "hive wasp", pos, [l.pan, l.tilt, 0.0], l.scale, l.kind, true, HIVE_WASP_ANIM);
+        let wid = spawn_wasp_body(sim, "hive wasp", pos, [l.pan.get(), l.tilt.get(), 0.0], l.scale, l.kind, true, HIVE_WASP_ANIM);
         sim.world.hive_wasps.insert(wid, HiveWasp::new(&l, pos));
         if exhausted {
             // Exhausted: the hive bursts (bullets.wdl:1255-1272).
@@ -41,10 +41,10 @@ pub(in crate::sim) fn hive_wasps(sim: &mut Sim, dt: Dt) {
         events.extend(sounds.drain(..).map(Event::Sound));
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = Pos(hw.pos);
-            b.angles = Angles::from_array([hw.pan, hw.tilt, 0.0]);
+            b.angles = Angles::from_array([hw.pan.get(), hw.tilt.get(), 0.0]);
         }
         if let Some((pickup, lifetime)) = done {
-            settled.push((*id, pickup, lifetime, [hw.pan, PICKUP_TILT, 0.0]));
+            settled.push((*id, pickup, lifetime, [hw.pan.get(), PICKUP_TILT, 0.0]));
         }
     }
     for (id, pickup, lifetime, angles) in settled {

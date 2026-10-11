@@ -23,7 +23,7 @@ pub(super) fn update_pov(sim: &mut Sim) {
         sim.scanners.0.push(pos);
     }
     // The intro's scripted Sammy scans id 25 (camera zones, hint title) while it runs.
-    let walker: Option<Body> = w.walkers.iter().next().map(|(id, wk)| (*id, wk.pos, wk.pan, wk.vel));
+    let walker: Option<Body> = w.walkers.iter().next().map(|(id, wk)| (*id, wk.pos, wk.pan.get(), wk.vel));
     if let (Some((_, pos, ..)), true) = (walker, sim.intro.active) {
         sim.scanners.0.push(pos);
     }

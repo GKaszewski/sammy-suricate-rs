@@ -1,6 +1,7 @@
 //! Wasps escaping when Sammy drops his ammo.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::time::Ticks;
 
 /// Escaping wasps on a type switch: at most this many, shown at half size, for this many
@@ -19,8 +20,8 @@ pub(super) const ESCAPE_SPEED: (f32, f32) = (20.0, 10.0);
 pub struct Escapee {
     pub kind: u32,
     pub pos: [f32; 3],
-    pub pan: f32,
-    pub tilt: f32,
+    pub pan: Degrees,
+    pub tilt: Degrees,
     pub(super) speed: f32,
     pub(super) timer: Ticks,
 }
@@ -30,16 +31,16 @@ impl Escapee {
         let pan = rng.random(360.0);
         let tilt = ESCAPE_TILT.0 + rng.random(ESCAPE_TILT.1);
         let speed = ESCAPE_SPEED.0 + rng.random(ESCAPE_SPEED.1);
-        Self { kind, pos, pan, tilt, speed, timer: Ticks::ZERO }
+        Self { kind, pos, pan: Degrees(pan), tilt: Degrees(tilt), speed, timer: Ticks::ZERO }
     }
 
     /// One frame; true when it is gone.
     pub fn step(&mut self, t: Ticks) -> bool {
-        let dir = forward(self.pan, self.tilt);
+        let dir = forward(self.pan.0, self.tilt.0);
         for (p, d) in self.pos.iter_mut().zip(dir) {
             *p += d * self.speed * t;
         }
-        self.pan += ESCAPE_SPIN * t;
+        self.pan += Degrees(ESCAPE_SPIN * t);
         self.timer += t;
         self.timer >= ESCAPE_TICKS
     }

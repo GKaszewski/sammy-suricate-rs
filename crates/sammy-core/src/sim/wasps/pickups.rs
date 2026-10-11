@@ -56,7 +56,7 @@ pub(in crate::sim) fn collect_ammo(sim: &mut Sim) {
     for (kind, n) in escapes {
         for _ in 0..n {
             let e = Escapee::new(kind, from, &mut sim.rng);
-            let id = spawn_wasp_body(sim, "escaping wasp", e.pos, [e.pan, e.tilt, 0.0], ESCAPE_SCALE, kind, false, 0.0);
+            let id = spawn_wasp_body(sim, "escaping wasp", e.pos, [e.pan.get(), e.tilt.get(), 0.0], ESCAPE_SCALE, kind, false, 0.0);
             sim.world.escapees.insert(id, e);
         }
     }

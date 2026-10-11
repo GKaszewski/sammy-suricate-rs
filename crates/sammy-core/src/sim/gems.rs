@@ -44,7 +44,7 @@ pub(super) fn throw_back_key(sim: &mut Sim, color: KeyColor, p: &Player, life: f
 
 /// `EjectNewKey` → `LaunchNewKey`: a gem launched from `pos` (boulders, Sammy's death).
 pub(super) fn launch(sim: &mut Sim, l: Launch) {
-    let gem = FlyingGem::launched(l.pos, l.pan, l.hspeed, l.vz, l.fate, &sim.jump);
+    let gem = FlyingGem::launched(l.pos, l.pan.get(), l.hspeed, l.vz, l.fate, &sim.jump);
     spawn_flying(sim, "launched gem", l.color, gem);
 }
 

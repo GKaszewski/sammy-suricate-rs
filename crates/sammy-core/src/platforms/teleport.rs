@@ -1,6 +1,7 @@
 //! Teleport pads and Sammy being teleported.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::time::Ticks;
 
 /// A teleport pad.
@@ -8,7 +9,7 @@ use crate::time::Ticks;
 pub struct Teleport {
     /// Skill1-3: destination; Skill4: pan on arrival.
     pub dest: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
     /// Flag2: lions are teleported too.
     pub lions: bool,
     /// `Skill12`: busy while someone is being teleported (shared by Sammy and lions).
@@ -17,7 +18,7 @@ pub struct Teleport {
 
 impl Teleport {
     pub fn from_object(obj: &Object) -> Self {
-        Self { dest: [obj.skill(1), obj.skill(2), obj.skill(3)], pan: obj.skill(4), lions: obj.flag(2), busy: false }
+        Self { dest: [obj.skill(1), obj.skill(2), obj.skill(3)], pan: Degrees(obj.skill(4)), lions: obj.flag(2), busy: false }
     }
 }
 
@@ -40,7 +41,7 @@ pub const CAMERA_SNAP: [f32; 3] = [32.0, 32.0, 150.0];
 #[derive(Clone, Debug)]
 pub struct Teleporting {
     pub dest: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
     pub(super) stage: TeleportStage,
     /// Sammy's opacity (percent).
     pub alpha: f32,

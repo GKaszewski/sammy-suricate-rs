@@ -1,4 +1,5 @@
 use super::*;
+use crate::angle::Degrees;
 use crate::game::Lives;
 use crate::keys::KeyColor;
 use crate::space::Placement;
@@ -6,7 +7,7 @@ use crate::space::Placement;
 fn run(kind: DeathKind, game: &mut GameState) -> Vec<DeathEvent> {
     let mut d = Dying::new(kind);
     let mut out = Vec::new();
-    let victim = Victim { pos: [0.0; 3], pan: 0.0, vel: [0.0; 3] };
+    let victim = Victim { pos: [0.0; 3], pan: Degrees(0.0), vel: [0.0; 3] };
     for _ in 0..200 {
         d.step(game, None, victim, Ticks(1.0), &mut out);
     }

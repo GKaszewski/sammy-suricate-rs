@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::angle::Angles;
+use crate::angle::Degrees;
 use crate::time::Ticks;
 
 /// Camera type 2 (`HandleCamera`, camera.wdl:13-136) with `SetPosCamera` placement.
@@ -11,7 +12,7 @@ pub(super) fn follow_type2(params: &CameraParams, level: Option<&Wmb>, p: Subjec
     if st.pos.is_none() || st.set_pos {
         // SetPosCamera: camera at Sammy's back (pan − back), height HautCamPerso; the proxy
         // keeps its xy (from CameraPosOrigine) and only takes the z unless it can move in Z.
-        let a = (p.pan - params.back).to_radians();
+        let a = (p.pan - Degrees(params.back)).radians();
         let cam = [me[0] + params.org.0 * a.cos(), me[1] + params.org.0 * a.sin(), me[2] + params.org.1];
         let syn = match st.pos {
             Some(s) if st.set_pos => [s[0], s[1], if params.can_move_z { s[2] } else { cam[2] }],
@@ -21,11 +22,11 @@ pub(super) fn follow_type2(params: &CameraParams, level: Option<&Wmb>, p: Subjec
             }
         };
         st.pos = Some(syn);
-        st.ang = p.pan;
+        st.ang = p.pan.get();
         st.target_z = me[2] + params.plus_tilt;
         st.set_pos = false;
     }
-    st.ang += angle_diff(p.pan - st.ang) * (4.0 * dt).min(1.0);
+    st.ang += angle_diff((p.pan - Degrees(st.ang)).get()) * (4.0 * dt).min(1.0);
     st.target_z += (me[2] + params.plus_tilt - st.target_z) / 4.0;
     let syn = st.pos.unwrap();
     let a = (st.ang - params.back).to_radians(); // NOTE minus: type 3 uses + back

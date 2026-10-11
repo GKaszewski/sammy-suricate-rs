@@ -14,7 +14,7 @@ pub(in crate::sim) fn escapees(sim: &mut Sim, dt: Dt) {
         }
         if let Some(b) = w.bodies.get_mut(id) {
             b.pos = Pos(e.pos);
-            b.angles = Angles::from_array([e.pan, e.tilt, 0.0]);
+            b.angles = Angles::from_array([e.pan.get(), e.tilt.get(), 0.0]);
         }
     }
     for id in gone {
@@ -60,7 +60,7 @@ pub(in crate::sim) fn fly(sim: &mut Sim, dt: Dt) {
                 b.hidden = false;
             }
             b.pos = Pos(wasp.pos);
-            b.angles = Angles::from_array([wasp.pan, wasp.tilt, 0.0]);
+            b.angles = Angles::from_array([wasp.pan.get(), wasp.tilt.get(), 0.0]);
         }
         if let WaspStep::Burst { hit } = step {
             events.push(Event::Sound(crate::wasps::burst_sound(rng)));
@@ -69,7 +69,7 @@ pub(in crate::sim) fn fly(sim: &mut Sim, dt: Dt) {
                     door.hit(wasp.poison);
                     weak_door_hits.push(target);
                 } else {
-                    wasp_hits.push(WaspHit { target, poison: wasp.poison, bounce_force: wasp.bounce_force, wasp_pan: wasp.pan, wasp_disp: wasp.last_disp });
+                    wasp_hits.push(WaspHit { target, poison: wasp.poison, bounce_force: wasp.bounce_force, wasp_pan: wasp.pan.get(), wasp_disp: wasp.last_disp });
                     // A lion keeps the wasp as a visible corpse (`wasptat` 1004).
                     if w.enemies.get(&target).is_some_and(|e| e.keeps_wasp_corpses()) {
                         corpses.push((*id, Corpse::new(wasp)));

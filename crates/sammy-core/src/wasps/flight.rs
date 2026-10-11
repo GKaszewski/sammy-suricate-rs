@@ -1,6 +1,7 @@
 //! A fired wasp in flight.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::time::Ticks;
 
 /// A flying wasp.
@@ -8,8 +9,8 @@ use crate::time::Ticks;
 pub struct Wasp {
     pub kind: u32,
     pub poison: f32,
-    pub pan: f32,
-    pub tilt: f32,
+    pub pan: Degrees,
+    pub tilt: Degrees,
     pub pos: [f32; 3],
     pub(super) speed: f32,
     pub homing_range: f32,
@@ -43,7 +44,7 @@ impl Wasp {
             kind: shot.kind,
             poison: shot.poison,
             pan: shot.pan,
-            tilt: 0.0,
+            tilt: Degrees(0.0),
             pos: shot.pos,
             speed: spec.speed,
             homing_range: spec.homing_range,
@@ -73,21 +74,21 @@ impl Wasp {
         if let Some(mut c) = self.climb {
             if c[0] > 0.0 {
                 c[0] -= t.get();
-                self.tilt += CLIMB_RATE * t;
+                self.tilt += Degrees(CLIMB_RATE * t);
             } else if c[1] > 0.0 {
                 c[1] -= t.get();
-            } else if c[2] > 0.0 && self.tilt > 1.0 {
+            } else if c[2] > 0.0 && self.tilt > Degrees(1.0) {
                 c[2] -= t.get();
                 self.tilt -= self.tilt * (0.2 * t).min(0.2);
                 if c[2] <= 0.0 {
-                    self.tilt = 0.0;
+                    self.tilt = Degrees(0.0);
                 }
             } else {
-                self.tilt -= c[3] * t;
+                self.tilt -= Degrees(c[3] * t);
             }
             self.climb = Some(c);
         }
-        let dir = forward(self.pan, self.tilt);
+        let dir = forward(self.pan.0, self.tilt.0);
         let target = [0, 1, 2].map(|i| self.pos[i] + dir[i] * self.speed * t);
         let hit = space.trace(Hull::Point, self.pos, target, self.shooter);
         self.last_disp = [0, 1, 2].map(|i| hit.trace.end[i] - self.pos[i]);

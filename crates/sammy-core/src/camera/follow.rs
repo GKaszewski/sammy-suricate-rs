@@ -1,6 +1,7 @@
 //! The follow camera's state and its frame.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::time::{Secs, Ticks};
 
 /// Follow-camera state in native coordinates.
@@ -57,7 +58,7 @@ pub enum CameraPose {
 #[derive(Clone, Copy, Debug)]
 pub struct Subject {
     pub pos: [f32; 3],
-    pub pan: f32,
+    pub pan: Degrees,
 }
 
 /// One frame of the follow camera (`t` ticks, `dt` seconds). `sweep`: the level-start
@@ -79,7 +80,7 @@ pub fn follow(st: &mut FollowState, params: &CameraParams, rt: &mut CameraRuntim
     let intro = sweep;
     // 1. Yaw follows Sammy's pan (4/AverageFps per frame = 4 per second).
     if st.pos.is_none() {
-        st.ang = pov.pan;
+        st.ang = pov.pan.get();
         // The level-start sweep flies in from `CameraPosOrigine`.
         if intro && let Some((o, ..)) = params.origin {
             st.pos = Some(o);
@@ -88,7 +89,7 @@ pub fn follow(st: &mut FollowState, params: &CameraParams, rt: &mut CameraRuntim
     if st.orbit {
         st.ang += 3.0 * t;
     } else {
-        st.ang += angle_diff(pov.pan - st.ang) * (4.0 * dt).min(1.0);
+        st.ang += angle_diff((pov.pan - Degrees(st.ang)).get()) * (4.0 * dt).min(1.0);
     }
 
     // 2. Ideal position: `dist` behind at `height` above.

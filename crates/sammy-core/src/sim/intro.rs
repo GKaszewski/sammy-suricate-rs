@@ -66,7 +66,7 @@ pub(super) fn start(sim: &mut Sim) {
     let mut pan = 0.0;
     for w in sim.world.walkers.values_mut() {
         w.walking = true; // `EtapesIntro = 1`
-        pan = w.pan;
+        pan = w.pan.get();
     }
     // `Camera_PlusTilt = 50`, arc 70, start at `CameraPosOrigine`.
     let c = &mut sim.camera;
@@ -132,7 +132,7 @@ pub(super) fn tick(sim: &mut Sim, controls: &Controls, dt: Dt) {
         }
         if let Some(b) = sim.world.bodies.get_mut(&id) {
             b.pos = Pos(pos);
-            b.angles = Angles::from_array([pan, 0.0, 0.0]);
+            b.angles = Angles::from_array([pan.get(), 0.0, 0.0]);
         }
         if let Some(a) = sim.world.animators.get_mut(&id) {
             a.anim.set_speed_pct(speed, TICKS_PER_SEC);

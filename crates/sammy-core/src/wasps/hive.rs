@@ -1,6 +1,7 @@
 //! Hives and the wasps they launch.
 
 use super::*;
+use crate::angle::Degrees;
 use crate::time::Ticks;
 
 /// A hive emitting wasps.
@@ -39,8 +40,8 @@ pub const HIVE_WASP_ANIM: f32 = 20.0;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct HiveLaunch {
     pub kind: u32,
-    pub pan: f32,
-    pub tilt: f32,
+    pub pan: Degrees,
+    pub tilt: Degrees,
     pub scale: f32,
     /// Horizontal and vertical launch speed.
     pub speed: [f32; 2],
@@ -85,7 +86,7 @@ impl Hive {
         let launch = [self.hspeed + rng.random(5.0), self.vz + rng.random(4.0)];
         self.total -= 1.0;
         let tilt = rng.random(20.0) + 20.0;
-        let l = HiveLaunch { kind, pan, tilt, scale: HIVE_PICKUP[idx(kind)].1, speed: launch, fate: self.fate };
+        let l = HiveLaunch { kind, pan: Degrees(pan), tilt: Degrees(tilt), scale: HIVE_PICKUP[idx(kind)].1, speed: launch, fate: self.fate };
         Some((l, self.total <= 0.0))
     }
 }
@@ -95,8 +96,8 @@ impl Hive {
 pub struct HiveWasp {
     pub kind: u32,
     pub pos: [f32; 3],
-    pub pan: f32,
-    pub tilt: f32,
+    pub pan: Degrees,
+    pub tilt: Degrees,
     pub(super) speed: f32,
     pub(super) vz: f32,
     pub(super) vz_org: f32,
@@ -161,8 +162,8 @@ impl HiveWasp {
                 vstep = self.vz * t;
             }
         }
-        self.tilt -= if self.bounces == 0.0 { 2.0 * t } else { self.tilt * 0.1 * t };
-        let (s, c) = self.pan.to_radians().sin_cos();
+        self.tilt -= if self.bounces == 0.0 { Degrees(2.0 * t) } else { Degrees(self.tilt.0 * 0.1 * t) };
+        let (s, c) = self.pan.radians().sin_cos();
         let d = [c * self.speed * t.min(Ticks(1.0)), s * self.speed * t.min(Ticks(1.0)), vstep];
         let hit = trace(self.pos, [self.pos[0] + d[0], self.pos[1] + d[1], self.pos[2] + d[2]]);
         let before = self.pos;
@@ -170,7 +171,7 @@ impl HiveWasp {
         if hit.hit() && hit.normal[2].abs() < 0.7 {
             // Wasp_Bounce: turn off the wall, lose speed.
             let n = hit.normal;
-            self.pan = n[1].atan2(n[0]).to_degrees();
+            self.pan = Degrees(n[1].atan2(n[0]).to_degrees());
             self.speed = (self.speed - 8.0).max(0.1);
         }
         self.speed -= 0.05 * t.min(Ticks(1.0));

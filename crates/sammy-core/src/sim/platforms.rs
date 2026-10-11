@@ -127,7 +127,7 @@ pub(super) fn run_teleports(sim: &mut Sim, dt: Dt) {
     match tp.state.step(dt.t) {
         TeleportStep::Fading => {}
         TeleportStep::Jump => {
-            p.teleport(tp.state.dest, tp.state.pan);
+            p.teleport(tp.state.dest, tp.state.pan.get());
             let d = tp.state.dest;
             sim.camera.follow.snap_to([d[0] + CAMERA_SNAP[0], d[1] + CAMERA_SNAP[1], d[2] + CAMERA_SNAP[2]]);
         }

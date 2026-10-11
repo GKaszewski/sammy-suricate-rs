@@ -47,7 +47,7 @@ pub struct CorpseStep {
 impl Corpse {
     /// From the wasp as it hit (its velocity per tick gives the recoil).
     pub fn new(w: &Wasp) -> Self {
-        let v = forward(w.pan, w.tilt).map(|c| c * w.speed);
+        let v = forward(w.pan.0, w.tilt.0).map(|c| c * w.speed);
         Self { kind: w.kind, pos: w.pos, bounce: [-v[0] * RECOIL_XY, -v[1] * RECOIL_XY, -v[2] * RECOIL_Z], step: 0.0, elapsed: Ticks(0.0), hidden: Ticks(0.0) }
     }
 
