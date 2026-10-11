@@ -69,3 +69,18 @@ pub fn load_env_file(storage: &crate::Storage) {
         }
     }
 }
+
+/// `SAMMY_PAD_NAV=right,down,a,b,...`: scripted pad presses, the first after
+/// `PAD_NAV_START` seconds, then one every `PAD_NAV_STEP`.
+const PAD_NAV_START: f32 = 3.0;
+const PAD_NAV_STEP: f32 = 0.5;
+
+/// The scripted pad press due in the frame ending at `clock` seconds (`dt` long), and
+/// whether the script is running (the pad counts as in use).
+pub fn pad_nav(clock: f32, dt: f32) -> (Option<String>, bool) {
+    let Ok(script) = std::env::var("SAMMY_PAD_NAV") else { return (None, false) };
+    let t = clock - PAD_NAV_START;
+    let step = (t / PAD_NAV_STEP).floor();
+    let due = (t >= 0.0 && (t - dt) / PAD_NAV_STEP < step).then(|| script.split(',').nth(step as usize).map(str::to_owned)).flatten();
+    (due, t >= 0.0)
+}

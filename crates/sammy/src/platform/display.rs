@@ -16,41 +16,17 @@ impl Plugin for DisplayPlugin {
     }
 }
 
-/// The interface's design resolution (the original's mode 6).
-const W: f32 = 640.0;
-const H: f32 = 480.0;
-/// Smallest fullscreen mode offered (the original art size).
-const MIN_FULLSCREEN: [u32; 2] = [640, 480];
-/// Windows smaller than the art fit it fractionally, but never below this scale.
-const MIN_FRACTIONAL_SCALE: f32 = 0.25;
 
-/// Windowed sizes offered (those that fit the monitor).
-const WINDOW_SIZES: [[u32; 2]; 10] = [[640, 480], [800, 600], [1024, 768], [1280, 720], [1280, 960], [1366, 768], [1600, 900], [1920, 1080], [2560, 1440], [3840, 2160]];
-
-/// Sizes selectable for the current mode, for the options screen.
-pub fn sizes(mode: DisplayMode, monitor: Option<&Monitor>) -> Vec<[u32; 2]> {
-    let max = monitor.map_or([u32::MAX; 2], |m| [m.physical_width, m.physical_height]);
-    match mode {
-        DisplayMode::Windowed => WINDOW_SIZES.iter().copied().filter(|s| s[0] <= max[0] && s[1] <= max[1]).collect(),
-        DisplayMode::Fullscreen => {
-            let mut v: Vec<[u32; 2]> = monitor.map(|m| m.video_modes.iter().map(|v| [v.physical_size.x, v.physical_size.y]).collect()).unwrap_or_default();
-            v.sort();
-            v.dedup();
-            v.retain(|s| s[0] >= MIN_FULLSCREEN[0] && s[1] >= MIN_FULLSCREEN[1]);
-            v
-        }
-        DisplayMode::Borderless => Vec::new(),
-    }
+/// The options screen's display choices on this monitor.
+pub fn display_info(d: &DisplaySettings, monitor: Option<&Monitor>) -> sammy_present::options::DisplayInfo {
+    let desktop = monitor.map(|m| [m.physical_width, m.physical_height]);
+    let modes: Vec<[u32; 2]> = monitor.map(|m| m.video_modes.iter().map(|v| [v.physical_size.x, v.physical_size.y]).collect()).unwrap_or_default();
+    sammy_present::options::DisplayInfo::new(d, desktop, &modes)
 }
 
-/// The resolution a mode uses now (for display).
+/// The resolution a mode uses now.
 pub fn current_size(d: &DisplaySettings, monitor: Option<&Monitor>) -> Option<[u32; 2]> {
-    let desktop = monitor.map(|m| [m.physical_width, m.physical_height]);
-    match d.mode {
-        DisplayMode::Windowed => Some(d.window),
-        DisplayMode::Borderless => desktop,
-        DisplayMode::Fullscreen => d.fullscreen.or(desktop),
-    }
+    display_info(d, monitor).current
 }
 
 /// Alt+Enter and F11 toggle between the window and the last fullscreen mode.
@@ -95,13 +71,10 @@ fn apply(game: Res<Game>, monitors: Query<&Monitor, With<PrimaryMonitor>>, mut w
     *applied = Some(d);
 }
 
-/// Whole multiples of the 640×480 art in physical pixels (sharp pixels): "large" is the
-/// biggest multiple that fits, "medium"/"small" one/two less; windows smaller than
-/// 640×480 get a fractional fit.
+/// Whole multiples of the 640×480 art in physical pixels ([`sammy_present::hud::ui_scale`]).
 fn ui_scale(game: Res<Game>, windows: Query<&Window, With<PrimaryWindow>>, mut scale: ResMut<UiScale>) {
     let Ok(w) = windows.single() else { return };
-    let fit = (w.physical_height() as f32 / H).min(w.physical_width() as f32 / W);
-    let s = if fit < 1.0 { fit.max(MIN_FRACTIONAL_SCALE) } else { (fit.floor() - game.save.display.ui_size as f32).max(1.0) };
+    let s = sammy_present::hud::ui_scale(w.physical_width() as f32, w.physical_height() as f32, game.save.display.ui_size as u32);
     let s = s / w.scale_factor();
     if (scale.0 - s).abs() > 1e-4 {
         scale.0 = s;

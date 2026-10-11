@@ -24,9 +24,6 @@ const NAV_REPEAT: f32 = 0.15;
 const MOUSE_MOVE_SQ: f32 = 4.0;
 /// A stick pushed past this length navigates the menus.
 const STICK_NAV: f32 = 0.5;
-/// `SAMMY_PAD_NAV` debug script: starts after this many seconds, one input per step.
-const PAD_NAV_START: f32 = 3.0;
-const PAD_NAV_STEP: f32 = 0.5;
 
 /// This frame's [`sammy_core::input::Controls`].
 #[derive(Resource, Default, Debug, Clone, Deref, DerefMut)]
@@ -148,27 +145,19 @@ fn read_controls(
         None => repeat.dir = None,
     }
     out.nav = nav.map(|d: IVec2| d.to_array());
-    // Debug: SAMMY_PAD_NAV=right,down,a,b,... presses one pad input every `PAD_NAV_STEP` from `PAD_NAV_START` on.
-    if let Ok(script) = std::env::var("SAMMY_PAD_NAV") {
-        let t = time.elapsed_secs() - PAD_NAV_START;
-        let step = (t / PAD_NAV_STEP).floor();
-        if t >= 0.0 && (t - time.delta_secs()) / PAD_NAV_STEP < step
-            && let Some(cmd) = script.split(',').nth(step as usize)
-        {
-            out.pad = true;
-            match cmd {
-                "left" => out.nav = Some([-1, 0]),
-                "right" => out.nav = Some([1, 0]),
-                "up" => out.nav = Some([0, 1]),
-                "down" => out.nav = Some([0, -1]),
-                "a" => (out.accept, out.jump_hit, out.any) = (true, true, true),
-                "b" => (out.back, out.uturn_hit) = (true, true),
-                "start" => out.options = true,
-                _ => {}
-            }
-        }
-        out.pad |= t >= 0.0;
+    // Debug: SAMMY_PAD_NAV=right,down,a,b,... presses one pad input at a time.
+    let (cmd, running) = sammy_platform::debug::pad_nav(time.elapsed_secs(), time.delta_secs());
+    match cmd.as_deref() {
+        Some("left") => out.nav = Some([-1, 0]),
+        Some("right") => out.nav = Some([1, 0]),
+        Some("up") => out.nav = Some([0, 1]),
+        Some("down") => out.nav = Some([0, -1]),
+        Some("a") => (out.accept, out.jump_hit, out.any) = (true, true, true),
+        Some("b") => (out.back, out.uturn_hit) = (true, true),
+        Some("start") => out.options = true,
+        _ => {}
     }
+    out.pad |= running;
     c.0 = out;
 }
 

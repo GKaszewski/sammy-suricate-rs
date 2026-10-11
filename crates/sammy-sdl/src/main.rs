@@ -9,8 +9,12 @@ mod audio;
 mod gfx;
 mod hud;
 mod input;
+mod menu;
+mod options;
 mod scene;
 mod shot;
+mod text;
+mod ui;
 
 use glow::HasContext;
 use sammy_core::sim::{Event, Files};
@@ -95,7 +99,7 @@ fn run() -> anyhow::Result<()> {
     attr.set_context_profile(sdl2::video::GLProfile::GLES);
     attr.set_context_version(2, 0);
     attr.set_depth_size(24);
-    let window = video.window("Sammy Suricate", SCREEN.0, SCREEN.1).opengl().resizable().build()?;
+    let mut window = video.window("Sammy Suricate", SCREEN.0, SCREEN.1).opengl().resizable().build()?;
     let _ctx = window.gl_create_context().map_err(anyhow::Error::msg)?;
     let _ = video.gl_set_swap_interval(1);
     let gl = unsafe { glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _) };
@@ -105,6 +109,19 @@ fn run() -> anyhow::Result<()> {
     let mut audio = audio::Audio::new(&sdl, &files);
     let mut scene = scene::Scene::default();
     let mut hud = hud::HudView::new(&gfx, &files);
+    let mut painter = ui::Painter::new(&gfx);
+    let fonts = text::Fonts::new(&gfx, &files);
+    let mut menu = menu::MenuView::new(&gfx, &files);
+    let mut options = options::OptionsView::new(&gfx, &files);
+    // A level is frozen while the options overlay is up.
+    let mut paused = false;
+    let mut display = Display::default();
+    if std::env::var_os("SAMMY_OPTIONS").is_some() {
+        options.show(sammy_present::options::Mode::Menu);
+    }
+    let mouse = sdl.mouse();
+    // The camera of the last frame (menu picking runs before this frame's tick).
+    let mut last_cam: Option<scene::Camera> = None;
     let mut shots = shot::Shots::from_env();
     let mut events = sdl.event_pump().map_err(anyhow::Error::msg)?;
     // SDL's clock (std's monotonic clock is not reliable on every handheld).
@@ -125,12 +142,20 @@ fn run() -> anyhow::Result<()> {
         let dt = if first { 0.0 } else { ((now - last) as f32).min(MAX_FRAME) };
         first = false;
         last = now;
+        let pointer = input.pointer();
         let controls = input.controls(dt);
+        let (w, h) = window.drawable_size();
+        let window_px = [w as f32, h as f32];
+        painter.resize(w as f32, h as f32, sammy_present::hud::ui_scale(w as f32, h as f32, sim.save.display.ui_size as u32));
+        let mut effects = options.open_on_key(&sim, &controls);
+        menu.modal = options.model.open();
+        menu.pick(&mut sim, &menu::Screen { scene: &scene, cam: last_cam.as_ref(), size: window_px }, &controls, &pointer, &mut audio);
         if frames < 6 {
             log::info!("frame {frames}: tick dt {dt:.3}");
         }
-        sim.tick(dt, &controls, &files as &dyn Files);
+        sim.tick(if paused { 0.0 } else { dt }, &controls, &files as &dyn Files);
         audio.set_volume(sim.save.sound);
+        menu.act(&mut sim);
         let drained: Vec<Event> = sim.drain_events().collect();
         for e in drained {
             match e {
@@ -138,11 +163,29 @@ fn run() -> anyhow::Result<()> {
                 Event::Saved => sammy_platform::save::write(&storage, &sim.save),
                 Event::LoadFailed { file } => log::error!("could not load level {file}"),
                 Event::Loaded { file } => log::info!("loaded level {file} (slot {:?})", sim.flow.slot),
-                Event::Quit => input.quit = true,
+                Event::OpenOptions => effects.extend(options.show(sammy_present::options::Mode::Menu)),
+                Event::Quit => options.model.ask_quit(),
                 _ => {}
             }
         }
-        hud.tick(&sim.game, dt * sammy_core::time::TICKS_PER_SEC);
+        let info = display.info(&video, &window, &sim.save.display);
+        effects.extend(options.update(&mut sim, &controls, &pointer, &painter, info.as_ref()));
+        for fx in effects {
+            use sammy_present::options::Effect;
+            match fx {
+                Effect::Sound(name, vol) => audio.play(name, vol),
+                Effect::Pause(p) => paused = p,
+                Effect::Abandon => sim.abandon(),
+                Effect::GiveUp => sim.give_up(),
+                Effect::Exit => {
+                    sammy_platform::save::write(&storage, &sim.save);
+                    input.quit = true;
+                }
+                Effect::SaveChanged => sammy_platform::save::write(&storage, &sim.save),
+            }
+        }
+        display.apply(&video, &mut window, &sim.save.display);
+        hud.tick(&sim.game, if paused { 0.0 } else { dt * sammy_core::time::TICKS_PER_SEC });
         frames += 1;
         if frames.is_multiple_of(LOG_FRAMES) {
             log::info!("frame {frames} at {:.1} s", secs() - start);
@@ -156,21 +199,25 @@ fn run() -> anyhow::Result<()> {
         scene.sync(&gfx, &files, &sim);
         trace("synced");
 
-        let (w, h) = window.drawable_size();
         unsafe {
             gfx.gl.viewport(0, 0, w as i32, h as i32);
             gfx.gl.clear_color(0.0, 0.0, 0.0, 1.0);
             gfx.gl.depth_mask(true);
             gfx.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         }
-        if let Some(pose) = sim.camera.pose.filter(|_| draw.contains("scene")) {
-            let cam = scene::Camera::from_pose(&pose, sim.camera.params.arc, w as f32 / h.max(1) as f32);
-            scene.draw(&gfx, &sim, &cam, &draw);
+        last_cam = sim.camera.pose.map(|pose| scene::Camera::from_pose(&pose, sim.camera.params.arc, w as f32 / h.max(1) as f32));
+        if let Some(cam) = last_cam.as_ref().filter(|_| draw.contains("scene")) {
+            scene.draw(&gfx, &sim, cam, &draw);
             trace("scene drawn");
         }
+        painter.begin(&gfx);
         if sim.flow.phase != sammy_core::flow::Phase::Menu && draw.contains("hud") {
-            hud.draw(&gfx, &sim.game, w as f32, h as f32, sim.save.display.ui_size as u32);
+            hud.draw(&gfx, &painter, &sim.game);
         }
+        menu.draw(&gfx, &painter, &fonts, &sim, &menu::Screen { scene: &scene, cam: last_cam.as_ref(), size: window_px }, &pointer);
+        options.draw(&gfx, &painter, &fonts, &sim, &pointer, controls.pad, info.as_ref());
+        painter.end(&gfx);
+        mouse.show_cursor(!menu.owns_cursor(&sim));
         if shots.due((secs() - start) as f32) {
             shots.save(&gfx.gl, w, h);
             if shots.done() {
@@ -182,4 +229,52 @@ fn run() -> anyhow::Result<()> {
         trace("swapped");
     }
     Ok(())
+}
+
+/// Window modes on desktops (windowed / borderless / fullscreen at a resolution) from
+/// the save's display settings; handhelds have one fixed screen.
+#[derive(Default)]
+struct Display {
+    applied: Option<sammy_core::save::DisplaySettings>,
+}
+
+impl Display {
+    /// Desktops change the display only when not making screenshots.
+    fn enabled() -> bool {
+        !cfg!(target_os = "vita") && std::env::var_os("SAMMY_SCREENSHOT").is_none()
+    }
+
+    /// The options screen's display choices (None on fixed screens).
+    fn info(&self, video: &sdl2::VideoSubsystem, window: &sdl2::video::Window, d: &sammy_core::save::DisplaySettings) -> Option<sammy_present::options::DisplayInfo> {
+        if !Self::enabled() {
+            return None;
+        }
+        let index = window.display_index().unwrap_or(0);
+        let desktop = video.desktop_display_mode(index).ok().map(|m| [m.w as u32, m.h as u32]);
+        let modes: Vec<[u32; 2]> = (0..video.num_display_modes(index).unwrap_or(0)).filter_map(|i| video.display_mode(index, i).ok()).map(|m| [m.w as u32, m.h as u32]).collect();
+        Some(sammy_present::options::DisplayInfo::new(d, desktop, &modes))
+    }
+
+    /// Applies `d` when it changed (and at start).
+    fn apply(&mut self, video: &sdl2::VideoSubsystem, window: &mut sdl2::video::Window, d: &sammy_core::save::DisplaySettings) {
+        if !Self::enabled() || self.applied == Some(*d) {
+            return;
+        }
+        self.applied = Some(*d);
+        use sammy_core::save::DisplayMode;
+        use sdl2::video::FullscreenType;
+        let result = match d.mode {
+            DisplayMode::Windowed => window.set_fullscreen(FullscreenType::Off).and_then(|_| window.set_size(d.window[0], d.window[1]).map_err(|e| e.to_string())),
+            DisplayMode::Borderless => window.set_fullscreen(FullscreenType::Desktop),
+            DisplayMode::Fullscreen => {
+                let index = window.display_index().unwrap_or(0);
+                let size = d.fullscreen.or_else(|| video.desktop_display_mode(index).ok().map(|m| [m.w as u32, m.h as u32]));
+                let mode = size.and_then(|[w, h]| video.closest_display_mode(index, &sdl2::video::DisplayMode::new(sdl2::pixels::PixelFormatEnum::Unknown, w as i32, h as i32, 0)).ok());
+                window.set_display_mode(mode).and_then(|_| window.set_fullscreen(FullscreenType::True))
+            }
+        };
+        if let Err(e) = result {
+            log::warn!("display mode: {e}");
+        }
+    }
 }

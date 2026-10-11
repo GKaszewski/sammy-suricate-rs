@@ -61,10 +61,17 @@ struct SpriteAsset {
     mesh: Mesh,
     tex: Texture,
     frames: u32,
+    bounds: Bounds,
 }
 
-/// A prefab's parts: one mesh per texture.
-type Parts = Rc<Vec<(Mesh, Texture)>>;
+/// A prefab's parts (one mesh per texture) and its local bounds.
+struct Prefab {
+    parts: Vec<(Mesh, Texture)>,
+    bounds: Bounds,
+}
+type Parts = Rc<Prefab>;
+/// Local axis-aligned bounds (min, max).
+type Bounds = (Vec3, Vec3);
 
 /// How an entity is drawn.
 enum View {
@@ -77,6 +84,8 @@ enum View {
 struct Level {
     /// Mesh, texture, lightmapped.
     batches: Vec<(Mesh, Texture, bool)>,
+    /// The menu's wide-screen grid walls (unlit).
+    walls: Vec<(Mesh, Texture)>,
     lightmap: Option<Texture>,
     textures: Vec<Texture>,
 }
@@ -154,16 +163,16 @@ impl Scene {
                 let wmb = formats::wmb::parse(&files.read(&key).ok()?).ok()?;
                 let level = wmb.build_mesh();
                 let textures: Vec<Texture> = wmb.textures.iter().map(|t| gfx.texture(&t.image, true, true)).collect();
-                let parts = level
-                    .models
-                    .iter()
-                    .flat_map(|m| &m.batches)
+                let batches = level.models.iter().flat_map(|m| &m.batches);
+                let points = batches.clone().flat_map(|b| b.positions.iter().map(|p| Vec3::from(*p)));
+                let bounds = points.fold((Vec3::MAX, Vec3::MIN), |(lo, hi), p| (lo.min(p), hi.max(p)));
+                let parts = batches
                     .map(|b| {
                         let v: Vec<f32> = (0..b.positions.len()).flat_map(|i| b.positions[i].into_iter().chain(b.normals[i]).chain(b.uvs[i])).collect();
                         (Mesh::new(&gfx.gl, Layout::Model, &v, &b.indices, false), b.texture.map_or(gfx.white, |t| textures[t]))
                     })
                     .collect();
-                Some(Rc::new(parts))
+                Some(Rc::new(Prefab { parts, bounds }))
             })
             .clone()
     }
@@ -208,6 +217,35 @@ impl Scene {
         }
     }
 
+    /// Where an entity is on screen: its bounds projected to window pixels
+    /// (`[x0, y0, x1, y1]`, y down) and its distance, if it is in front of the camera.
+    pub fn screen_rect(&self, sim: &Sim, id: Id, cam: &Camera, size: [f32; 2]) -> Option<([f32; 4], f32)> {
+        let b = sim.world.bodies.get(&id)?;
+        let (_, view) = self.views.get(&id)?;
+        let (bounds, rot) = match view {
+            View::Model { asset, .. } => {
+                let f = asset.mdl.frames.first()?;
+                ((Vec3::from(f.bbox_min), Vec3::from(f.bbox_max)), rotation(b.angles))
+            }
+            View::Prefab(p) => (p.bounds, rotation(b.angles)),
+            View::Sprite { asset, facing } => (asset.bounds, sprite_rotation(b, *facing, cam)),
+            View::Missing => return None,
+        };
+        let m = cam.view_proj * transform(b, rot);
+        let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+        for i in 0..8 {
+            let c = Vec3::new(if i & 1 == 0 { bounds.0.x } else { bounds.1.x }, if i & 2 == 0 { bounds.0.y } else { bounds.1.y }, if i & 4 == 0 { bounds.0.z } else { bounds.1.z });
+            let p = m * c.extend(1.0);
+            if p.w <= 0.0 {
+                return None;
+            }
+            let (x, y) = ((p.x / p.w * 0.5 + 0.5) * size[0], (0.5 - p.y / p.w * 0.5) * size[1]);
+            lo = [lo[0].min(x), lo[1].min(y)];
+            hi = [hi[0].max(x), hi[1].max(y)];
+        }
+        Some(([lo[0], lo[1], hi[0], hi[1]], (Vec3::from(b.pos) - cam.pos).length()))
+    }
+
     fn view(&mut self, gfx: &Gfx, files: &GameFiles, sim: &Sim, id: Id, look: &Look) -> View {
         match &look.visual {
             Visual::Model { file, skin, overlay, frame } => {
@@ -225,6 +263,9 @@ impl Scene {
     fn build_level(&mut self, gfx: &Gfx, sim: &Sim) {
         if let Some(old) = self.level.take() {
             for (m, ..) in &old.batches {
+                m.delete(&gfx.gl);
+            }
+            for (m, _) in &old.walls {
                 m.delete(&gfx.gl);
             }
             for t in old.textures.into_iter().chain(old.lightmap) {
@@ -247,7 +288,18 @@ impl Scene {
             let v: Vec<f32> = (0..b.positions.len()).flat_map(|i| b.positions[i].into_iter().chain(b.uvs[i]).chain(if lit { b.lightmap_uvs[i] } else { [0.0, 0.0] })).collect();
             batches.push((Mesh::new(&gfx.gl, Layout::World, &v, &b.indices, false), b.texture.map_or(gfx.white, |t| textures[t]), lit));
         }
-        self.level = Some(Level { batches, lightmap, textures });
+        let walls = if menu {
+            sammy_present::menu::grid_walls(&wmb, sim.world.menu_markers.values())
+                .into_iter()
+                .map(|q| {
+                    let v: Vec<f32> = (0..4).flat_map(|i| q.corners[i].into_iter().chain([0.0, -1.0, 0.0]).chain(q.uvs[i])).collect();
+                    (Mesh::new(&gfx.gl, Layout::Model, &v, &[0, 1, 2, 0, 2, 3], false), textures[q.texture])
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        self.level = Some(Level { batches, walls, lightmap, textures });
     }
 
     /// Draws the world from the game's camera.
@@ -278,6 +330,13 @@ impl Scene {
             for (mesh, tex, lit) in &level.batches {
                 gfx.draw_world(mesh, &cam.view_proj, *tex, level.lightmap.filter(|_| *lit), &lights);
             }
+            let l = sammy_present::menu::WALL_LIGHT;
+            let wall = Shade { color: [l, l, l, 1.0], unlit: true, ..Default::default() };
+            unsafe { gl.disable(glow::CULL_FACE) };
+            for (mesh, tex) in &level.walls {
+                gfx.draw_model(mesh, &cam.view_proj, &Mat4::IDENTITY, *tex, &wall, &lights);
+            }
+            unsafe { gl.enable(glow::CULL_FACE) };
         }
         // Models face both ways like Bevy's skinned meshes (some are open shells).
         unsafe { gl.disable(glow::CULL_FACE) };
@@ -338,9 +397,9 @@ impl Scene {
         }
         match view {
             View::Model { mesh, tex, .. } => gfx.draw_model(mesh, &cam.view_proj, &transform(b, rotation(b.angles)), *tex, &shade, lights),
-            View::Prefab(parts) => {
+            View::Prefab(prefab) => {
                 let m = transform(b, rotation(b.angles));
-                for (mesh, tex) in parts.iter() {
+                for (mesh, tex) in &prefab.parts {
                     gfx.draw_model(mesh, &cam.view_proj, &m, *tex, &shade, lights);
                 }
             }
@@ -351,20 +410,25 @@ impl Scene {
                 {
                     shade.uv_offset = a.frame.floor() / asset.frames as f32;
                 }
-                let rot = match facing {
-                    // Turn about the vertical axis to face the camera (A4 sprites).
-                    SpriteFacing::Billboard => {
-                        let d = Vec3::from(b.pos) - cam.pos;
-                        Quat::from_rotation_z(d.y.atan2(d.x))
-                    }
-                    SpriteFacing::Screen => Quat::from_mat3(&cam.axes),
-                    // The quad faces -X; an oriented sprite faces along its angles.
-                    SpriteFacing::Oriented => rotation(b.angles) * Quat::from_rotation_z(std::f32::consts::PI),
-                };
+                let rot = sprite_rotation(b, *facing, cam);
                 gfx.draw_model(&asset.mesh, &cam.view_proj, &transform(b, rot), asset.tex, &shade, lights);
             }
             View::Missing => {}
         }
+    }
+}
+
+/// How a sprite is turned this frame.
+fn sprite_rotation(b: &Body, facing: SpriteFacing, cam: &Camera) -> Quat {
+    match facing {
+        // Turn about the vertical axis to face the camera (A4 sprites).
+        SpriteFacing::Billboard => {
+            let d = Vec3::from(b.pos) - cam.pos;
+            Quat::from_rotation_z(d.y.atan2(d.x))
+        }
+        SpriteFacing::Screen => Quat::from_mat3(&cam.axes),
+        // The quad faces -X; an oriented sprite faces along its angles.
+        SpriteFacing::Oriented => rotation(b.angles) * Quat::from_rotation_z(std::f32::consts::PI),
     }
 }
 
@@ -427,5 +491,5 @@ fn load_sprite(gfx: &Gfx, files: &GameFiles, file: &str) -> Option<Rc<SpriteAsse
         0.0, w, h,   -1.0, 0.0, 0.0,  0.0, 0.0,
     ];
     let mesh = Mesh::new(&gfx.gl, Layout::Model, &v, &[0, 1, 2, 0, 2, 3], false);
-    Some(Rc::new(SpriteAsset { mesh, tex: gfx.texture(&img, false, true), frames }))
+    Some(Rc::new(SpriteAsset { mesh, tex: gfx.texture(&img, false, true), frames, bounds: (Vec3::new(-1.0, -w, -h), Vec3::new(1.0, w, h)) }))
 }

@@ -17,6 +17,20 @@ const STICK_NAV: f32 = 0.6;
 const NAV_DELAY: f32 = 0.4;
 const NAV_REPEAT: f32 = 0.15;
 
+/// The mouse in a frame.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Pointer {
+    /// Window pixels; None while a gamepad is in use or before the mouse moved.
+    pub pos: Option<[f32; 2]>,
+    /// The left button: pressed this frame, held, released this frame.
+    pub clicked: bool,
+    pub held: bool,
+    pub released: bool,
+    /// Yes / No dialog keys this frame (J/T/Y, N).
+    pub yes: bool,
+    pub no: bool,
+}
+
 #[derive(Default)]
 pub struct Input {
     keys: HashSet<Keycode>,
@@ -25,11 +39,18 @@ pub struct Input {
     buttons: HashSet<Button>,
     pad_pressed: HashSet<Button>,
     right_click: bool,
+    left_click: bool,
+    left_held: bool,
+    left_released: bool,
+    /// The mouse pointer (window pixels), once it moved.
+    mouse: Option<[f32; 2]>,
     nav_dir: Option<[i32; 2]>,
     nav_timer: f32,
     /// The last input came from a gamepad.
     pad: bool,
     pub quit: bool,
+    /// Seconds since start (for `SAMMY_PAD_NAV`).
+    clock: f32,
 }
 
 impl Input {
@@ -52,6 +73,20 @@ impl Input {
                 self.keys.remove(k);
             }
             Event::MouseButtonDown { mouse_btn: sdl2::mouse::MouseButton::Right, .. } => self.right_click = true,
+            Event::MouseButtonUp { mouse_btn: sdl2::mouse::MouseButton::Left, .. } => {
+                self.left_held = false;
+                self.left_released = true;
+            }
+            Event::MouseButtonDown { mouse_btn: sdl2::mouse::MouseButton::Left, x, y, .. } => {
+                self.left_click = true;
+                self.left_held = true;
+                self.mouse = Some([*x as f32, *y as f32]);
+                self.pad = false;
+            }
+            Event::MouseMotion { x, y, .. } => {
+                self.mouse = Some([*x as f32, *y as f32]);
+                self.pad = false;
+            }
             Event::ControllerButtonDown { button, .. } => {
                 self.buttons.insert(*button);
                 self.pad_pressed.insert(*button);
@@ -70,6 +105,19 @@ impl Input {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The mouse this frame: pointer position (window pixels) and a left click.
+    pub fn pointer(&self) -> Pointer {
+        let hit = |k: &[Keycode]| k.iter().any(|k| self.pressed.contains(k));
+        Pointer {
+            pos: self.mouse.filter(|_| !self.pad),
+            clicked: self.left_click,
+            held: self.left_held,
+            released: self.left_released,
+            yes: hit(&[Keycode::J, Keycode::T, Keycode::Y]),
+            no: hit(&[Keycode::N]),
         }
     }
 
@@ -139,9 +187,28 @@ impl Input {
             self.pad = true;
             c.pad = true;
         }
+        // Debug: SAMMY_PAD_NAV=right,down,a,b,... presses one pad input every step.
+        self.clock += dt;
+        let (cmd, running) = sammy_platform::debug::pad_nav(self.clock, dt);
+        match cmd.as_deref() {
+            Some("left") => c.nav = Some([-1, 0]),
+            Some("right") => c.nav = Some([1, 0]),
+            Some("up") => c.nav = Some([0, 1]),
+            Some("down") => c.nav = Some([0, -1]),
+            Some("a") => (c.accept, c.jump_hit, c.any) = (true, true, true),
+            Some("b") => (c.back, c.uturn_hit) = (true, true),
+            Some("start") => c.options = true,
+            _ => {}
+        }
+        if running {
+            self.pad = true;
+            c.pad = true;
+        }
         self.pressed.clear();
         self.pad_pressed.clear();
         self.right_click = false;
+        self.left_click = false;
+        self.left_released = false;
         c
     }
 }

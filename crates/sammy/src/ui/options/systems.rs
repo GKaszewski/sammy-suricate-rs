@@ -504,7 +504,7 @@ pub(crate) fn choices(
                 d.mode = modes[cycle(i, modes.len())];
             }
             Choice::Size => {
-                let list = crate::platform::display::sizes(d.mode, monitor);
+                let list = crate::platform::display::display_info(d, monitor).sizes;
                 if list.is_empty() {
                     continue;
                 }
