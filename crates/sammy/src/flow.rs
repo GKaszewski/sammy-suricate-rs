@@ -43,7 +43,7 @@ impl Plugin for FlowPlugin {
             .init_resource::<PendingLoad>()
             .init_resource::<crate::level::GameAssets>()
             .add_systems(PreUpdate, load_pending)
-            .add_systems(Update, run_flow);
+            .add_systems(Update, run_flow.in_set(crate::schedule::FrameSet::Flow));
     }
 }
 

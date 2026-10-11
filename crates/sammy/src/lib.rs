@@ -22,6 +22,7 @@ pub mod music;
 pub mod options;
 pub mod particles;
 pub mod save;
+pub mod schedule;
 pub mod shadow;
 pub mod ui_text;
 pub mod vfs;
@@ -82,12 +83,13 @@ pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
     if !app.world().contains_resource::<save::SaveGame>() {
         app.insert_resource(save::load(dir));
     }
+    app.add_plugins(schedule::SchedulePlugin);
     app.add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin, particles::ParticlePlugin))
         .add_plugins((hud3d::Hud3dPlugin, ui_text::UiTextPlugin, menu::MenuPlugin, options::OptionsPlugin, music::MusicPlugin, intro::IntroPlugin, input::InputPlugin, display::DisplayPlugin))
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, (audio::load_sounds, setup))
-        .add_systems(Update, (level::face_camera, level::animate_sprites));
+        .add_systems(Update, (level::face_camera.in_set(schedule::FrameSet::Camera), level::animate_sprites));
     Ok(())
 }
 

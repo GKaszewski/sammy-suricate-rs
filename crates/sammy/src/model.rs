@@ -15,7 +15,7 @@ pub struct ModelPlugin;
 
 impl Plugin for ModelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, animate_models);
+        app.add_systems(Update, animate_models.in_set(crate::schedule::FrameSet::Animate));
     }
 }
 
@@ -120,7 +120,7 @@ impl ModelAnimator {
     }
 }
 
-fn animate_models(time: Res<Time>, mut meshes: ResMut<Assets<Mesh>>, mut q: Query<(&mut ModelAnimator, &Mesh3d)>) {
+pub fn animate_models(time: Res<Time>, mut meshes: ResMut<Assets<Mesh>>, mut q: Query<(&mut ModelAnimator, &Mesh3d)>) {
     for (mut anim, mesh) in &mut q {
         let Some((a, b, f)) = anim.anim.advance(time.delta_secs()) else { continue };
         let Some(mut mesh) = meshes.get_mut(&mesh.0) else { continue };

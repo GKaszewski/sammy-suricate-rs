@@ -19,7 +19,7 @@ impl Plugin for CameraPlugin {
         app.init_resource::<CameraMode>()
             .init_resource::<CameraParams>()
             .init_resource::<CameraRuntime>()
-            .add_systems(Update, (camera_zones, reset_camera_on_respawn))
+            .add_systems(Update, (reset_camera_on_respawn, camera_zones).chain_ignore_deferred().in_set(crate::schedule::FrameSet::Camera))
             .add_systems(Update, (toggle_mode, fly.run_if(resource_equals(CameraMode::Fly)), apply_arc))
             .add_systems(
                 PostUpdate,

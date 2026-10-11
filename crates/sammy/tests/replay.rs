@@ -115,7 +115,13 @@ fn digest(world: &mut World) -> String {
         .collect();
     lines.sort();
     let _ = write!(out, " | entities {} {:016x}", lines.len(), fnv(&lines.join("\n")));
+    LAST_LINES.with(|l| *l.borrow_mut() = lines);
     out
+}
+
+thread_local! {
+    /// The entity lines of the last digest (for `DUMP_AT`).
+    static LAST_LINES: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 fn run(name: &str, level: &str, seconds: f64, script: impl FnMut(u64) -> Controls + Send + Sync + 'static) {
@@ -126,6 +132,13 @@ fn run(name: &str, level: &str, seconds: f64, script: impl FnMut(u64) -> Control
         app.update();
         if f % SAMPLE == 0 {
             let _ = writeln!(got, "{:5.1}s {}", f as f64 / FPS, digest(app.world_mut()));
+            // Debug: DUMP_AT=<seconds> writes every entity line of that sample.
+            if std::env::var("DUMP_AT").ok().and_then(|v| v.parse::<f64>().ok()).is_some_and(|at| (f as f64 / FPS - at).abs() < 1e-6) {
+                let lines = LAST_LINES.with(|l| l.borrow().join("\n"));
+                let path = std::env::temp_dir().join(format!("sammy_dump_{name}.txt"));
+                std::fs::write(&path, lines).unwrap();
+                eprintln!("dumped {}", path.display());
+            }
         }
     }
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden").join(format!("{name}.txt"));
@@ -217,5 +230,20 @@ fn all_levels_sweep() {
             c.uturn_hit = f % 700 == 350;
             c
         });
+    }
+}
+
+/// Debug: `DUMP_ORDER=1` prints the Update schedule's execution order.
+#[test]
+fn dump_update_order() {
+    if std::env::var_os("DUMP_ORDER").is_none() {
+        return;
+    }
+    let Some(mut app) = headless("1", |_| Controls::default()) else { return };
+    app.update();
+    let schedules = app.world().resource::<bevy::ecs::schedule::Schedules>();
+    let s = schedules.get(Update).unwrap();
+    for (_, sys) in s.systems().unwrap() {
+        println!("ORDER {}", sys.name());
     }
 }
