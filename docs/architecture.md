@@ -9,39 +9,49 @@ be tested headlessly. Bevy is one frontend: rendering, audio, input devices, win
 ```
 crates/
   formats/       file formats (WRS, WMB, MDL, PCX, SAV, LZSS, traces); no_std + alloc
-  sammy-core/    the game rules, plain Rust: no Bevy, no I/O, no clocks, no threads
+  sammy-core/    the whole game, plain Rust: no engine, no I/O, no clocks, no threads
+    sim/           `Sim`: the world, the frame, level loading (see below)
+      world.rs       entity ids and tables (bodies, looks, animators, one table per kind)
+      spawn.rs       level objects by action (the WDL inits), `Presentation` → `Look`
+      flow.rs player.rs platforms.rs doors.rs gems.rs pickups.rs health.rs wasps.rs
+      enemies.rs extro.rs camera.rs intro.rs menu.rs      one file per feature's steps
+      events.rs      what the frontend presents (sounds, effects, popups, saves)
+      assets.rs      `Files` trait + parsed WMB/MDL cache
     time.rs angle.rs rng.rs id.rs      ticks, A4 angles, WDL random(), entity ids
-    levels.rs save.rs game.rs          level table, SaveGame model, score/lives state
+    levels.rs save.rs game.rs          level table, SaveGame model, WDL globals
     anim.rs collision.rs physics.rs    MDL scenes, hulls + `Space` trait, jump params
-    player.rs input.rs                 Sammy's movement (`Player::step`), `Controls`
-    doors.rs keys.rs gems.rs pickups.rs platforms.rs health.rs
-    wasps.rs enemies.rs                lions, wasps, hives, planks
-    camera.rs flow.rs level.rs         follow camera, level phases, object dispatch
-    extro.rs intro.rs menu.rs titles.rs decor.rs eye.rs
+    player.rs doors.rs keys.rs gems.rs pickups.rs platforms.rs health.rs wasps.rs
+    enemies.rs camera.rs flow.rs extro.rs intro.rs menu.rs titles.rs decor.rs eye.rs
+                   the rules per feature (state types, constants with WDL cites, steps)
   sammy/         Bevy frontend (lib + thin binary)
-    lib.rs         `SammyPlugins` (the plugin group), `run()`
-    schedule.rs    `GameSet` steps and the `FRAME` order
-    gameplay/      one folder per feature: mod.rs (plugin) components.rs resources.rs
-                   spawn.rs systems.rs; dispatch.rs maps level objects to features
-    camera/ flow/ level/
+    game.rs        the `Sim` as a resource, ticked once per frame; events → messages
+    scene/         level geometry, the mirror (game entity → Bevy entity), indicators
+    camera/        main camera at the game's camera pose; fly camera; field of view
     render/        models, level material + WESL shaders, lights, shadows, particles
-    ui/            hud, hud3d, text, menu/, options/, intro/
+    ui/            hud, hud3d, text, menu/ (picking), options/, intro/ (logos, fog)
     platform/      audio, music, input (keyboard + gamepad), display, vfs, save, debug
 ```
 
-Core state types are wrapped on the Bevy side in `Deref` newtype components and
-resources (orphan rule); core functions return events (`DoorEvent`, `DeathEvent`,
-`Fire` ...) that the systems apply. Entities cross the boundary as `Id(u64)`
-(`Entity::to_bits`).
+### The simulation
 
-### Frame order
+`Sim::tick(secs, &Controls, &dyn Files)` runs one frame: `t = secs × 16` ticks, like
+the original's variable `time`. Its steps run in a fixed order (the original port's
+frame, listed in `sim/mod.rs`); entities update in spawn order (ids are never reused),
+so behaviour never depends on an engine's internals. State lives in typed tables on
+`World` (`players`, `doors`, `key_gems`, `shrinking` ...), joined by id, which keeps
+the steps close to the original WDL loops. What the player sees is `Body` (position,
+angles, scale, hidden, alpha) and `Look` (model / prefab / sprite, revision for morphs)
+plus `Animator`/`SpriteAnim`/`Light`; anything else is presented from events.
 
-`schedule.rs` gives every gameplay system its own `GameSet` step; `FRAME` lists the
-steps and the explicit command sync points (`ApplyDeferred`) in order. Both are part of
-the game's behaviour (later steps see earlier spawns; random rolls happen in order), so
-the replay test locks them. So does plugin registration order in `SammyPlugins`: it sets
-component registration and so query iteration order, which decides which gem draws which
-random colour.
+A frontend:
+1. implements `Files` (bytes by file name) and builds `Sim::new(save, seed)`;
+2. each frame: `tick`, then draws the tables and `sim.camera.pose`, and handles
+   `drain_events()` (sounds, effects, popups, `Saved` → write the save);
+3. feeds UI decisions back: `menu.hovered`, `menu_choice(code)`, `abandon()`,
+   `give_up()`, `request_load(file)`.
+
+The Bevy frontend does exactly that (`game.rs`, `scene/mirror.rs`); a vitasdk frontend
+would do the same with its own renderer.
 
 ### Cargo features (`sammy`)
 
@@ -59,17 +69,18 @@ Rules:
 - No magic numbers: every WDL value is a named constant with its source cite, or an
   enum / newtype.
 - The frontend reads core state and events; it never changes game rules.
-- Feature plugins are self-contained and can be left out (Cargo features for optional
-  parts: music, intro, debug tools).
+- Debug overrides reach the core as `DebugOptions` (the frontend reads the environment).
 
 ## Safety net
 
-`crates/sammy/tests/replay.rs` plays scenarios headlessly (levels 1, 4, 20, 36 with
-scripted input, the extro, the boot intro, and a 20 s sweep of all 36 levels): fixed 60 Hz steps, seeded RNG,
-single-threaded schedules. Every half second it records the game state, Sammy's
-position and a hash of all named entity transforms, and compares them with
-`tests/golden/*.txt`. Every refactoring step must keep it green;
-`UPDATE_GOLDEN=1` is only for changes meant to alter behaviour.
+`crates/sammy-core/tests/sim_replay.rs` plays scenarios on the `Sim` alone (levels 1,
+4, 20, 36 with scripted input, the extro, the boot intro, and a 20 s sweep of all 36
+levels): fixed 60 Hz frames, seeded RNG. Every half second it records the game state,
+Sammy, the phase and a hash of every body, and compares them with
+`tests/golden/*.txt` (about a second for everything). `UPDATE_GOLDEN=1` is only for
+changes meant to alter behaviour. `lions_hurt_sammy` checks lion combat directly.
+`crates/sammy/tests/smoke.rs` runs the Bevy frontend headless and checks that the
+scene mirrors the game.
 
 ## Steps
 
@@ -81,8 +92,7 @@ position and a hash of all named entity transforms, and compares them with
    flow), the Bevy side becoming adapters. **(done)**
 5. Restructure the Bevy crate into feature plugins (`mod/components/resources/systems`),
    explicit frame schedule, Cargo features for optional plugins. **(done)**
-6. Hygiene pass: remaining magic numbers, clippy clean (`--all-targets`), docs.
-
-Next (not started): a core-owned `Sim` that owns the world state and ticks it at 16 Hz
-(`Sim::tick(&mut self, &Controls) -> Events`), so a non-Bevy frontend (vitasdk) only
-draws, plays sounds and reads input.
+6. Hygiene pass: remaining magic numbers, clippy clean (`--all-targets`), docs. **(done)**
+7. Core-owned `Sim`: the world, the frame and level loading in `sammy-core`; Bevy only
+   presents it. Verified identical (game state and Sammy's path in every scenario) to
+   the engine port before the switch. **(done)**

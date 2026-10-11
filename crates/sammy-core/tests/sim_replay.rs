@@ -286,3 +286,29 @@ fn compare_with_engine_port() {
     }
 }
 
+
+/// Lions hurt Sammy: standing still next to a lion of level 4 (the first lion level),
+/// he gets swiped and loses health.
+#[test]
+fn lions_hurt_sammy() {
+    let Some(files) = files() else { return };
+    let mut sim = new_sim();
+    sim.request_load(file_for(4).unwrap());
+    sim.tick(0.0, &Controls::default(), files);
+    let lion = sim.world.enemies.values().map(|e| e.pos).next().expect("a lion");
+    sim.debug.start = Some(([lion[0] + 150.0, lion[1], lion[2] + 40.0], Some(180.0)));
+    sim.request_load(file_for(4).unwrap());
+    let (mut min_hearts, mut lives_lost, mut hits) = (f32::MAX, false, 0);
+    let mut last = 48.0;
+    for f in 0..(180.0 * FPS) as u64 {
+        sim.tick(if f == 0 { 0.0 } else { 1.0 / FPS }, &Controls::default(), files);
+        hits += sim.drain_events().filter(|e| matches!(e, sammy_core::sim::Event::Sound("Hit1" | "Hit2" | "Hit3"))).count();
+        let h = sim.game.hearts;
+        min_hearts = min_hearts.min(h);
+        lives_lost |= h > last + 10.0; // refilled after a death
+        last = h;
+    }
+    eprintln!("min hearts {min_hearts}, swipes {hits}, life lost {lives_lost}, lives {}", sim.game.lives);
+    assert!(min_hearts < sammy_core::game::MAX_HEARTS, "no lion ever hurt Sammy");
+    assert!(hits > 0, "no swipe landed");
+}
