@@ -355,6 +355,12 @@ mod tests {
             flags,
             state: DoorState::Down,
             flash: 0.0,
+            rise: 300.0,
+            gem_flying: false,
+            validated: false,
+            refreshed: false,
+            bell: 0.0,
+            clear_pass: 0,
         }
     }
 
