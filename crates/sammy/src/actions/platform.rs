@@ -61,8 +61,12 @@ pub struct Platform {
 
 #[derive(Component)]
 pub struct Teleport {
-    dest: [f32; 3],
+    pub dest: [f32; 3],
     pan: f32,
+    /// Flag2: lions are teleported too.
+    pub lions: bool,
+    /// `Skill12`: busy while someone is being teleported (shared by Sammy and lions).
+    pub busy: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -76,6 +80,7 @@ enum TeleportStage {
 /// Sammy is being teleported (input locked).
 #[derive(Component)]
 pub struct Teleporting {
+    pad: Entity,
     dest: [f32; 3],
     pan: f32,
     stage: TeleportStage,
@@ -107,7 +112,7 @@ pub fn init_platform(obj: &Object, body: bool, entity: &mut EntityCommands) {
 
 pub fn init_teleport(obj: &Object, entity: &mut EntityCommands) {
     let s = &obj.skills;
-    entity.insert(Teleport { dest: [s[0], s[1], s[2]], pan: s[3] });
+    entity.insert(Teleport { dest: [s[0], s[1], s[2]], pan: s[3], lions: obj.flags & (1 << 1) != 0, busy: false });
 }
 
 /// `SetLinkMoteur`: each platform attaches to the engine with its link id.
@@ -238,13 +243,17 @@ pub fn ride_platforms(
 }
 
 /// `Teleport_Hit`: Sammy standing on a pad is faded out, moved and faded back in.
-pub fn enter_teleports(mut commands: Commands, pads: Query<&Teleport>, player: Query<(Entity, &Player), Without<Teleporting>>) {
+pub fn enter_teleports(mut commands: Commands, mut pads: Query<&mut Teleport>, player: Query<(Entity, &Player), Without<Teleporting>>) {
     let Ok((e, p)) = player.single() else { return };
     if !p.grounded || p.vz != 0.0 || p.state == State::Dead {
         return;
     }
-    if let Some(pad) = p.ground_entity.and_then(|g| pads.get(g).ok()) {
-        commands.entity(e).insert(Teleporting { dest: pad.dest, pan: pad.pan, stage: TeleportStage::Settle(4.0), alpha: 100.0 });
+    if let Some(g) = p.ground_entity
+        && let Ok(mut pad) = pads.get_mut(g)
+        && !pad.busy
+    {
+        pad.busy = true;
+        commands.entity(e).insert(Teleporting { pad: g, dest: pad.dest, pan: pad.pan, stage: TeleportStage::Settle(4.0), alpha: 100.0 });
     }
 }
 
@@ -253,6 +262,7 @@ pub fn run_teleports(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut follow: Query<&mut FollowState>,
+    mut pads: Query<&mut Teleport>,
     mut player: Query<(Entity, &mut Player, &mut Teleporting, &MeshMaterial3d<StandardMaterial>)>,
 ) {
     let Ok((e, mut p, mut tp, mat)) = player.single_mut() else { return };
@@ -277,6 +287,9 @@ pub fn run_teleports(
             tp.alpha = (tp.alpha + 10.0 * t).min(100.0);
             if tp.alpha >= 100.0 {
                 p.state = State::Stand;
+                if let Ok(mut pad) = pads.get_mut(tp.pad) {
+                    pad.busy = false;
+                }
                 commands.entity(e).remove::<Teleporting>();
             }
             TeleportStage::FadeIn

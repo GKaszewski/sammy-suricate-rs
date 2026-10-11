@@ -35,14 +35,69 @@ const ANIM_FIN_JUMP_FAST: f32 = 18.0;
 
 /// `widthbarBoost`: WindowBoost runs 0 (full) .. 150 (empty).
 pub const BOOST_MAX: f32 = 150.0;
-// Slopes (`handlePente`, per-level values from InitLvl.wdl).
-const SLOPE_ANGLE_MIN: f32 = 0.92;
-const FORCE_PENTE: f32 = 100.0;
-const ACC_PENTE: f32 = 1.5;
-const AMORTI_PENTE_END: f32 = 0.3;
-const BIG_SLOPE: f32 = 10.0;
 const MEDIUM_SLOPE: f32 = 2.0;
 const SPEED_ROTATION_PENTE: f32 = 0.05;
+
+/// Per-level player tuning (InitLvl.wdl defaults; `InitGame5` turning and slopes,
+/// `InitGame4` knockback; docs/level-objects.md §2.9).
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct PlayerTuning {
+    /// `SpeedRotationPlayer` / `SpeedRotationPlayerMove` (degrees per tick).
+    pub turn_stand: f32,
+    pub turn_move: f32,
+    pub slope_angle_min: f32,
+    pub acc_pente: f32,
+    pub force_pente: f32,
+    pub amorti_pente_end: f32,
+    pub big_slope: f32,
+    /// `IntensiteBlobBounce` / `AmortiBouncePlayer`.
+    pub bounce: f32,
+    pub amorti_bounce: f32,
+}
+
+impl Default for PlayerTuning {
+    fn default() -> Self {
+        Self {
+            turn_stand: 10.0,
+            turn_move: 7.0,
+            slope_angle_min: 0.92,
+            acc_pente: 1.5,
+            force_pente: 100.0,
+            amorti_pente_end: 0.3,
+            big_slope: 10.0,
+            bounce: 30.0,
+            amorti_bounce: 10.0,
+        }
+    }
+}
+
+impl PlayerTuning {
+    /// `InitGame5` (mm1.wdl:1912-1924): Skill1/2 turning, Skill4-8 slopes.
+    pub fn apply_game5(&mut self, s: &[f32]) {
+        let set = |v: &mut f32, x: f32| {
+            if x != 0.0 {
+                *v = x;
+            }
+        };
+        set(&mut self.turn_stand, s[0]);
+        set(&mut self.turn_move, s[1]);
+        set(&mut self.slope_angle_min, s[3]);
+        set(&mut self.acc_pente, s[4]);
+        set(&mut self.force_pente, s[5]);
+        set(&mut self.amorti_pente_end, s[6]);
+        set(&mut self.big_slope, s[7]);
+    }
+
+    /// `InitGame4` (mm1.wdl:1891-1910): Skill5/6 knockback strength and decay.
+    pub fn apply_game4(&mut self, s: &[f32]) {
+        if s[4] != 0.0 {
+            self.bounce = s[4];
+        }
+        if s[5] != 0.0 {
+            self.amorti_bounce = s[5];
+        }
+    }
+}
 
 /// Collision geometry of the current level.
 #[derive(Resource, Clone)]
@@ -203,7 +258,13 @@ pub struct PlayerTouched(pub Entity);
 
 /// Moves along `delta`, sliding along walls (approximates A4's `MOVE` glide).
 /// Returns the new position and the last entity bumped into.
-pub fn slide_move(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 3], ignore: Option<Entity>) -> ([f32; 3], Option<Entity>) {
+pub fn slide_move(world: &CollisionWorld, pos: [f32; 3], delta: [f32; 3], ignore: Option<Entity>) -> ([f32; 3], Option<Entity>) {
+    let (p, t) = slide_move_n(world, pos, delta, ignore);
+    (p, t.map(|(e, _)| e))
+}
+
+/// `slide_move` that also reports the contact normal of the touched entity.
+pub fn slide_move_n(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 3], ignore: Option<Entity>) -> ([f32; 3], Option<(Entity, [f32; 3])>) {
     let mut touched = None;
     for _ in 0..4 {
         if delta.iter().all(|d| d.abs() < 1e-4) {
@@ -215,8 +276,10 @@ pub fn slide_move(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 3]
         if tr.start_solid {
             return (pos, touched);
         }
-        if hit.entity.is_some() && tr.hit() {
-            touched = hit.entity;
+        if let Some(e) = hit.entity
+            && tr.hit()
+        {
+            touched = Some((e, tr.normal));
         }
         pos = tr.end;
         if !tr.hit() {
@@ -238,7 +301,10 @@ pub fn move_player(
     world: CollisionWorld,
     mut game: ResMut<crate::game::GameState>,
     mut sfx: crate::audio::Sfx,
+    tuning: Res<PlayerTuning>,
     enemies: Query<(), With<super::enemy::Enemy>>,
+    pushers: Query<(), Or<(With<super::platform::Platform>, With<super::wasp::Hive>)>>,
+    gems: Query<(), With<super::pickups::KeyGem>>,
     mut touched_msgs: MessageWriter<PlayerTouched>,
     mut q: Query<(Entity, &mut Player, &mut Transform, Option<&mut ModelAnimator>)>,
 ) {
@@ -326,7 +392,7 @@ pub fn move_player(
             iy = 0.0;
         }
         // 1. Turning: 10°/tick standing, 7 moving (×0.6 boosting), half in the air.
-        let mut rate = if iy != 0.0 { if p.boosting { 0.6 * 7.0 } else { 7.0 } } else { 10.0 };
+        let mut rate = if iy != 0.0 { if p.boosting { 0.6 * tuning.turn_move } else { tuning.turn_move } } else { tuning.turn_stand };
         if !p.grounded {
             rate *= 0.5;
         }
@@ -336,7 +402,7 @@ pub fn move_player(
         let mut v = if p.grounded { iy * p.speed * t } else { iy * p.speed * 0.75 * t };
         let mut strafe = 0.0;
         // Slope steering: big slopes strafe and turn downhill, medium slopes damp turning.
-        let big = p.pente[0].abs() > BIG_SLOPE || p.pente[1].abs() > BIG_SLOPE;
+        let big = p.pente[0].abs() > tuning.big_slope || p.pente[1].abs() > tuning.big_slope;
         let medium = p.pente[0].abs() > MEDIUM_SLOPE || p.pente[1].abs() > MEDIUM_SLOPE;
         let slope_pan = p.pente[1].atan2(p.pente[0]).to_degrees();
         if big {
@@ -352,22 +418,29 @@ pub fn move_player(
         }
         p.pan -= angle_force;
         let (s, c) = p.pan.to_radians().sin_cos();
-        let (pos, touched) = slide_move(&world, p.pos, [c * v - s * strafe, s * v + c * strafe, 0.0], Some(me));
+        let (pos, touched) = slide_move_n(&world, p.pos, [c * v - s * strafe, s * v + c * strafe, 0.0], Some(me));
         p.pos = pos;
-        if let Some(e) = touched {
+        if let Some((e, n)) = touched {
             touched_msgs.write(PlayerTouched(e));
+            // Player_Bong (player.wdl:520-697): bumping an entity cancels the slope slide;
+            // non-pushers knock Sammy back along the contact normal, pushers (platforms,
+            // hives: no speed of their own) cancel the knockback. Lions: enemy.rs.
+            if !gems.contains(e) && !enemies.contains(e) {
+                p.pente = [0.0; 3];
+                p.knock = if pushers.contains(e) { [0.0; 3] } else { [n[0] * tuning.bounce, n[1] * tuning.bounce, 0.0] };
+            }
         }
 
         // handlePente: on floors steeper than ~23° Sammy slides downhill and leans.
         if let Some((f, _, n)) = floor_below(&world, p.pos)
             && n[2] > 0.0
-            && n[2] <= SLOPE_ANGLE_MIN
+            && n[2] <= tuning.slope_angle_min
             && p.pos[2] - f <= BLOB_HAUT + 32.0
         {
-            let force = [n[0] * FORCE_PENTE, n[1] * FORCE_PENTE, -20.0];
+            let force = [n[0] * tuning.force_pente, n[1] * tuning.force_pente, -20.0];
             let v2 = 1.0 - n[2];
             for i in 0..3 {
-                p.pente[i] += ACC_PENTE * force[i].signum() * v2;
+                p.pente[i] += tuning.acc_pente * force[i].signum() * v2;
                 if p.pente[i].abs() > force[i].abs() {
                     p.pente[i] = force[i];
                 }
@@ -390,7 +463,7 @@ pub fn move_player(
         } else {
             p.tilt -= 0.6 * p.tilt * t.min(1.0);
             p.roll -= 0.6 * p.roll * t.min(1.0);
-            let k = (1.0 - AMORTI_PENTE_END * t).max(0.0);
+            let k = (1.0 - tuning.amorti_pente_end * t).max(0.0);
             p.pente = p.pente.map(|x| if x.abs() < 0.01 { 0.0 } else { x * k });
             if p.pente != [0.0; 3] {
                 let d = p.pente.map(|x| x * t);
@@ -402,7 +475,7 @@ pub fn move_player(
         if p.knock != [0.0; 3] {
             let k = p.knock.map(|v| v * t);
             p.pos = slide_move(&world, p.pos, [k[0], k[1], 0.0], Some(me)).0;
-            let dec = 10.0 * 80.0 / 51.0 * t;
+            let dec = tuning.amorti_bounce * 80.0 / 51.0 * t;
             p.knock = p.knock.map(|v| if v.abs() <= dec { 0.0 } else { v - dec * v.signum() });
         }
 

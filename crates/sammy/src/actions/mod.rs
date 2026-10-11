@@ -25,6 +25,7 @@ pub struct ActionsPlugin;
 impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<player::JumpParams>()
+            .init_resource::<player::PlayerTuning>()
             .init_resource::<GameState>()
             .init_resource::<crate::game::Rng>()
             .init_resource::<pickups::GemSprites>()
@@ -80,7 +81,9 @@ impl Plugin for ActionsPlugin {
                         enemy::tick_enemies,
                         enemy::bump_clock,
                         enemy::add_enemy_colliders,
+                        enemy::run_start_triggers,
                         enemy::sync_enemy_colliders,
+                        enemy::fade_enemies,
                         enemy::place_enemies,
                     )
                         .chain(),
@@ -174,6 +177,14 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             let sk = obj.skills.clone();
             entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills2(&sk));
         }
+        "initgame5" => {
+            let sk = obj.skills.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<player::PlayerTuning>().apply_game5(&sk));
+        }
+        "initgame4" => {
+            let sk = obj.skills.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<player::PlayerTuning>().apply_game4(&sk));
+        }
         "initgame6" => {
             let sk = obj.skills.clone();
             entity.commands().queue(move |w: &mut World| {
@@ -259,6 +270,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initlion" => {
             let skin = enemy::init_lion(obj, entity);
             ActionInit { skin, anim: Some(("stand", 3.0)), ..default() }
+        }
+        "initstartennemy" => {
+            enemy::init_start_ennemy(obj, entity);
+            ActionInit { hidden_but_alive: true, ..default() }
         }
         "initpath" => {
             enemy::init_path(obj, entity);

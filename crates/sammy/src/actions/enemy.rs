@@ -257,6 +257,12 @@ pub struct Enemy {
     pub circle_z: f32,
     /// Distance to Sammy from the last `TestDistLionPlayer`.
     pub dist: f32,
+    /// Entity the gravity trace stands on (platform, teleport pad...).
+    floor_entity: Option<Entity>,
+    /// Teleport pad in use: (pad, destination, fading in?).
+    teleport: Option<(Entity, [f32; 3], bool)>,
+    /// Opacity in percent (teleport fades).
+    pub alpha: f32,
 }
 
 impl Enemy {
@@ -457,6 +463,9 @@ pub fn init_lion(obj: &mut Object, entity: &mut EntityCommands) -> Option<u32> {
         avu: false,
         circle_z: 8.0,
         dist: f32::MAX,
+        floor_entity: None,
+        teleport: None,
+        alpha: 100.0,
     });
     skin
 }
@@ -520,6 +529,8 @@ pub fn tick_enemies(
     mut calls: ResMut<FriendCalls>,
     mut warnings: MessageWriter<WarningAttack>,
     mut commands: Commands,
+    platforms: Query<&super::platform::Platform>,
+    mut pads: Query<&mut super::platform::Teleport>,
 ) {
     let mut warn = false;
     let mut call_rings = Vec::new();
@@ -543,6 +554,47 @@ pub fn tick_enemies(
             }
             e.prev_pos = e.pos;
             e.prev_pan = e.pan;
+            // Teleport pads with Flag2 (mm1.wdl:4236-4285): fade out −2/tick, jump, fade in
+            // +1.5/tick, forced idle and intangible throughout.
+            if let Some((pad, dest, fading_in)) = e.teleport {
+                e.etat = 0;
+                if !fading_in {
+                    e.alpha -= 2.0;
+                    if e.alpha <= 0.0 {
+                        e.alpha = 0.0;
+                        e.pos = dest;
+                        e.prev_pos = dest;
+                        e.teleport = Some((pad, dest, true));
+                    }
+                } else {
+                    e.alpha += 1.5;
+                    if e.alpha >= 100.0 {
+                        e.alpha = 100.0;
+                        e.teleport = None;
+                        if let Ok(mut p) = pads.get_mut(pad) {
+                            p.busy = false;
+                        }
+                    }
+                }
+                continue;
+            }
+            let grounded = e.vspeed == 0.0 && e.pos[2] <= e.floor + e.hover + 41.0;
+            if grounded && e.alive() && let Some(fe) = e.floor_entity {
+                if let Ok(mut pad) = pads.get_mut(fe)
+                    && pad.lions
+                    && !pad.busy
+                {
+                    pad.busy = true;
+                    e.teleport = Some((fe, pad.dest, false));
+                    continue;
+                }
+                // Moving platforms carry the lion (`LionForce` = platform motion).
+                if let Ok(pl) = platforms.get(fe) {
+                    for i in 0..3 {
+                        e.pos[i] += pl.delta[i];
+                    }
+                }
+            }
             // Contacts with Sammy (either mover): the swipe rules (§4.1).
             let touching = sammy.is_some_and(|(s, _, _)| touched.contains(&me) || e_touches(&world, &e, me, s));
             if touching && sammy_alive && e.class == LION {
@@ -942,6 +994,7 @@ fn randomize(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) {
 fn gravity(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) {
     let g = ctx.g;
     let hit = ctx.world.trace(0, e.pos, [e.pos[0], e.pos[1], e.pos[2] - 2000.0], Some(ctx.me));
+    e.floor_entity = hit.entity.filter(|_| hit.trace.hit());
     if hit.trace.hit() {
         e.floor = hit.trace.end[2];
         e.vertical = 0.0;
@@ -1367,7 +1420,92 @@ pub fn home_wasps(time: Res<Time>, mut wasps: Query<&mut Wasp>, mut enemies: Que
 pub fn sync_enemy_colliders(mut q: Query<(&Enemy, &mut BoxCollider)>) {
     for (e, mut c) in &mut q {
         c.center = [e.pos[0], e.pos[1], e.pos[2] + e.center_z];
-        c.solid = e.class != 0 && !matches!(e.etat, 7) && !(e.etat == 6 && e.anim_step > 50.0);
+        c.solid = e.class != 0 && e.teleport.is_none() && !matches!(e.etat, 7) && !(e.etat == 6 && e.anim_step > 50.0);
+    }
+}
+
+/// Lions fading on teleport pads get their own material copy while translucent.
+#[derive(Component)]
+pub struct FadeMaterial(Handle<StandardMaterial>);
+
+pub fn fade_enemies(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut q: Query<(Entity, &Enemy, &mut MeshMaterial3d<StandardMaterial>, Option<&FadeMaterial>)>,
+) {
+    for (ent, e, mut mat, fade) in &mut q {
+        match (e.alpha < 100.0, fade) {
+            (true, None) => {
+                let mut m = materials.get(&mat.0).cloned().unwrap_or_default();
+                m.alpha_mode = AlphaMode::Blend;
+                commands.entity(ent).insert(FadeMaterial(mat.0.clone()));
+                mat.0 = materials.add(m);
+            }
+            (true, Some(_)) => {
+                if let Some(mut m) = materials.get_mut(&mat.0) {
+                    m.base_color.set_alpha(e.alpha / 100.0);
+                }
+            }
+            (false, Some(orig)) => {
+                mat.0 = orig.0.clone();
+                commands.entity(ent).remove::<FadeMaterial>();
+            }
+            (false, None) => {}
+        }
+    }
+}
+
+/// `InitStartEnnemy` (mm1.wdl:5126-5170): every 8 ticks, wake the first lion of id
+/// Skill1 within Skill2 into state Skill3 with new react/attack ranges; one-shot unless Skill4.
+#[derive(Component)]
+pub struct StartTrigger {
+    pos: [f32; 3],
+    s: [f32; 8],
+    timer: f32,
+    active: bool,
+}
+
+pub fn init_start_ennemy(obj: &Object, entity: &mut EntityCommands) {
+    let mut s = [0.0; 8];
+    s.copy_from_slice(&obj.skills[..8]);
+    entity.insert(StartTrigger { pos: obj.origin, s, timer: 0.0, active: true });
+}
+
+pub fn run_start_triggers(clock: Res<AiClock>, mut triggers: Query<&mut StartTrigger>, mut enemies: Query<&mut Enemy>) {
+    for _ in 0..clock.ticks {
+        for mut tr in &mut triggers {
+            if !tr.active {
+                continue;
+            }
+            tr.timer -= 1.0;
+            if tr.timer > 0.0 {
+                continue;
+            }
+            tr.timer = 8.0;
+            let p = tr.pos;
+            let s = tr.s;
+            let hit = enemies.iter_mut().find(|e| {
+                e.class as f32 == s[0] && e.alive() && (0..3).map(|i| (e.pos[i] - p[i]).powi(2)).sum::<f32>().sqrt() <= s[1]
+            });
+            if let Some(mut e) = hit {
+                e.etat = s[2] as i32;
+                if e.etat == 1 && e.class == LION {
+                    e.anim_step = 0.0;
+                    e.anim_speed = 0.82 * e.speed;
+                }
+                if s[4] != 0.0 {
+                    e.react_range = s[4];
+                }
+                if s[5] != 0.0 {
+                    e.attack_range = s[5];
+                }
+                if s[3] == 0.0 {
+                    tr.active = false;
+                } else {
+                    tr.timer = s[3];
+                }
+            }
+        }
     }
 }
 
