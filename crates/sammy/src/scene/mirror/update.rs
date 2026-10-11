@@ -94,12 +94,12 @@ pub(in crate::scene) fn update(
         // Dynamic light.
         match (w.lights.get(&id), light) {
             (Some(l), Some(mut dl)) => {
-                if dl.color != l.color || dl.range != l.range {
-                    *dl = DynamicLight { color: l.color, range: l.range };
+                if dl.color != l.color || dl.range != l.range.get() {
+                    *dl = DynamicLight { color: l.color, range: l.range.get() };
                 }
             }
             (Some(l), None) => {
-                commands.entity(e).insert(DynamicLight { color: l.color, range: l.range });
+                commands.entity(e).insert(DynamicLight { color: l.color, range: l.range.get() });
             }
             (None, Some(_)) => {
                 commands.entity(e).remove::<DynamicLight>();

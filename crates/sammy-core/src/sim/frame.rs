@@ -1,6 +1,7 @@
 //! One frame of the game: the original main loop's steps in order.
 
 use super::*;
+use crate::space::Quants;
 
 impl Sim {
     /// One frame: `secs` of game time (0 while paused) and this frame's input.
@@ -111,9 +112,9 @@ impl Sim {
     fn fade_lights(&mut self, dt: Dt) {
         for l in self.world.lights.values_mut() {
             if let Some((rate, until)) = l.fade {
-                l.range -= rate * dt.t;
+                l.range -= Quants(rate * dt.t);
                 if l.range <= until {
-                    l.range = 0.0;
+                    l.range = Quants::ZERO;
                     l.fade = None;
                 }
             }

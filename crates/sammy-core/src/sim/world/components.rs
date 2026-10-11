@@ -4,6 +4,7 @@ use super::*;
 use crate::percent::Percent;
 use crate::angle::Angles;
 use crate::space::Pos;
+use crate::space::Quants;
 
 /// Where an entity is and how it shows (native coordinates, degrees).
 #[derive(Clone, Debug)]
@@ -119,13 +120,14 @@ pub struct SpriteAnim {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Light {
     pub color: [f32; 3],
-    pub range: f32,
-    pub fade: Option<(f32, f32)>,
+    pub range: Quants,
+    /// Shrink per tick and the range it goes out at.
+    pub fade: Option<(f32, Quants)>,
 }
 
 impl Light {
     /// A flash: start range, shrink per tick, cut-off range.
     pub fn flash(color: [f32; 3], range: f32, rate: f32, until: f32) -> Self {
-        Self { color, range, fade: Some((rate, until)) }
+        Self { color, range: Quants(range), fade: Some((rate, Quants(until))) }
     }
 }

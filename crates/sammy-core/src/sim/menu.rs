@@ -15,6 +15,7 @@ use crate::menu::{Bob, Choice, LEVEL_ICON, Look, MenuAction};
 use crate::percent::Percent;
 use crate::angle::Angles;
 use crate::space::Pos;
+use crate::space::Quants;
 
 /// Camera `arc` in the menu (degrees).
 pub const MENU_ARC: f32 = 70.0;
@@ -23,7 +24,7 @@ const HOVER_SCALE: f32 = 1.2;
 /// Hover light colours (orange; darker for locked icons) and range.
 const LIGHT_COLOR: [f32; 3] = [255.0, 180.0, 50.0];
 const LIGHT_COLOR_LOCKED: [f32; 3] = [255.0, 100.0, 20.0];
-const LIGHT_RANGE: f32 = 300.0;
+const LIGHT_RANGE: Quants = Quants(300.0);
 
 /// `InitMainMenu` / `InitMainTitle` entity (interfac.wdl:23-199, :950-1014).
 #[derive(Clone, Debug)]

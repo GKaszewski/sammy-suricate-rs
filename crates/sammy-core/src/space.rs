@@ -1,8 +1,34 @@
 //! Native A4 space: positions in quants, X forward, Y left, Z up.
 
-use core::ops::{Index, IndexMut};
+use core::ops::{Index, IndexMut, Sub, SubAssign};
 
 use crate::angle::Degrees;
+
+/// A distance in quants (the level unit; 32 quants ≈ one metre-ish Bevy unit).
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+pub struct Quants(pub f32);
+
+impl Quants {
+    pub const ZERO: Self = Self(0.0);
+
+    /// The plain number.
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+}
+
+impl Sub for Quants {
+    type Output = Self;
+    fn sub(self, o: Self) -> Self {
+        Self(self.0 - o.0)
+    }
+}
+
+impl SubAssign for Quants {
+    fn sub_assign(&mut self, o: Self) {
+        self.0 -= o.0;
+    }
+}
 
 /// A point in the level, in quants (native axes: X forward, Y left, Z up). Frontends
 /// convert it to their own space at their boundary.

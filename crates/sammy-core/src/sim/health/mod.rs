@@ -17,6 +17,7 @@ use crate::id::Id;
 use crate::pickups::in_scan;
 use crate::platforms::CAMERA_SNAP;
 use crate::player::State;
+use crate::space::Quants;
 
 mod collect;
 mod death;
@@ -36,6 +37,6 @@ const GET_LIFE_EVERY: f32 = 2.0;
 /// The warning light: colour, start range (`LightRange1`); it shrinks
 /// `WARNING_FADE_RATE` per tick and goes out at `WARNING_FADE_END`.
 const WARNING_COLOR: [f32; 3] = [250.0, 100.0, 0.0];
-pub const WARNING_RANGE: f32 = 300.0;
+pub const WARNING_RANGE: Quants = Quants(300.0);
 const WARNING_FADE_RATE: f32 = 5.0;
-const WARNING_FADE_END: f32 = 100.0;
+const WARNING_FADE_END: Quants = Quants(100.0);

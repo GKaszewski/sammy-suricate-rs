@@ -5,6 +5,7 @@
 use formats::wmb::Object;
 use crate::keys::KeyColor;
 use crate::points::Points;
+use crate::space::Quants;
 
 /// A picked-up item shrinks ×0.8 per tick (`ScaleDownGem`) ...
 pub const SHRINK_PER_TICK: f32 = 0.8;
@@ -64,6 +65,7 @@ impl KeySpec {
 }
 
 /// Sammy's pickup scan: within `radius` of his origin.
-pub fn in_scan(sammy: [f32; 3], radius: f32, item: [f32; 3]) -> bool {
+pub fn in_scan(sammy: [f32; 3], radius: Quants, item: [f32; 3]) -> bool {
+    let radius = radius.get();
     (0..3).map(|i| (item[i] - sammy[i]).powi(2)).sum::<f32>().sqrt() <= radius
 }

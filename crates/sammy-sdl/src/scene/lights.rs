@@ -17,8 +17,8 @@ impl SceneLights {
         let mut list: Vec<(Vec3, f32, [f32; 3])> = w
             .lights
             .iter()
-            .filter(|(_, l)| l.range > 0.0)
-            .filter_map(|(id, l)| w.bodies.get(id).map(|b| (Vec3::from(b.pos.get()), l.range, l.color.map(|c| c / 255.0))))
+            .filter(|(_, l)| l.range > sammy_core::space::Quants::ZERO)
+            .filter_map(|(id, l)| w.bodies.get(id).map(|b| (Vec3::from(b.pos.get()), l.range.get(), l.color.map(|c| c / 255.0))))
             .chain(extra.iter().copied())
             .collect();
         list.sort_by(|a, b| (a.0 - cam).length_squared().total_cmp(&(b.0 - cam).length_squared()));

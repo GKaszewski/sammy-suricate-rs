@@ -37,6 +37,7 @@ pub use self::state::{State, Touch};
 pub use self::tuning::PlayerTuning;
 use self::intent::Intent;
 use crate::time::Ticks;
+use crate::space::Quants;
 
 #[derive(Clone, Debug)]
 pub struct Player {
@@ -53,7 +54,7 @@ pub struct Player {
     /// Entity Sammy stands on (None = level geometry).
     pub ground_entity: Option<Id>,
     /// `BlobZoneScan` (Skill5): pickup scan radius.
-    pub scan_radius: f32,
+    pub scan_radius: Quants,
     /// `BounceForce1`: knockback velocity (quants/tick), decays each tick.
     pub knock: [f32; 3],
     /// Last frame's movement in quants/tick (`PlayerSpeed`), what others get pushed by.
@@ -106,10 +107,10 @@ impl Player {
     pub fn from_object(obj: &Object) -> Self {
         let speed = Some(obj.skill(2)).filter(|&s| s > 0.0).unwrap_or(DEFAULT_SPEED);
         let scan_radius = Some(obj.skill(5)).filter(|&s| s > 0.0).unwrap_or(DEFAULT_SCAN_RADIUS);
-        Self::at(obj.origin, obj.angles[0], speed, scan_radius)
+        Self::at(obj.origin, obj.angles[0], speed, Quants(scan_radius))
     }
 
-    pub fn at(pos: [f32; 3], pan: f32, speed: f32, scan_radius: f32) -> Self {
+    pub fn at(pos: [f32; 3], pan: f32, speed: f32, scan_radius: Quants) -> Self {
         Self {
             pos,
             pan,

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::angle::Angles;
+use crate::space::Quants;
 
 pub(in crate::sim) fn init_eye(w: &mut World, id: Id, obj: &Object) {
     let eye = EyePickup::from_object(obj);
@@ -20,14 +21,14 @@ pub(in crate::sim) fn warning_light(sim: &mut Sim, dt: Dt) {
     let fading = w.warning_fade.contains(&me);
     match w.lights.get_mut(&me) {
         Some(l) if fading => {
-            l.range -= WARNING_FADE_RATE * dt.t;
+            l.range -= Quants(WARNING_FADE_RATE * dt.t);
             if l.range <= WARNING_FADE_END {
-                l.range = 0.0;
+                l.range = Quants::ZERO;
                 w.warning_fade.remove(&me);
             }
         }
         // Only when Sammy carries no light already (`lightrange == 0`).
-        Some(l) if warn && l.range == 0.0 => {
+        Some(l) if warn && l.range == Quants::ZERO => {
             *l = Light { color: WARNING_COLOR, range: WARNING_RANGE, fade: None };
             w.warning_fade.insert(me);
         }
