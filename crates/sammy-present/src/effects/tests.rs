@@ -1,10 +1,13 @@
 use super::*;
 
+/// A named emitter under test.
+type Emitter = (&'static str, Box<dyn Fn(&mut Particles)>);
+
 /// Every effect spawns something and dies out within its documented lifetime.
 #[test]
 fn every_effect_spawns_and_expires() {
     let o = [0.0; 3];
-    let effects: Vec<(&str, Box<dyn Fn(&mut Particles)>)> = vec![
+    let effects: Vec<Emitter> = vec![
         ("gem_trail", Box::new(move |ps| gem_trail(ps, o, 3))),
         ("gem_trail_master", Box::new(move |ps| gem_trail(ps, o, sammy_core::keys::MASTER_KEY))),
         ("gem_explode", Box::new(move |ps| gem_explode(ps, o, 4))),
