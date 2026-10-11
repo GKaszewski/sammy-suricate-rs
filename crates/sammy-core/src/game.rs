@@ -2,8 +2,7 @@
 
 use formats::wmb::Object;
 
-/// Colour key value granted on reaching the score goal (opens every door).
-pub const MASTER_KEY: u32 = 255;
+pub use crate::keys::MASTER_KEY;
 /// `WindowHeartsOrg`: full health.
 pub const MAX_HEARTS: f32 = 48.0;
 /// `MaxBalles`: most lives Sammy can hold.

@@ -3,7 +3,7 @@
 
 use formats::wmb::Object;
 
-use crate::game::{GameState, MASTER_KEY};
+use crate::game::GameState;
 
 /// `RangeScanDoor` (mm1.wdl:165): radius of Sammy's per-tick door scan.
 pub const RANGE_SCAN_DOOR: f32 = 500.0;
@@ -143,14 +143,7 @@ impl Door {
         if self.no_sammy {
             return false;
         }
-        if key == MASTER_KEY || self.keyless {
-            return true;
-        }
-        if self.exact {
-            return key == self.color;
-        }
-        // A primary key (red 1, yellow 2, blue 4) opens every door containing it.
-        key & self.color != 0 && (key == self.color || matches!(key, 1 | 2 | 4))
+        self.keyless || crate::keys::fits(key, self.color, self.exact)
     }
 
     pub fn permanent(&self) -> bool {
@@ -310,6 +303,7 @@ impl ExitTile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keys::MASTER_KEY;
 
     fn door(color: u32, flags: u32) -> Door {
         let obj = Object { skills: vec![0.0, 0.0, 0.0, 40.0, 80.0, color as f32, SAMMY_SCAN_ID, 0.0], flags, ..Default::default() };
