@@ -4,6 +4,7 @@ use super::*;
 use crate::time::Ticks;
 use crate::keys::KeyColor;
 use crate::game::Lives;
+use crate::space::Placement;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Stage {
@@ -68,7 +69,7 @@ pub enum DeathEvent {
     /// Out of lives: the camera stops tilting and orbits.
     GameOver,
     /// `RestartSammy`: reset scan, back to the respawn point (if any).
-    Respawn(Option<([f32; 3], f32)>),
+    Respawn(Option<Placement>),
     /// Visible or not during the blink.
     Visible(bool),
     /// Faded back in: Sammy can move again.

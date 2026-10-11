@@ -15,6 +15,7 @@ use crate::levels::LevelSlot;
 use crate::keys::KeyColor;
 use crate::time::Ticks;
 use crate::game::Lives;
+use crate::space::Placement;
 
 /// Level 10 hard-codes 4 lives (Loads.wdl:80).
 const FIXED_LIVES_SLOT: LevelSlot = LevelSlot(10);
@@ -63,7 +64,7 @@ impl Sim {
                 pan = p.pan;
                 p.teleport(cp, pan);
             }
-            self.game.start = Some((cp, pan));
+            self.game.start = Some(Placement::new(cp, pan));
             self.game.checkpoint = true; // [I] kept until the next game end stores it again
         }
         if slot == Some(FIXED_LIVES_SLOT) {
@@ -110,7 +111,7 @@ impl Sim {
     /// one (no lose screen).
     pub fn abandon(&mut self) {
         if let Some(slot) = self.flow.slot {
-            let checkpoint = self.game.checkpoint.then_some(self.game.start).flatten().map(|(p, _)| p);
+            let checkpoint = self.game.checkpoint.then_some(self.game.start).flatten().map(|s| s.pos.get());
             self.save.record_game(slot, self.game.score, checkpoint, false, None);
             self.emit(Event::Saved);
         }

@@ -79,7 +79,7 @@ impl LevelFlow {
                 // End of a game: StoreCurrentSkills, best score, ValideLevel, Save_Info
                 // "BestSco" (mm1.wdl:972-997).
                 if let Some(slot) = self.slot {
-                    let checkpoint = game.checkpoint.then_some(game.start).flatten().map(|(p, _)| p);
+                    let checkpoint = game.checkpoint.then_some(game.start).flatten().map(|s| s.pos.get());
                     let next = game.won.then(|| next_slot(slot)).filter(|&n| n != slot);
                     save.record_game(slot, game.score, checkpoint, game.won, next);
                     if game.won && slot == EXTRO_SLOT {

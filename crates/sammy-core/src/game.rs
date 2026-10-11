@@ -2,6 +2,7 @@
 
 use formats::wmb::Object;
 use crate::points::Points;
+use crate::space::Placement;
 use crate::time::Ticks;
 use crate::keys::KeyColor;
 
@@ -70,7 +71,7 @@ pub struct GameState {
     /// `WindowHearts`: health 0..48.
     pub hearts: f32,
     /// `Player1Start` / `Player1AngleStart`: respawn point (spawn or checkpoint).
-    pub start: Option<([f32; 3], f32)>,
+    pub start: Option<Placement>,
     /// `DoRestart`: a checkpoint was taken (its position is saved with the level).
     pub checkpoint: bool,
     /// `EyeOfTruth` ticks left (lion range rings visible while > 0).

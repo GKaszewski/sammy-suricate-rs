@@ -2,6 +2,8 @@
 
 use core::ops::{Index, IndexMut};
 
+use crate::angle::Degrees;
+
 /// A point in the level, in quants (native axes: X forward, Y left, Z up). Frontends
 /// convert it to their own space at their boundary.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -21,6 +23,19 @@ impl Pos {
     /// The plain coordinates (as [`Pos::to_array`]).
     pub const fn get(self) -> [f32; 3] {
         self.0
+    }
+}
+
+/// Where and facing which way Sammy (re)appears: a spawn point or a checkpoint.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    pub pos: Pos,
+    pub pan: Degrees,
+}
+
+impl Placement {
+    pub const fn new(pos: [f32; 3], pan: f32) -> Self {
+        Self { pos: Pos(pos), pan: Degrees(pan) }
     }
 }
 

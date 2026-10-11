@@ -3,6 +3,7 @@
 use super::*;
 use crate::percent::Percent;
 use crate::space::Pos;
+use crate::space::Placement;
 
 /// Hazards under Sammy's feet and running out of health start a death.
 pub(in crate::sim) fn detect_deaths(sim: &mut Sim, dt: Dt) {
@@ -51,9 +52,9 @@ pub(in crate::sim) fn run_death(sim: &mut Sim, dt: Dt) {
             }
             DeathEvent::Respawn(at) => {
                 sim.reset_scan = true;
-                if let Some((pos, pan)) = at {
+                if let Some(Placement { pos: Pos(pos), pan }) = at {
                     if let Some(p) = sim.world.players.get_mut(&me) {
-                        p.teleport(pos, pan);
+                        p.teleport(pos, pan.get());
                     }
                     sim.camera.follow.snap_to([pos[0] + CAMERA_SNAP[0], pos[1] + CAMERA_SNAP[1], pos[2] + CAMERA_SNAP[2]]);
                 }

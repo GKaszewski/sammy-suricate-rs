@@ -49,7 +49,7 @@ fn screenshot(
         if let Some((_, p)) = sim.world.player() {
             info!(
                 "t={now:.1} {} {:?} player {:?} pente {:?} state {:?} on {:?} | score {}/{} key {} lives {} hearts {:.0} start {:?} won {}",
-                current.file, current.phase, p.pos.map(|v| v.round()), p.pente.map(|v| v.round()), p.state, p.ground_entity, game.score, game.goal, game.key, game.lives, game.hearts, game.start.map(|(s, _)| s.map(|v| v.round())), game.won
+                current.file, current.phase, p.pos.map(|v| v.round()), p.pente.map(|v| v.round()), p.state, p.ground_entity, game.score, game.goal, game.key, game.lives, game.hearts, game.start.map(|s| s.pos.get().map(|v| v.round())), game.won
             );
             info!("   calls {:?}", *calls);
             info!("   camera dist {:.0} height {:.0} back {:.0} plus_tilt {:.0} start_type {}", cam.dist, cam.height, cam.back, cam.plus_tilt, cam.start_type);

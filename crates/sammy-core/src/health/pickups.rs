@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::space::Placement;
 
 /// A small heart (health).
 #[derive(Clone, Debug)]
@@ -64,8 +65,8 @@ impl Checkpoint {
     }
 
     /// Where Sammy restarts once it is taken.
-    pub fn respawn(&self) -> ([f32; 3], f32) {
-        ([self.home[0], self.home[1], self.home[2] + CHECKPOINT_RESPAWN_HEIGHT], self.pan)
+    pub fn respawn(&self) -> Placement {
+        Placement::new([self.home[0], self.home[1], self.home[2] + CHECKPOINT_RESPAWN_HEIGHT], self.pan)
     }
 }
 

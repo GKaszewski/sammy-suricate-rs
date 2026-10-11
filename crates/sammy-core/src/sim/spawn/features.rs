@@ -4,6 +4,7 @@ use formats::wmb::Object;
 
 use super::*;
 use crate::level::is_marker;
+use crate::space::Placement;
 
 impl Sim {
     /// The action's initialisation: config entities set globals, the others get their
@@ -26,7 +27,7 @@ impl Sim {
             }
             "initmarche" => {
                 crate::sim::player::init(self, id, obj);
-                self.game.start = Some((obj.origin, obj.angles[0]));
+                self.game.start = Some(Placement::new(obj.origin, obj.angles[0]));
                 Presentation::default()
             }
             "inittiledeath" => {
