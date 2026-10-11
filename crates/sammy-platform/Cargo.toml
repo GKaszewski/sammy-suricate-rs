@@ -2,6 +2,7 @@
 name = "sammy-platform"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 description = "Sammy Suricate on a machine, engine-agnostic: game files, the player's storage and saves, the sound table and music"
 
 [dependencies]

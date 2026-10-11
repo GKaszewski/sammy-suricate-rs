@@ -2,6 +2,7 @@
 name = "sammy-sdl"
 version = "0.1.0"
 edition.workspace = true
+license.workspace = true
 description = "Sammy Suricate on SDL2 + OpenGL ES 2: the light frontend for handhelds (PS Vita) and any desktop"
 
 [dependencies]

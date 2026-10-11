@@ -4,6 +4,7 @@ members = ["crates/formats", "crates/sammy-convert", "crates/sammy-core", "crate
 
 [workspace.package]
 edition = "2024"
+license = "MIT"
 
 [workspace.dependencies]
 formats = { path = "crates/formats" }
