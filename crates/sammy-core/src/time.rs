@@ -8,3 +8,24 @@ pub const TICKS_PER_SEC: f32 = 16.0;
 pub fn ticks(seconds: f32) -> f32 {
     seconds * TICKS_PER_SEC
 }
+
+/// A 16 Hz logic clock driven by fractional frame ticks: how many whole ticks to run
+/// this frame (at most [`TickClock::MAX_TICKS`]), the rest carried over (capped at one).
+#[derive(Clone, Debug, Default)]
+pub struct TickClock {
+    /// Fraction of a tick carried over (also the render interpolation factor).
+    pub acc: f32,
+    /// Ticks to run this frame.
+    pub ticks: u32,
+}
+
+impl TickClock {
+    pub const MAX_TICKS: u32 = 4;
+
+    pub fn advance(&mut self, t: f32) {
+        self.acc += t;
+        self.ticks = (self.acc.floor() as u32).min(Self::MAX_TICKS);
+        self.acc -= self.ticks as f32;
+        self.acc = self.acc.min(1.0);
+    }
+}

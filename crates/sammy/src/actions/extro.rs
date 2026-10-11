@@ -1,48 +1,25 @@
-//! Extro level (`Extro.wdl`, docs/level-objects.md §2.14): the `pov_Syn` camera target,
-//! id-25 scanners other than Sammy, and the scripted triggers `InitSetPovSyn`,
-//! `InitSetAnimPlayer` and `InitSetFinExtro` (mm1.wdl:5395-5562).
+//! Extro level as Bevy systems: the `pov_Syn` camera target, id-25 scanners and the
+//! scripted triggers, from [`sammy_core::extro`].
 
 use bevy::prelude::*;
 use formats::wmb::Object;
+use sammy_core::extro::{Body, TriggerKind, Wanted};
 
 use super::enemy::Enemy;
 use super::player::{Player, State};
 use crate::camera::{CameraParams, FollowState};
+use crate::collision::{entity, id};
 
-/// `IdPlayer` (Sammy's Skill1 in scans).
-const ID_PLAYER: f32 = 3333.0;
-/// `PlayerAnimSpeedLoopjambes` (mm1.wdl:52).
-const ANIM_SPEED_LOOPJAMBES: f32 = 2.0;
-/// `RangeScanDoor`: radius of the id-25 scans.
-pub const RANGE_SCAN_25: f32 = 500.0;
+pub use sammy_core::extro::RANGE_SCAN_25;
 
-/// `pov_Syn`: whom the camera follows and whom enemies measure distance and line of
-/// sight to. Sammy unless a trigger (or `StartExtro`) retargets it to an enemy.
-#[derive(Resource, Default)]
-pub struct Pov {
-    /// Enemy to follow; `None` = Sammy.
-    pub target: Option<Entity>,
-    /// Resolved this frame.
-    pub entity: Option<Entity>,
-    pub pos: [f32; 3],
-    pub pan: f32,
-    pub vel: [f32; 3],
-}
+/// `pov_Syn` ([`sammy_core::extro::Pov`]): whom the camera follows and whom enemies
+/// measure distance and line of sight to.
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct Pov(pub sammy_core::extro::Pov);
 
-/// Positions doing an id-25 scan this frame (Sammy, plus Flag5 lions and wasp enemies):
-/// they trigger `SetCamera` zones and `InitTitle` credits.
-#[derive(Resource, Default)]
-pub struct Scanners(pub Vec<[f32; 3]>);
-
-impl Scanners {
-    /// Nearest scanner distance to `p`.
-    pub fn nearest(&self, p: [f32; 3]) -> Option<([f32; 3], f32)> {
-        self.0
-            .iter()
-            .map(|s| (*s, (0..3).map(|i| (s[i] - p[i]).powi(2)).sum::<f32>().sqrt()))
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-    }
-}
+/// This frame's id-25 scanners ([`sammy_core::extro::Scanners`]).
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct Scanners(pub sammy_core::extro::Scanners);
 
 pub fn update_pov(
     mut pov: ResMut<Pov>,
@@ -51,79 +28,50 @@ pub fn update_pov(
     enemies: Query<(Entity, &Enemy)>,
     (intro, walker): (Res<crate::intro::Intro>, Query<(Entity, &crate::intro::Walker)>),
 ) {
-    scanners.0.clear();
-    let sammy = player.single().ok();
-    if let Some((_, p)) = sammy {
-        scanners.0.push(p.pos);
+    scanners.0.0.clear();
+    let sammy: Option<Body> = player.single().ok().map(|(e, p)| (id(e), p.pos, p.pan, p.vel));
+    if let Some((_, pos, ..)) = sammy {
+        scanners.0.0.push(pos);
     }
     // The intro's scripted Sammy scans id 25 (camera zones, hint title) while it runs.
-    let walker = walker.single().ok();
-    if let Some((ent, w)) = walker {
-        if intro.active {
-            scanners.0.push(w.pos);
-        }
-        if sammy.is_none() {
-            (pov.entity, pov.pos, pov.pan, pov.vel) = (Some(ent), w.pos, w.pan, w.vel);
-        }
+    let walker: Option<Body> = walker.single().ok().map(|(e, w)| (id(e), w.pos, w.pan, w.vel));
+    if let (Some((_, pos, ..)), true) = (walker, intro.active) {
+        scanners.0.0.push(pos);
     }
-    scanners.0.extend(enemies.iter().filter(|(_, e)| e.scans_25()).map(|(_, e)| e.pos));
-    if let Some((ent, e)) = pov.target.and_then(|t| enemies.get(t).ok()).filter(|(_, e)| !e.gone()) {
-        (pov.entity, pov.pos, pov.pan, pov.vel) = (Some(ent), e.pos, e.pan, e.vel);
-    } else if let Some((ent, p)) = sammy {
-        (pov.entity, pov.pos, pov.pan, pov.vel) = (Some(ent), p.pos, p.pan, p.vel);
-    }
+    scanners.0.0.extend(enemies.iter().filter(|(_, e)| e.scans_25()).map(|(_, e)| e.pos));
+    let target: Option<Body> = pov.target.and_then(|t| enemies.get(entity(t)).ok()).filter(|(_, e)| !e.gone()).map(|(e, en)| (id(e), en.pos, en.pan, en.vel));
+    pov.resolve(sammy, walker, target);
 }
 
-/// `StartExtro` (Extro.wdl:155-159): after `waitt 2` the camera target becomes this wasp,
-/// overriding any trigger that fired on the first ticks.
+/// `StartExtro`: after a short wait the camera target becomes this wasp, overriding any
+/// trigger that fired on the first ticks.
 #[derive(Component)]
 pub struct StartExtroPov(f32);
 
 pub fn start_extro(entity: &mut EntityCommands) {
-    entity.insert(StartExtroPov(2.0));
+    entity.insert(StartExtroPov(sammy_core::extro::START_POV_DELAY));
 }
 
 /// The triggers' own 16 Hz clock: their scan loops are not gated by `PartieEncours`, so
 /// they already run during the level-start sweep (mm1.wdl:5411-5416).
-#[derive(Resource, Default)]
-pub struct TriggerClock {
-    acc: f32,
-    ticks: u32,
-}
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct TriggerClock(sammy_core::time::TickClock);
 
 pub fn trigger_clock(time: Res<Time>, mut clock: ResMut<TriggerClock>) {
-    clock.acc += time.delta_secs() * super::player::TICKS;
-    clock.ticks = (clock.acc.floor() as u32).min(4);
-    clock.acc = (clock.acc - clock.ticks as f32).min(1.0);
+    clock.advance(time.delta_secs() * super::player::TICKS);
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Kind {
-    PovSyn,
-    AnimPlayer,
-    FinExtro,
-}
-
-/// One of the extro's invisible sphere-scan triggers.
-#[derive(Component)]
-pub struct ExtroTrigger {
-    kind: Kind,
-    pos: [f32; 3],
-    s: [f32; 8],
-    timer: f32,
-    /// Fired (despawn pending).
-    done: bool,
-}
+/// One of the extro's triggers ([`sammy_core::extro::Trigger`]).
+#[derive(Component, Deref, DerefMut)]
+pub struct ExtroTrigger(sammy_core::extro::Trigger);
 
 pub fn init_trigger(action: &str, obj: &Object, entity: &mut EntityCommands) {
     let kind = match action {
-        "initsetpovsyn" => Kind::PovSyn,
-        "initsetanimplayer" => Kind::AnimPlayer,
-        _ => Kind::FinExtro,
+        "initsetpovsyn" => TriggerKind::PovSyn,
+        "initsetanimplayer" => TriggerKind::AnimPlayer,
+        _ => TriggerKind::FinExtro,
     };
-    let mut s = [0.0; 8];
-    s.copy_from_slice(&obj.skills[..8]);
-    entity.insert(ExtroTrigger { kind, pos: obj.origin, s, timer: 0.0, done: false });
+    entity.insert(ExtroTrigger(sammy_core::extro::Trigger::from_object(kind, obj)));
 }
 
 /// Sammy is in a scripted animation (`PlayerEtat` 2/3 forced by `SetAnimPlayer`):
@@ -156,52 +104,40 @@ pub fn run_triggers(
         for (e, mut s) in &mut start {
             s.0 -= 1.0;
             if s.0 <= 0.0 {
-                pov.target = Some(e);
+                pov.target = Some(id(e));
                 commands.entity(e).remove::<StartExtroPov>();
             }
         }
         for (me, mut tr) in &mut triggers {
-            if tr.done {
+            if !tr.scans() {
                 continue;
             }
-            tr.timer -= 1.0;
-            if tr.timer > 0.0 {
-                continue;
-            }
-            // Scan periods: SetPovSyn / SetAnimPlayer every 2 ticks, SetFinExtro every 4.
-            tr.timer = if tr.kind == Kind::FinExtro { 4.0 } else { 2.0 };
-            let (p, s) = (tr.pos, tr.s);
-            let within = |q: [f32; 3]| (0..3).map(|i| (q[i] - p[i]).powi(2)).sum::<f32>().sqrt() <= s[1];
-            // First matching entity in the sphere (Sammy is IdPlayer 3333).
-            let hit: Option<(Option<Entity>, [f32; 3])> = if s[0] == ID_PLAYER {
-                player.single().ok().filter(|(_, pl, _)| within(pl.pos)).map(|(_, pl, _)| (None, pl.pos))
-            } else {
-                enemies
+            // First matching entity in the sphere.
+            let hit: Option<(Option<Entity>, [f32; 3])> = match tr.wanted() {
+                Wanted::Sammy => player.single().ok().filter(|(_, pl, _)| tr.within(pl.pos)).map(|(_, pl, _)| (None, pl.pos)),
+                Wanted::Enemy { class, spec } => enemies
                     .iter()
-                    .find(|(_, e)| e.class() as f32 == s[0] && !e.gone() && (s[2] == 0.0 || e.spec_id() as f32 == s[2]) && within(e.pos))
-                    .map(|(ent, e)| (Some(ent), e.pos))
+                    .find(|(_, e)| e.class() as f32 == class && !e.gone() && spec.is_none_or(|s| e.spec_id() as f32 == s) && tr.within(e.pos))
+                    .map(|(ent, e)| (Some(ent), e.pos)),
             };
             let Some((target, at)) = hit else { continue };
             match tr.kind {
-                Kind::PovSyn => {
-                    // Hard cut: dist behind at the world-fixed back angle, height above.
-                    pov.target = target;
-                    let a = params.back.to_radians();
-                    let cam = [at[0] + a.cos() * params.dist, at[1] + a.sin() * params.dist, at[2] + params.height];
+                TriggerKind::PovSyn => {
+                    pov.target = target.map(id);
+                    let cam = sammy_core::extro::cut_camera(at, params.back, params.dist, params.height);
                     for mut f in &mut follow {
                         f.snap_to(cam);
                     }
                 }
-                Kind::AnimPlayer => {
+                TriggerKind::AnimPlayer => {
                     if let Ok((pe, mut pl, mut anim)) = player.single_mut() {
-                        let salut = s[2] == 12.0;
+                        let scene = tr.scene();
                         pl.state = State::Scripted;
-                        anim.play(if salut { "salut" } else { "loopjambes" }, !salut, s[5]);
-                        anim.set_speed_pct(s[4], super::player::TICKS);
-                        commands.entity(pe).insert(ScriptedAnim { salut });
+                        scene.start(&mut anim.anim);
+                        commands.entity(pe).insert(ScriptedAnim { salut: scene.salut });
                     }
                 }
-                Kind::FinExtro => {
+                TriggerKind::FinExtro => {
                     commands.insert_resource(FinExtro(1.0));
                     commands.spawn((
                         FadePanel,
@@ -219,14 +155,9 @@ pub fn run_triggers(
     }
 }
 
-/// "salut" plays once, then "loopjambes" loops at its default speed (anims.wdl:485-496).
 pub fn scripted_anims(mut q: Query<(&mut ScriptedAnim, &mut crate::model::ModelAnimator)>) {
     for (mut s, mut anim) in &mut q {
-        if s.salut && anim.finished() {
-            s.salut = false;
-            anim.play("loopjambes", true, 0.0);
-            anim.set_speed_pct(ANIM_SPEED_LOOPJAMBES, super::player::TICKS);
-        }
+        s.salut = sammy_core::extro::scripted_anim(s.salut, &mut anim.anim);
     }
 }
 
@@ -241,7 +172,7 @@ pub fn fade_out(
     mut save: ResMut<crate::save::SaveGame>,
 ) {
     let Some(mut fin) = fin else { return };
-    fin.0 = (fin.0 + 6.0 * time.delta_secs() * super::player::TICKS).min(100.0);
+    fin.0 = (fin.0 + sammy_core::extro::FADE_SPEED * time.delta_secs() * super::player::TICKS).min(100.0);
     for mut bg in &mut panel {
         bg.0 = Color::BLACK.with_alpha(fin.0 / 100.0);
     }
@@ -249,7 +180,7 @@ pub fn fade_out(
         commands.remove_resource::<FinExtro>();
         // `Branch MainMenu` (Extro.wdl:152); Play then resumes level 20 (Extro.wdl:114).
         let _ = &current;
-        save.last_level = 20;
+        save.last_level = sammy_core::extro::RESUME_LEVEL;
         crate::save::write(&save);
         pending.0 = Some(crate::menu::MENU_FILE.to_owned());
     }

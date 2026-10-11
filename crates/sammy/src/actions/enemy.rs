@@ -107,7 +107,7 @@ pub fn tick_enemies(
     };
     let view = World {
         space: &world,
-        sammy: pov.entity.map(|e| (id(e), pov.pos, pov.vel)),
+        sammy: pov.entity.map(|e| (e, pov.pos, pov.vel)),
         sammy_entity,
         sammy_alive,
         touched: &touched,
