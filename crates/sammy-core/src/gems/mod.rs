@@ -11,6 +11,7 @@ use crate::physics::JumpParams;
 use crate::rng::Rng;
 
 mod boulder;
+mod bounce;
 mod door_gem;
 mod fate;
 mod flight;

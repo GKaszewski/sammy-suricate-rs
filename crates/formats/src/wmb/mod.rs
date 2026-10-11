@@ -12,6 +12,7 @@ mod mesh;
 mod model;
 mod parse;
 mod query;
+mod textures;
 
 pub use entity::{Entity, Object, entity_flag_names, entity_flags};
 pub use mesh::{Batch, LevelMesh, ModelMesh};

@@ -14,9 +14,10 @@ use crate::time::TICKS_PER_SEC;
 use crate::time::Ticks;
 
 mod death;
+mod hazards;
 mod pickups;
 
-pub use self::{death::*, pickups::*};
+pub use self::{death::*, hazards::*, pickups::*};
 
 /// Lava burns this much health per tick.
 pub const LAVA_DAMAGE: f32 = 1.0;

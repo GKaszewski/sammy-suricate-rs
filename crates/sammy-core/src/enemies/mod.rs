@@ -28,6 +28,7 @@ mod movement;
 mod patrol;
 mod sense;
 mod start;
+mod queries;
 mod tick;
 mod view;
 

@@ -19,6 +19,7 @@ mod camera;
 mod draw;
 mod lights;
 mod logo;
+mod shadows;
 mod sync;
 
 pub use self::{assets::*, camera::*};
