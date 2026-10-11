@@ -16,7 +16,7 @@ use bevy::render::RenderPlugin;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::ExitCondition;
-use sammy::input::ScriptedInput;
+use sammy::platform::input::ScriptedInput;
 use sammy_core::input::Controls;
 
 const FPS: f64 = 60.0;
@@ -40,16 +40,16 @@ fn headless(level: &str, script: impl FnMut(u64) -> Controls + Send + Sync + 'st
     );
     app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / FPS)));
     // Every level open; nothing ever written to the player's save.
-    let mut save = sammy::save::SaveGame::default();
+    let mut save = sammy::platform::save::SaveGame::default();
     save.readonly = true;
     for s in save.level_state.iter_mut().skip(1) {
-        if *s != sammy::save::LevelState::Absent {
-            *s = sammy::save::LevelState::Unlocked;
+        if *s != sammy::platform::save::LevelState::Absent {
+            *s = sammy::platform::save::LevelState::Unlocked;
         }
     }
     save.games_started = 1;
     app.insert_resource(save);
-    app.insert_resource(sammy::game::Rng::seeded(42));
+    app.insert_resource(sammy::gameplay::state::Rng::seeded(42));
     app.insert_resource(ScriptedInput { frame: 0, script: Box::new(script) });
     sammy::add_game(&mut app, &dir, sammy::Args { model: None, level: level.into() }).ok()?;
     // Deterministic system order.
@@ -85,7 +85,7 @@ fn r(v: f32) -> f32 {
 /// Game state, Sammy, and a hash over every named entity's transform (sorted, so the
 /// spawn order does not matter).
 fn digest(world: &mut World) -> String {
-    let g = world.resource::<sammy::game::GameState>();
+    let g = world.resource::<sammy::gameplay::state::GameState>();
     let mut out = format!(
         "score {} goal {} lives {} hearts {} key {} ammo {}x{} boost {} reached {} won {} lost {}",
         g.score,
@@ -100,7 +100,7 @@ fn digest(world: &mut World) -> String {
         g.won,
         g.lost
     );
-    let mut q = world.query::<(&sammy::actions::player::Player, &Transform)>();
+    let mut q = world.query::<(&sammy::gameplay::player::Player, &Transform)>();
     for (p, _) in q.iter(world) {
         let _ = write!(out, " | sammy {} {} {} pan {}", r(p.pos[0] / 32.0), r(p.pos[1] / 32.0), r(p.pos[2] / 32.0), r(p.pan));
     }
@@ -108,7 +108,7 @@ fn digest(world: &mut World) -> String {
     // Particle render batches are plumbing (created when a texture first appears), not
     // game state.
     let entities: Vec<(Entity, Option<String>, GlobalTransform)> = world
-        .query_filtered::<(Entity, Option<&Name>, &GlobalTransform), Without<sammy::particles::ParticleBatch>>()
+        .query_filtered::<(Entity, Option<&Name>, &GlobalTransform), Without<sammy::render::particles::ParticleBatch>>()
         .iter(world)
         .map(|(e, n, t)| (e, n.map(|n| n.as_str().to_owned()), *t))
         .collect();

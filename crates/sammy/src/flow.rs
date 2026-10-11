@@ -3,12 +3,12 @@
 
 use bevy::prelude::*;
 
-use crate::actions::player::{JumpParams, TICKS};
+use crate::gameplay::player::{JumpParams, TICKS};
 use crate::camera::{CameraParams, FollowState};
-use crate::game::GameState;
+use crate::gameplay::state::GameState;
 use crate::level::Spawner;
-use crate::material::LevelMaterial;
-use crate::vfs::GameFiles;
+use crate::render::material::LevelMaterial;
+use crate::platform::vfs::GameFiles;
 
 pub use sammy_core::levels::{EXTRO_SLOT, LEVELS, file_for, next_slot, slot_for};
 
@@ -60,7 +60,7 @@ fn load_pending(
         ResMut<JumpParams>,
         ResMut<CameraParams>,
         ResMut<crate::level::GameAssets>,
-        ResMut<crate::save::SaveGame>,
+        ResMut<crate::platform::save::SaveGame>,
     ),
     (mut meshes, mut images, mut materials, mut level_materials): (
         ResMut<Assets<Mesh>>,
@@ -79,19 +79,19 @@ fn load_pending(
     game.apply_debug_env();
     *jump = JumpParams::default();
     *cam = CameraParams::default();
-    commands.insert_resource(crate::actions::player::PlayerTuning::default());
+    commands.insert_resource(crate::gameplay::player::PlayerTuning::default());
     commands.insert_resource(crate::camera::CameraRuntime::default());
-    commands.insert_resource(crate::actions::enemy::LionGlobals::default());
-    commands.insert_resource(crate::actions::extro::Pov::default());
-    commands.insert_resource(crate::particles::Particles::default());
-    commands.remove_resource::<crate::actions::extro::FinExtro>();
+    commands.insert_resource(crate::gameplay::enemies::LionGlobals::default());
+    commands.insert_resource(crate::gameplay::extro::Pov::default());
+    commands.insert_resource(crate::render::particles::Particles::default());
+    commands.remove_resource::<crate::gameplay::extro::FinExtro>();
     for mut f in &mut follow {
         *f = FollowState::default();
     }
     let slot = slot_for(&file);
     // `sun_angle`: pan 135 / tilt 85 in levels (mm1.wdl:618-620), pan 90 in the extro (Extro.wdl:81).
-    commands.insert_resource(if slot == Some(EXTRO_SLOT) { crate::shadow::SunAngle(90.0, 85.0) } else { crate::shadow::SunAngle::default() });
-    let phase = if file.eq_ignore_ascii_case(crate::menu::MENU_FILE) { Phase::Menu } else { Phase::Intro };
+    commands.insert_resource(if slot == Some(EXTRO_SLOT) { crate::render::shadow::SunAngle(90.0, 85.0) } else { crate::render::shadow::SunAngle::default() });
+    let phase = if file.eq_ignore_ascii_case(crate::ui::menu::MENU_FILE) { Phase::Menu } else { Phase::Intro };
     *current = CurrentLevel { flow: sammy_core::flow::LevelFlow { slot, file: file.clone(), phase, intro_ticks: 0.0 }, loads: current.loads + 1 };
     let mut spawner = Spawner {
         commands: &mut commands,
@@ -109,12 +109,12 @@ fn load_pending(
     if slot == Some(EXTRO_SLOT) && !save.extro_seen {
         // `ExtroVue = 1` (Extro.wdl:15): unlocks the Bonus menu entry.
         save.extro_seen = true;
-        crate::save::write(&save);
+        crate::platform::save::write(&save);
     }
     // AfterLoadInitLevel: start at the checkpoint saved for this level (InitLvl.wdl:232-237).
     if let Some(cp) = slot.and_then(|s| save.checkpoints.get(s as usize).copied().flatten()) {
         commands.queue(move |w: &mut World| {
-            let mut q = w.query::<&mut crate::actions::player::Player>();
+            let mut q = w.query::<&mut crate::gameplay::player::Player>();
             let mut pan = 0.0;
             for mut p in q.iter_mut(w) {
                 pan = p.pan;
@@ -158,9 +158,9 @@ fn load_pending(
 
 fn run_flow(
     time: Res<Time>,
-    controls: Res<crate::input::Controls>,
+    controls: Res<crate::platform::input::Controls>,
     game: Res<GameState>,
-    mut save: ResMut<crate::save::SaveGame>,
+    mut save: ResMut<crate::platform::save::SaveGame>,
     follow: Query<&FollowState>,
     mut current: ResMut<CurrentLevel>,
     mut pending: ResMut<PendingLoad>,
@@ -173,7 +173,7 @@ fn run_flow(
     };
     let step = current.flow.step(input, &game, &mut save);
     if step.saved {
-        crate::save::write(&save);
+        crate::platform::save::write(&save);
     }
     if let Some(file) = step.load {
         pending.0 = Some(file);

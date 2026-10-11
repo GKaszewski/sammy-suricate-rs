@@ -7,9 +7,9 @@ use bevy::prelude::*;
 use formats::wmb::Object;
 use sammy_core::camera::{CameraPose, Subject};
 
-use crate::actions::player::{LevelCollision, Player, TICKS};
-use crate::collision::id;
-use crate::coords;
+use crate::gameplay::player::{LevelCollision, Player, TICKS};
+use crate::gameplay::collision::id;
+use crate::render::coords;
 use crate::flow::{CurrentLevel, Phase};
 
 pub struct CameraPlugin;
@@ -72,9 +72,9 @@ pub fn camera_zones(
     level: Option<Res<LevelCollision>>,
     mut params: ResMut<CameraParams>,
     mut rt: ResMut<CameraRuntime>,
-    scanners: Res<crate::actions::extro::Scanners>,
+    scanners: Res<crate::gameplay::extro::Scanners>,
     mut zones: Query<(Entity, &mut CameraZone)>,
-    intro: Res<crate::intro::Intro>,
+    intro: Res<crate::ui::intro::Intro>,
 ) {
     let Some(level) = level else { return };
     if current.phase != Phase::Playing && !intro.following() {
@@ -87,7 +87,7 @@ pub fn camera_zones(
 
 /// Respawn (`RestartSammy`) resets the camera.
 pub fn reset_camera_on_respawn(
-    mut reset: MessageReader<crate::game::ResetScan>,
+    mut reset: MessageReader<crate::gameplay::state::ResetScan>,
     mut params: ResMut<CameraParams>,
     mut rt: ResMut<CameraRuntime>,
     mut cam: Query<&mut FollowState>,
@@ -123,13 +123,13 @@ fn toggle_mode(keys: Res<ButtonInput<KeyCode>>, mut mode: ResMut<CameraMode>, mu
 
 pub fn follow(
     time: Res<Time>,
-    intro: Res<crate::intro::Intro>,
+    intro: Res<crate::ui::intro::Intro>,
     params: Res<CameraParams>,
     mut rt: ResMut<CameraRuntime>,
     current: Res<CurrentLevel>,
     level: Option<Res<LevelCollision>>,
     player: Query<&Player>,
-    pov: Res<crate::actions::extro::Pov>,
+    pov: Res<crate::gameplay::extro::Pov>,
     mut cam: Query<(&mut Transform, &mut FollowState), With<MainCamera>>,
 ) {
     // The menu has a fixed camera, except while the intro follows the scripted Sammy.

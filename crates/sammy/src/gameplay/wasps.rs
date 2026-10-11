@@ -1,0 +1,373 @@
+//! Sammy's wasps (docs/wasps.md): ammo pickups (`InitAmmo1`, bullets.wdl:21-177),
+//! firing (`PlayerTire`, player.wdl:271-384), flight and hits (`InitWasp`/`Wasp`/
+//! `Wasp_Hit`, bullets.wdl:203-747) and weak doors (`InitDoorWeak`, mm1.wdl:4466-4715).
+
+use bevy::prelude::*;
+use formats::wmb::Object;
+use sammy_core::wasps::{AMMO_COLORS, DoorDamage, FIRED, PICKUP_FADE, PICKUP_FADE_SHRINK, PICKUP_SPIN, PICKUP_TILT, PLANKS, WaspStep};
+
+use super::pickups::{PickupPos, Shrinking};
+use super::player::{Player, State, TICKS};
+use crate::platform::audio::Sfx;
+use crate::gameplay::collision::{Brush, CollisionWorld, Hull, entity, id};
+use crate::render::coords;
+use crate::gameplay::state::{GameState, Rng};
+use crate::level::{GameAssets, LevelObject};
+use crate::render::model::ModelAnimator;
+use super::is_playing;
+use crate::schedule::GameSet;
+#[allow(unused_imports)]
+use bevy::prelude::{App, IntoScheduleConfigs, Plugin, PreUpdate, Update};
+
+/// Sammy's wasps: ammo, firing, flight, weak doors, planks and hives.
+pub struct WaspsPlugin;
+
+impl Plugin for WaspsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_message::<WaspHit>()
+            .add_systems(
+                Update,
+                (
+                    collect_ammo.run_if(is_playing).in_set(GameSet::CollectAmmo),
+                    fire.in_set(GameSet::Fire),
+                    spin_pickups.in_set(GameSet::SpinAmmo),
+                    fly_wasps.in_set(GameSet::WaspFlight),
+                    update_weak_doors.in_set(GameSet::WeakDoors),
+                    fly_planks.in_set(GameSet::Planks),
+                    run_hives.run_if(is_playing).in_set(GameSet::Hives),
+                    fly_hive_wasps.in_set(GameSet::HiveWasps),
+                    expire_pickups.in_set(GameSet::ExpireAmmo),
+                ),
+            );
+    }
+}
+
+
+/// An ammo pickup ([`sammy_core::wasps::AmmoPickup`]).
+#[derive(Component, Deref)]
+pub struct AmmoPickup(pub sammy_core::wasps::AmmoPickup);
+
+/// Spin of an idle pickup.
+#[derive(Component)]
+pub struct Spinning {
+    angles: [f32; 3],
+}
+
+/// A flying wasp ([`sammy_core::wasps::Wasp`]).
+#[derive(Component, Deref, DerefMut)]
+pub struct Wasp(pub sammy_core::wasps::Wasp);
+
+/// A wasp hit something solid (sent to targets such as lions).
+#[derive(Message, Clone, Copy)]
+pub struct WaspHit {
+    pub target: Entity,
+    pub poison: f32,
+    pub bounce_force: f32,
+    pub wasp_pan: f32,
+    pub wasp_disp: [f32; 3],
+}
+
+/// Shots still to fire in a fan ([`sammy_core::wasps::PendingShots`]).
+#[derive(Component, Deref, DerefMut)]
+pub struct PendingShots(sammy_core::wasps::PendingShots);
+
+#[derive(Component, Deref, DerefMut)]
+pub struct WeakDoor(sammy_core::wasps::WeakDoor);
+
+#[derive(Component, Deref, DerefMut)]
+pub struct Plank(sammy_core::wasps::Plank);
+
+/// Returns the model skin and animation speed.
+pub fn init_ammo(obj: &mut Object, entity: &mut EntityCommands) -> (u32, f32) {
+    let (pickup, look) = sammy_core::wasps::AmmoPickup::from_object(obj);
+    if let Some(sc) = look.scale {
+        obj.scale = [sc; 3];
+    }
+    obj.angles = [0.0, PICKUP_TILT, 0.0];
+    entity.insert((AmmoPickup(pickup), PickupPos(obj.origin), Spinning { angles: obj.angles }));
+    (look.skin, sammy_core::wasps::PICKUP_ANIM)
+}
+
+pub fn init_door_weak(obj: &Object, entity: &mut EntityCommands) {
+    entity.insert(WeakDoor(sammy_core::wasps::WeakDoor::from_object(obj)));
+}
+
+pub fn spin_pickups(time: Res<Time>, mut q: Query<(&mut Spinning, &mut Transform)>) {
+    let t = time.delta_secs() * TICKS;
+    for (mut s, mut tf) in &mut q {
+        s.angles[0] += PICKUP_SPIN * t;
+        tf.rotation = coords::rotation(s.angles);
+    }
+}
+
+pub fn collect_ammo(
+    mut commands: Commands,
+    mut game: ResMut<GameState>,
+    mut sfx: Sfx,
+    player: Query<&Player>,
+    pickups: Query<(Entity, &PickupPos, &AmmoPickup), Without<Shrinking>>,
+) {
+    let Ok(p) = player.single() else { return };
+    if p.state == State::Dead {
+        return;
+    }
+    for (e, pos, a) in &pickups {
+        if !sammy_core::pickups::in_scan(p.pos, p.scan_radius, pos.0) {
+            continue;
+        }
+        a.take(&mut game);
+        sfx.play("clog3");
+        sfx.play("TakeWasp_son");
+        let color = AMMO_COLORS[(a.kind.clamp(1, 7) - 1) as usize];
+        commands.entity(e).insert((Shrinking, crate::render::lights::flash(color, 300.0, 15.0, 100.0)));
+    }
+}
+
+/// `PlayerTire`: fire when Sammy is in a normal ground state.
+#[allow(clippy::too_many_arguments)]
+pub fn fire(
+    time: Res<Time>,
+    controls: Res<crate::platform::input::Controls>,
+    current: Res<crate::flow::CurrentLevel>,
+    mut commands: Commands,
+    mut game: ResMut<GameState>,
+    mut sfx: Sfx,
+    assets: Res<GameAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut player: Query<(Entity, &mut Player, &mut ModelAnimator, Option<&mut PendingShots>)>,
+    mut shots: Local<Vec<sammy_core::wasps::Shot>>,
+) {
+    let Ok((e, mut p, mut anim, pending)) = player.single_mut() else { return };
+    let t = time.delta_secs() * TICKS;
+    let kind = game.ammo_type.clamp(1, 7);
+    // Debug: SAMMY_AUTOFIRE=1 fires whenever possible.
+    let trigger = controls.fire_hit || std::env::var_os("SAMMY_AUTOFIRE").is_some();
+    let fired = sammy_core::wasps::fire(&mut p, &mut anim.anim, &mut game, trigger, crate::flow::playing(&current));
+    if fired.empty {
+        sfx.play("Error1");
+    }
+    if let Some(new) = fired.thrown {
+        commands.entity(e).insert(PendingShots(new));
+    }
+    // Release due shots of the current fan.
+    if let Some(mut pending) = pending {
+        shots.clear();
+        if pending.release(kind, game.ammo_poison, p.pan, t, &mut shots) {
+            commands.entity(e).remove::<PendingShots>();
+        }
+        for shot in shots.drain(..) {
+            spawn_wasp(&mut commands, &assets, &mut meshes, &mut sfx, shot, e);
+        }
+    }
+}
+
+fn spawn_wasp(commands: &mut Commands, assets: &GameAssets, meshes: &mut Assets<Mesh>, sfx: &mut Sfx, shot: sammy_core::wasps::Shot, shooter: Entity) {
+    let Some(model) = assets.model("wasp1.mdl") else { return };
+    let w = sammy_core::wasps::Wasp::new(shot, Some(id(shooter)));
+    let mut anim = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
+    anim.play("walk", true, 0.0);
+    anim.set_speed_pct(sammy_core::wasps::WING_ANIM * w.speed(), TICKS);
+    sfx.play("Wasp_son");
+    let scale = FIRED[(shot.kind - 1) as usize].scale;
+    commands.spawn((
+        Name::new("wasp"),
+        crate::flow::LevelScoped,
+        Mesh3d(meshes.add(model.build_mesh(anim.frames.first().copied().unwrap_or(0)))),
+        MeshMaterial3d(model.skin(shot.kind)),
+        Transform { translation: coords::pos(shot.pos), rotation: coords::rotation([shot.pan, 0.0, 0.0]), scale: Vec3::splat(scale) },
+        Visibility::Hidden,
+        anim,
+        Wasp(w),
+    ));
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn fly_wasps(
+    time: Res<Time>,
+    world: CollisionWorld,
+    mut commands: Commands,
+    mut sfx: Sfx,
+    mut rng: ResMut<Rng>,
+    mut hits: MessageWriter<WaspHit>,
+    mut doors: Query<&mut WeakDoor>,
+    player: Query<&Player>,
+    mut wasps: Query<(Entity, &mut Wasp, &mut Transform, &mut Visibility)>,
+) {
+    let t = time.delta_secs() * TICKS;
+    let sammy = player.single().map(|p| p.pos).ok();
+    for (e, mut w, mut tf, mut vis) in &mut wasps {
+        let step = w.step(&world, sammy, t);
+        if w.visible && *vis == Visibility::Hidden {
+            *vis = Visibility::Inherited;
+        }
+        tf.translation = coords::pos(w.pos);
+        tf.rotation = coords::rotation([w.pan, w.tilt, 0.0]);
+        if let WaspStep::Burst { hit } = step {
+            if let Some(target) = hit.map(entity) {
+                if let Ok(mut door) = doors.get_mut(target) {
+                    door.hit(w.poison);
+                } else {
+                    hits.write(WaspHit { target, poison: w.poison, bounce_force: w.bounce_force, wasp_pan: w.pan, wasp_disp: w.last_disp });
+                }
+            }
+            let (at, kind) = (w.pos, w.kind);
+            crate::render::effects::queue(&mut commands, move |ps| crate::render::effects::wasp_explode(ps, at, kind, 2.0));
+            sfx.play(sammy_core::wasps::burst_sound(&mut rng));
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+/// `ExplodeDoorWeak`: HP 3/2/1 morph to doorwk2/3/4; otherwise the door breaks into planks.
+#[allow(clippy::too_many_arguments)]
+pub fn update_weak_doors(
+    mut commands: Commands,
+    mut sfx: Sfx,
+    mut rng: ResMut<Rng>,
+    assets: Res<GameAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut doors: Query<(Entity, &WeakDoor, &mut Brush, &LevelObject, Option<&Children>), Changed<WeakDoor>>,
+) {
+    for (e, door, mut brush, obj, children) in &mut doors {
+        match door.damage() {
+            DoorDamage::Untouched => {}
+            DoorDamage::Morph(file) => {
+                sfx.play("plank1_Son");
+                let Some((wmb, _)) = assets.prefab(file) else { continue };
+                if !std::sync::Arc::ptr_eq(&brush.wmb, &wmb) {
+                    super::doors::morph(&mut commands, e, &mut brush, children, &assets, file);
+                }
+            }
+            DoorDamage::Destroyed => {
+                // The door vanishes and six planks fly out (`LaunchPlank`).
+                commands.entity(e).despawn();
+                for file in PLANKS {
+                    let Some(model) = assets.model(file) else { continue };
+                    let plank = sammy_core::wasps::Plank::burst(obj.0.origin, &mut rng.0);
+                    commands.spawn((
+                        Name::new("plank"),
+                        crate::flow::LevelScoped,
+                        Mesh3d(meshes.add(model.build_mesh(0))),
+                        MeshMaterial3d(model.material.clone()),
+                        Transform { translation: coords::pos(plank.pos), rotation: coords::rotation(plank.angles), scale: Vec3::ONE },
+                        Plank(plank),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+pub fn fly_planks(time: Res<Time>, world: CollisionWorld, mut sfx: Sfx, mut commands: Commands, mut q: Query<(Entity, &mut Plank, &mut Transform)>) {
+    let t = time.delta_secs() * TICKS;
+    for (e, mut p, mut tf) in &mut q {
+        let (sound, gone) = p.step(|a, b| world.trace(Hull::Point, a, b, None).trace, t);
+        if sound {
+            sfx.play("plank1_Son");
+        }
+        tf.translation = coords::pos(p.pos);
+        tf.rotation = coords::rotation(p.angles);
+        if gone {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+/// A hive ([`sammy_core::wasps::Hive`]).
+#[derive(Component, Deref, DerefMut)]
+pub struct Hive(sammy_core::wasps::Hive);
+
+pub fn init_hive(obj: &Object, entity: &mut EntityCommands) {
+    entity.insert(Hive(sammy_core::wasps::Hive::from_object(obj)));
+}
+
+/// A wasp launched by a hive ([`sammy_core::wasps::HiveWasp`]).
+#[derive(Component, Deref, DerefMut)]
+pub struct HiveWasp(sammy_core::wasps::HiveWasp);
+
+/// Remaining lifetime of a hive-emitted pickup (fades over its last 16 ticks).
+#[derive(Component)]
+pub struct PickupLifetime(f32);
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_hives(
+    time: Res<Time>,
+    mut commands: Commands,
+    game: Res<GameState>,
+    mut rng: ResMut<Rng>,
+    assets: Res<GameAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut hives: Query<(Entity, &mut Hive, &Transform)>,
+) {
+    let t = time.delta_secs() * TICKS;
+    for (e, mut h, tf) in &mut hives {
+        let Some((l, exhausted)) = h.step(&game, &mut rng.0, t) else { continue };
+        let Some(model) = assets.model("wasp1.mdl") else { continue };
+        let mut anim = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
+        anim.play("walk", true, 0.0);
+        anim.set_speed_pct(sammy_core::wasps::HIVE_WASP_ANIM, TICKS);
+        commands.spawn((
+            Name::new("hive wasp"),
+            crate::flow::LevelScoped,
+            Mesh3d(meshes.add(model.build_mesh(0))),
+            MeshMaterial3d(model.skin(l.kind)),
+            Transform { translation: coords::pos(h.pos), rotation: coords::rotation([l.pan, l.tilt, 0.0]), scale: Vec3::splat(l.scale) },
+            anim,
+            HiveWasp(sammy_core::wasps::HiveWasp::new(&l, h.pos)),
+        ));
+        if exhausted {
+            // Exhausted: the hive bursts (bullets.wdl:1255-1272).
+            let at = crate::render::coords::native(tf.translation);
+            crate::render::effects::queue(&mut commands, move |ps| crate::render::effects::hive_burst(ps, at));
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+/// `LaunchNewWasp` flight: ballistic hops with damped bounces until it settles, then
+/// it becomes a 1-ammo pickup.
+pub fn fly_hive_wasps(
+    time: Res<Time>,
+    world: CollisionWorld,
+    mut commands: Commands,
+    mut sfx: Sfx,
+    mut rng: ResMut<Rng>,
+    mut q: Query<(Entity, &mut HiveWasp, &mut Transform)>,
+    mut sounds: Local<Vec<&'static str>>,
+) {
+    let t = time.delta_secs() * TICKS;
+    for (e, mut w, mut tf) in &mut q {
+        let settled = w.step(|a, b| world.trace_static(Hull::Point, a, b).trace, &mut rng.0, t, &mut sounds);
+        for s in sounds.drain(..) {
+            sfx.play(s);
+        }
+        tf.translation = coords::pos(w.pos);
+        tf.rotation = coords::rotation([w.pan, w.tilt, 0.0]);
+        if let Some((pickup, lifetime)) = settled {
+            let mut ent = commands.entity(e);
+            ent.remove::<HiveWasp>().insert((AmmoPickup(pickup), PickupPos(w.pos), Spinning { angles: [w.pan, PICKUP_TILT, 0.0] }));
+            if let Some(l) = lifetime {
+                ent.insert(PickupLifetime(l));
+            }
+        }
+    }
+}
+
+/// Hive pickups fade over their last ticks, then burst.
+pub fn expire_pickups(time: Res<Time>, mut commands: Commands, mut q: Query<(Entity, &mut PickupLifetime, &mut Transform, Option<&AmmoPickup>)>) {
+    let t = time.delta_secs() * TICKS;
+    for (e, mut life, mut tf, ammo) in &mut q {
+        life.0 -= t;
+        if life.0 < PICKUP_FADE {
+            tf.scale *= PICKUP_FADE_SHRINK.powf(t);
+        }
+        if life.0 <= 0.0 {
+            // `InitWaspWed` countdown over: the wasp bursts (bullets.wdl:80-108).
+            if let Some(a) = ammo {
+                let (at, kind) = (crate::render::coords::native(tf.translation), a.kind);
+                crate::render::effects::queue(&mut commands, move |ps| crate::render::effects::wasp_explode(ps, at, kind, 2.0));
+            }
+            commands.entity(e).despawn();
+        }
+    }
+}

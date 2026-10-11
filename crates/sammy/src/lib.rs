@@ -1,31 +1,14 @@
-pub mod actions;
-pub mod audio;
+//! Sammy Suricate on Bevy: the frontend for [`sammy_core`] (rendering, audio, input,
+//! windows, UI) and the feature plugins that drive the core rules each frame.
+
 pub mod camera;
-pub mod collision;
-pub mod coords;
-pub mod debug;
-pub mod display;
-pub mod effects;
 pub mod flow;
-pub mod game;
-pub mod hud;
-pub mod hud3d;
-pub mod input;
-pub mod intro;
-pub mod image;
+pub mod gameplay;
 pub mod level;
-pub mod lights;
-pub mod material;
-pub mod menu;
-pub mod model;
-pub mod music;
-pub mod options;
-pub mod particles;
-pub mod save;
+pub mod platform;
+pub mod render;
 pub mod schedule;
-pub mod shadow;
-pub mod ui_text;
-pub mod vfs;
+pub mod ui;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -34,8 +17,8 @@ use bevy::prelude::*;
 use bevy::render::view::Tonemapping;
 
 use camera::{CameraPlugin, FlyCamera, FollowState, MainCamera, SkyCamera};
-use model::{LoadedModel, ModelAnimator, ModelPlugin};
-use vfs::GameFiles;
+use render::model::{LoadedModel, ModelAnimator, ModelPlugin};
+use platform::vfs::GameFiles;
 
 /// Default install location; override with the SAMMY_DIR environment variable.
 pub const DEFAULT_GAME_DIR: &str = "/mnt/drive/Games/sammy-suricate/drive_c/Program Files (x86)/Sammy Suricate";
@@ -80,15 +63,15 @@ pub fn run() -> anyhow::Result<()> {
 pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
     let files = GameFiles::open(dir)?;
     // A test may supply its own save (and never touches the player's).
-    if !app.world().contains_resource::<save::SaveGame>() {
-        app.insert_resource(save::load(dir));
+    if !app.world().contains_resource::<platform::save::SaveGame>() {
+        app.insert_resource(platform::save::load(dir));
     }
     app.add_plugins(schedule::SchedulePlugin);
-    app.add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin, particles::ParticlePlugin))
-        .add_plugins((hud3d::Hud3dPlugin, ui_text::UiTextPlugin, menu::MenuPlugin, options::OptionsPlugin, music::MusicPlugin, intro::IntroPlugin, input::InputPlugin, display::DisplayPlugin))
+    app.add_plugins((CameraPlugin, ModelPlugin, gameplay::ActionsPlugin, render::material::LevelMaterialPlugin, ui::hud::HudPlugin, flow::FlowPlugin, render::lights::LightsPlugin, platform::debug::DebugPlugin, render::shadow::ShadowPlugin, render::particles::ParticlePlugin))
+        .add_plugins((ui::hud3d::Hud3dPlugin, ui::text::UiTextPlugin, ui::menu::MenuPlugin, ui::options::OptionsPlugin, platform::music::MusicPlugin, ui::intro::IntroPlugin, platform::input::InputPlugin, platform::display::DisplayPlugin))
         .insert_resource(files)
         .insert_resource(args)
-        .add_systems(Startup, (audio::load_sounds, setup))
+        .add_systems(Startup, (platform::audio::load_sounds, setup))
         .add_systems(Update, (level::face_camera.in_set(schedule::GameSet::FaceCamera), level::animate_sprites));
     Ok(())
 }
@@ -124,7 +107,7 @@ fn setup(
     // A slot number (1-49) or a WMB file name.
     let file = match args.level.parse::<u32>() {
         Ok(slot) => flow::file_for(slot).map(str::to_owned).unwrap_or_else(|| panic!("no level in slot {slot}")),
-        Err(_) if args.level == "menu" => menu::MENU_FILE.to_owned(),
+        Err(_) if args.level == "menu" => ui::menu::MENU_FILE.to_owned(),
         Err(_) => args.level.clone(),
     };
     pending.0 = Some(file);
