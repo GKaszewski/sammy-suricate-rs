@@ -76,7 +76,7 @@ world! {
     // Pickups and gems.
     diamonds: Table<crate::pickups::Diamond>,
     /// Key gems by colour.
-    key_gems: Table<u32>,
+    key_gems: Table<crate::keys::KeyColor>,
     level_keys: Table<crate::sim::pickups::LevelKey>,
     collectable: Tag,
     flying_gems: Table<crate::gems::FlyingGem>,

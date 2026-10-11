@@ -1,5 +1,6 @@
 use super::*;
 use sammy_core::space::Pos;
+use sammy_core::keys::KeyColor;
 
 /// A named emitter under test.
 type Emitter = (&'static str, Box<dyn Fn(&mut Particles)>);
@@ -9,11 +10,11 @@ type Emitter = (&'static str, Box<dyn Fn(&mut Particles)>);
 fn every_effect_spawns_and_expires() {
     let o = [0.0; 3];
     let effects: Vec<Emitter> = vec![
-        ("gem_trail", Box::new(move |ps| gem_trail(ps, Pos(o), 3))),
+        ("gem_trail", Box::new(move |ps| gem_trail(ps, Pos(o), KeyColor(3)))),
         ("gem_trail_master", Box::new(move |ps| gem_trail(ps, Pos(o), sammy_core::keys::MASTER_KEY))),
-        ("gem_explode", Box::new(move |ps| gem_explode(ps, Pos(o), 4))),
-        ("gem_catch", Box::new(move |ps| gem_catch(ps, Pos(o), 1))),
-        ("gem_mix", Box::new(move |ps| gem_mix(ps, Pos(o), 2))),
+        ("gem_explode", Box::new(move |ps| gem_explode(ps, Pos(o), KeyColor(4)))),
+        ("gem_catch", Box::new(move |ps| gem_catch(ps, Pos(o), KeyColor(1)))),
+        ("gem_mix", Box::new(move |ps| gem_mix(ps, Pos(o), KeyColor(2)))),
         ("diamond", Box::new(move |ps| diamond_burst(ps, Pos(o)))),
         ("dust", Box::new(move |ps| dust(ps, o, 3000.0, 10.0))),
         ("hit", Box::new(move |ps| hit_stars(ps, Pos(o), 10))),

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::keys::KeyColor;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Stage {
@@ -104,9 +105,9 @@ impl Dying {
                 if self.ticks == t {
                     // ResetSammy: input off; the held key is dropped unless the goal is reached.
                     out.push(DeathEvent::Started);
-                    if game.key != 0 && !game.goal_reached {
+                    if game.key != KeyColor::NONE && !game.goal_reached {
                         let color = game.key;
-                        game.key = 0;
+                        game.key = KeyColor::NONE;
                         let pos = [victim.pos[0], victim.pos[1], victim.pos[2] + DROP_HEIGHT];
                         let hspeed = victim.vel[0].abs() + victim.vel[1].abs();
                         out.push(DeathEvent::DropKey(Launch { color, pos, pan: victim.pan, hspeed, vz: DROP_VZ, fate: Fate::Decorative }));

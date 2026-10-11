@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::keys::KeyColor;
 
 /// Remaining lifetime (Skill9) of a runtime gem; counts down once it rests.
 #[derive(Clone, Debug)]
@@ -62,12 +63,12 @@ impl Surprise {
     }
 
     /// Counts down; returns the new colour when it becomes collectable.
-    pub fn step(&mut self, color: u32, rng: &mut Rng, t: Ticks) -> Option<u32> {
+    pub fn step(&mut self, color: KeyColor, rng: &mut Rng, t: Ticks) -> Option<KeyColor> {
         let t = t.get();
         if self.delay <= 0.0 {
             return None;
         }
         self.delay -= t;
-        (self.delay <= 0.0).then(|| (color + rng.random(self.add) as u32 + 1).min(SURPRISE_MAX_COLOR))
+        (self.delay <= 0.0).then(|| KeyColor((color.get() + rng.random(self.add) as u32 + 1).min(SURPRISE_MAX_COLOR)))
     }
 }

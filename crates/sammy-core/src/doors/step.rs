@@ -13,7 +13,7 @@ impl Door {
             down_speed: obj.skill(5),
             hold: if obj.skill(8) == 0.0 { DEFAULT_HOLD } else { obj.skill(8) },
             open_dist: if obj.skill(3) == 0.0 { DEFAULT_OPEN_DIST } else { obj.skill(3) },
-            color: obj.skill(6) as u32,
+            color: KeyColor(obj.skill(6) as u32),
             scan_id: obj.skill(7),
             no_sammy: obj.flag(2),
             permanent: obj.flag(5),
@@ -31,11 +31,11 @@ impl Door {
     }
 
     /// The open rule of `movePortail` for Sammy.
-    pub fn accepts(&self, key: u32) -> bool {
+    pub fn accepts(&self, key: KeyColor) -> bool {
         if self.no_sammy {
             return false;
         }
-        self.keyless || crate::keys::fits(key, self.color, self.exact)
+        self.keyless || key.fits(self.color, self.exact)
     }
 
     pub fn permanent(&self) -> bool {
@@ -70,16 +70,16 @@ impl Door {
                     // CreateGemKeyAnim: the held gem flies into the door (none for key 0).
                     self.gem_flying = true;
                     self.validated = false;
-                    if game.key != 0 {
+                    if game.key != KeyColor::NONE {
                         out.push(DoorEvent::LaunchGem { color: game.key });
                         game.key_in_flight = true;
                         if !game.goal_reached {
-                            game.key = 0;
+                            game.key = KeyColor::NONE;
                         }
                     }
                 }
                 out.push(DoorEvent::Sound("DoorOpen_son"));
-                if (1..=6).contains(&self.color) {
+                if (1..=6).contains(&self.color.get()) {
                     out.push(DoorEvent::Flash { color: self.color });
                 }
                 self.state = DoorState::Rising;

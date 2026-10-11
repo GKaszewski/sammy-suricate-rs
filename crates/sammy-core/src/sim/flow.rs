@@ -12,6 +12,7 @@ use crate::levels::{EXTRO_SLOT, MENU_FILE, slot_for};
 use crate::physics::JumpParams;
 use crate::player::PlayerTuning;
 use crate::levels::LevelSlot;
+use crate::keys::KeyColor;
 
 /// Level 10 hard-codes 4 lives (Loads.wdl:80).
 const FIXED_LIVES_SLOT: LevelSlot = LevelSlot(10);
@@ -30,7 +31,7 @@ impl Sim {
         // entities then override them.
         self.game = GameState::default();
         if let Some(k) = self.debug.key {
-            self.game.key = k;
+            self.game.key = KeyColor(k);
         }
         self.jump = JumpParams::default();
         self.tuning = PlayerTuning::default();

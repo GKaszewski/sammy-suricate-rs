@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::keys::KeyColor;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EngineState {
@@ -23,7 +24,7 @@ pub struct Engine {
     /// Flag3: reflect off walls instead of turning.
     pub(super) reflect: bool,
     /// Skill6: key colour that unlocks it (0 = always running); Flag7 = exact colour.
-    pub(super) lock: u32,
+    pub(super) lock: KeyColor,
     pub(super) lock_exact: bool,
     pub unlocked: bool,
     pub(super) state: EngineState,
@@ -42,7 +43,7 @@ impl Engine {
             pause: obj.skill(3),
             turn: [obj.skill(4), obj.skill(5), obj.skill(7)],
             reflect: obj.flag(3),
-            lock: obj.skill(6) as u32,
+            lock: KeyColor(obj.skill(6) as u32),
             lock_exact: obj.flag(7),
             unlocked: obj.skill(6) == 0.0,
             state: EngineState::Moving,
@@ -51,8 +52,8 @@ impl Engine {
     }
 
     /// Whether `key` starts a locked engine.
-    pub fn unlocks(&self, key: u32) -> bool {
-        crate::keys::fits(key, self.lock, self.lock_exact)
+    pub fn unlocks(&self, key: KeyColor) -> bool {
+        key.fits(self.lock, self.lock_exact)
     }
 
     /// One frame; `trace` sweeps a point through the level (the engine is a tiny sprite).

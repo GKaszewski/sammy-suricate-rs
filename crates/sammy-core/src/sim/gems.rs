@@ -11,6 +11,7 @@ use crate::id::Id;
 use crate::player::Player;
 use crate::time::{TICKS_PER_SEC, Ticks};
 use crate::space::Pos;
+use crate::keys::KeyColor;
 
 /// Gem sprite animation speed (frames per second), backwards for door gems.
 pub(super) const GEM_FPS: f32 = 48.0;
@@ -28,7 +29,7 @@ pub struct DoorGemFlight {
 }
 
 /// A runtime key gem in flight.
-fn spawn_flying(sim: &mut Sim, name: &str, color: u32, gem: FlyingGem) {
+fn spawn_flying(sim: &mut Sim, name: &str, color: KeyColor, gem: FlyingGem) {
     let pos = gem.pos;
     if let Some(id) = super::spawn::gem_sprite(sim, name, color, pos, GEM_SCALE, GEM_FPS) {
         sim.world.key_gems.insert(id, color);
@@ -37,7 +38,7 @@ fn spawn_flying(sim: &mut Sim, name: &str, color: u32, gem: FlyingGem) {
 }
 
 /// `EjectOldKey` + `LaunchYouKey`: the old key flies forward at 2× Sammy's walk speed.
-pub(super) fn throw_back_key(sim: &mut Sim, color: u32, p: &Player, life: f32) {
+pub(super) fn throw_back_key(sim: &mut Sim, color: KeyColor, p: &Player, life: f32) {
     spawn_flying(sim, "thrown key", color, FlyingGem::thrown(p.pos, p.pan, p.speed, life));
 }
 
@@ -127,13 +128,13 @@ pub(super) fn lifetimes(sim: &mut Sim, dt: Dt) {
             sim.events.push(Event::Sound("cligno1_son"));
         }
         if l.tick(t) {
-            burst.push((*id, body.pos, w.key_gems.get(id).copied().unwrap_or(0)));
+            burst.push((*id, body.pos, w.key_gems.get(id).copied().unwrap_or(KeyColor::NONE)));
         }
     }
     for (id, at, color) in burst {
         sim.world.despawn(id);
         sim.sound("broken4"); // GemExplose
-        sim.effect(Effect::GemExplode { at, color });
+        sim.effect(Effect::GemExplode { at, color: color });
     }
 }
 

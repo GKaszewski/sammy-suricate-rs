@@ -5,6 +5,7 @@ use formats::wmb::Object;
 
 use crate::game::GameState;
 use crate::time::Ticks;
+use crate::keys::KeyColor;
 
 mod exit;
 mod step;
@@ -16,7 +17,7 @@ pub const RANGE_SCAN_DOOR: f32 = 500.0;
 /// Scan id of Sammy's door scan; a door with another Skill7 never reacts to him.
 pub const SAMMY_SCAN_ID: f32 = 25.0;
 /// Colour of the exit door (red + yellow + blue).
-pub const EXIT_COLOR: u32 = 7;
+pub const EXIT_COLOR: KeyColor = KeyColor::EXIT;
 /// Rise heights up to this are replaced by [`MIN_RISE`].
 const RISE_DEFAULT_BELOW: f32 = 250.0;
 const MIN_RISE: f32 = 300.0;
@@ -68,7 +69,7 @@ pub struct Door {
     /// Skill3: horizontal open distance.
     open_dist: f32,
     /// Skill6: colour bitmask ([`EXIT_COLOR`] = exit door).
-    pub color: u32,
+    pub color: KeyColor,
     /// Skill7: scan id the door reacts to.
     scan_id: f32,
     /// Flag2: never for Sammy; Flag5: permanent (a key gem opens it for good);
@@ -99,9 +100,9 @@ pub struct Door {
 pub enum DoorEvent {
     Sound(&'static str),
     /// `CreateGemKeyAnim`: the held key (colour) flies from Sammy into the door.
-    LaunchGem { color: u32 },
+    LaunchGem { color: KeyColor },
     /// A coloured door opens: flash of its colour.
-    Flash { color: u32 },
+    Flash { color: KeyColor },
     /// A validated permanent door turns into `doordark.wmb`.
     MorphDark,
 }

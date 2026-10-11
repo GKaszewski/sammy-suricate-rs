@@ -2,6 +2,7 @@
 
 use formats::wmb::Object;
 use crate::time::Ticks;
+use crate::keys::KeyColor;
 
 pub use crate::keys::MASTER_KEY;
 /// `WindowHeartsOrg`: full health.
@@ -24,7 +25,7 @@ pub struct GameState {
     /// `ScoreGoal` (InitGame Skill7).
     pub goal: i32,
     /// `PlayerKey`: colour bitmask of the carried key (0 = none, 255 = master).
-    pub key: u32,
+    pub key: KeyColor,
     /// `PlayerOldKey != 0`: an ejected key is still bouncing, pickups are blocked.
     pub key_in_flight: bool,
     /// `BallesJoueur1`.
@@ -61,7 +62,7 @@ impl Default for GameState {
         Self {
             score: 0,
             goal: 0,
-            key: 0,
+            key: KeyColor::NONE,
             key_in_flight: false,
             lives: 1,
             goal_reached: false,

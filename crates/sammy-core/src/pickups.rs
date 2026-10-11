@@ -3,6 +3,7 @@
 //! `BlobZoneScan`).
 
 use formats::wmb::Object;
+use crate::keys::KeyColor;
 
 /// A picked-up item shrinks ×0.8 per tick (`ScaleDownGem`) ...
 pub const SHRINK_PER_TICK: f32 = 0.8;
@@ -38,7 +39,7 @@ impl Diamond {
 #[derive(Clone, Copy, Debug)]
 pub struct KeySpec {
     /// Skill6.
-    pub color: u32,
+    pub color: KeyColor,
     /// Skill5: surprise gem (colour climbs by up to this much).
     pub surprise: Option<f32>,
     /// Flag7: falls to its rest height and rides platforms.
@@ -52,7 +53,7 @@ pub struct KeySpec {
 impl KeySpec {
     pub fn from_object(obj: &Object) -> Self {
         Self {
-            color: obj.skill(6) as u32,
+            color: KeyColor(obj.skill(6) as u32),
             surprise: (obj.skill(5) != 0.0).then_some(obj.skill(5)),
             gravity: obj.flag(7),
             hover_from_wed: obj.flag(7) && obj.flag(5),

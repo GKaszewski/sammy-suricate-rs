@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::space::Pos;
+use crate::keys::KeyColor;
 
 
 /// Sprites snapped onto the floor below their editor origin (once the level is there).
@@ -23,7 +24,7 @@ pub(in crate::sim) fn snap_sprites(sim: &mut Sim) {
 }
 
 /// A runtime gem sprite of `color` at `pos`.
-pub(in crate::sim) fn gem_sprite(sim: &mut Sim, name: &str, color: u32, pos: [f32; 3], scale: f32, fps: f32) -> Option<Id> {
+pub(in crate::sim) fn gem_sprite(sim: &mut Sim, name: &str, color: KeyColor, pos: [f32; 3], scale: f32, fps: f32) -> Option<Id> {
     let file = crate::keys::gem_sprite(color)?;
     let frames = crate::sim::assets::sprite_frames(file);
     let id = sim.world.spawn_body(Body::new(name, pos).scaled(scale));

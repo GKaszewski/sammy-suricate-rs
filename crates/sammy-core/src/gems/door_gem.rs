@@ -2,13 +2,14 @@
 
 use super::*;
 use crate::time::Ticks;
+use crate::keys::KeyColor;
 
 /// Gem flying from Sammy into a permanent door (`AnimGemKey`, gems.wdl:1043-1233):
 /// phase 1 at [`SPEED_GEM_KEY`] for ≤80 ticks, phase 2 closes 70 % of the gap per tick
 /// for ≤16 ticks; a recalled gem flies back to Sammy.
 #[derive(Clone, Debug)]
 pub struct DoorGem {
-    pub color: u32,
+    pub color: KeyColor,
     pub pos: [f32; 3],
     pub(super) phase: DoorGemPhase,
     pub(super) timer: f32,
@@ -54,8 +55,8 @@ pub(super) fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
 }
 
 impl DoorGem {
-    pub fn new(color: u32, sammy: [f32; 3]) -> Self {
-        Self { color, pos: [sammy[0], sammy[1], sammy[2] + DOOR_GEM_START], phase: DoorGemPhase::Approach, timer: APPROACH_TICKS }
+    pub fn new(color: KeyColor, sammy: [f32; 3]) -> Self {
+        Self { color: color, pos: [sammy[0], sammy[1], sammy[2] + DOOR_GEM_START], phase: DoorGemPhase::Approach, timer: APPROACH_TICKS }
     }
 
     /// One frame: `Some(true)` arrived (validate the door), `Some(false)` back with Sammy

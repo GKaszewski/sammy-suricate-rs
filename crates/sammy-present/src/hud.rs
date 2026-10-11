@@ -134,7 +134,7 @@ impl Hud {
         image("vbarhear.pcx", Anchor::TopLeft, HEARTS, Some([0.0, h, HEARTS_STRIP_W, HEARTS_WINDOW_H]), 1.0);
         image("fondscor.pcx", Anchor::TopRight, SCORE_PLATE, None, 1.0);
         // Key gem: slot = key bitmask (255 = master → slot 7); blinks once the goal is reached.
-        let slot = if game.key == MASTER_KEY { GEM_LAST_SLOT } else { game.key.min(GEM_LAST_SLOT) };
+        let slot = if game.key == MASTER_KEY { GEM_LAST_SLOT } else { game.key.get().min(GEM_LAST_SLOT) };
         let blink_on = !game.goal_reached || (self.blink / GEM_BLINK_TICKS) as i32 % 2 == 0;
         if slot != 0 {
             image("fondgems.pcx", Anchor::TopCenter, GEM_PLATE, None, HALF);

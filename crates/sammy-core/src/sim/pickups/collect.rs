@@ -60,7 +60,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim) {
         }
         let life = w.gem_lifetimes.get(&id).map_or(0.0, |l| l.ticks);
         sim.sound("ColoredGem_son");
-        sim.effect(Effect::GemCatch { at, color });
+        sim.effect(Effect::GemCatch { at, color: color });
         let held = sim.game.key;
         let (key, outcome) = take_key(held, color);
         sim.game.key = key;

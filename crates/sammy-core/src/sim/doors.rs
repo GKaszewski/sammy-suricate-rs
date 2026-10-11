@@ -8,6 +8,7 @@ use crate::gems::DoorGemTarget;
 use crate::keys::{MASTER_KEY, light_color};
 use crate::player::State;
 use crate::space::Pos;
+use crate::keys::KeyColor;
 
 /// Door flash when a key fits: start range, shrink per tick, cut-off range.
 const DOOR_FLASH: (f32, f32, f32) = (600.0, 50.0, 100.0);
@@ -44,7 +45,7 @@ pub(super) fn run(sim: &mut Sim, dt: Dt) {
 }
 
 /// `CreateGemKeyAnim`: the key flies from Sammy into the door.
-fn spawn_door_gem(sim: &mut Sim, door: crate::id::Id, color: u32, sammy: [f32; 3]) {
+fn spawn_door_gem(sim: &mut Sim, door: crate::id::Id, color: KeyColor, sammy: [f32; 3]) {
     let gem = crate::gems::DoorGem::new(color, sammy);
     let pos = gem.pos;
     if let Some(id) = super::spawn::gem_sprite(sim, "door gem", color, pos, 1.0, -super::gems::GEM_FPS) {

@@ -2,18 +2,19 @@
 //! saves. Drained once per frame with [`super::Sim::drain_events`].
 
 use crate::space::Pos;
+use crate::keys::KeyColor;
 
 /// A particle effect at a native position (docs/particles.md).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Effect {
     /// `GemExplose`: a gem bursts (key colour; 0 = plain).
-    GemExplode { at: Pos, color: u32 },
+    GemExplode { at: Pos, color: KeyColor },
     /// `Bonus3_Hit`: diamond pickup.
     DiamondBurst { at: Pos },
     /// `Key_Hit`: a key gem caught.
-    GemCatch { at: Pos, color: u32 },
+    GemCatch { at: Pos, color: KeyColor },
     /// `AnimGemMix1`: two primaries mixed (stars of both colours at Sammy).
-    GemMix { at: Pos, colors: [u32; 2] },
+    GemMix { at: Pos, colors: [KeyColor; 2] },
     /// A small heart taken.
     SmallHeart { at: Pos },
     /// `particle_Getlife` after `delay` ticks.
