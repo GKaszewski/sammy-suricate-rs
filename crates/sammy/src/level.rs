@@ -151,6 +151,11 @@ impl Spawner<'_, '_, '_> {
             self.commands.entity(id).despawn();
             return;
         }
+        if init.hidden_but_alive {
+            // Logic-only entity: keep it (with its components) but render nothing.
+            self.commands.entity(id).insert((Name::new(obj.name.clone()), LevelObject(obj.clone()), ChildOf(parent)));
+            return;
+        }
         let tf = Transform {
             translation: coords::pos(obj.origin),
             rotation: coords::rotation(obj.angles),

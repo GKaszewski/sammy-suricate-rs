@@ -5,6 +5,7 @@ mod decor;
 pub mod door;
 pub mod health;
 pub mod pickups;
+pub mod platform;
 pub mod player;
 pub mod title;
 
@@ -26,6 +27,9 @@ impl Plugin for ActionsPlugin {
             .add_systems(
                 Update,
                 (
+                    // Platforms move first so riders and the player see this frame's positions.
+                    (platform::link_platforms, platform::run_engines.run_if(is_playing), platform::follow_engines, platform::ride_platforms)
+                        .chain(),
                     // Sammy's scans (doors, pickups, exit) only run while playing.
                     door::run_doors.run_if(is_playing),
                     player::move_player,
@@ -37,7 +41,9 @@ impl Plugin for ActionsPlugin {
                         door::run_exits.run_if(is_playing),
                         health::collect_health.run_if(is_playing),
                         health::detect_deaths.run_if(is_playing),
+                        platform::enter_teleports.run_if(is_playing),
                     ),
+                    platform::run_teleports,
                     (health::run_death, pickups::reset_keys, health::reset_checkpoints, health::animate_hearts, health::spin_pickups),
                     title::update_titles,
                 )
@@ -56,6 +62,8 @@ pub struct ActionInit {
     pub hidden: bool,
     /// Help sign: own fading material, drawn on top, screen-aligned.
     pub title: bool,
+    /// Invisible logic entity that still runs (platform engines).
+    pub hidden_but_alive: bool,
 }
 
 fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
@@ -65,7 +73,7 @@ fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
 /// Map entities the player walks through (pickups, triggers).
 pub fn is_passable(action: &str) -> bool {
     let a = action.to_ascii_lowercase();
-    ["initteleport", "initrestart", "initbonusvie", "initeyeoftruth", "initsmallheart"].contains(&a.as_str())
+    ["initrestart", "initbonusvie", "initeyeoftruth", "initsmallheart"].contains(&a.as_str())
 }
 
 /// Config and marker entities: their actions only read skills into globals
@@ -133,6 +141,22 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initbonusvie" | "initbonuslife" => {
             health::init_bonus_vie(obj, entity);
+            ActionInit::default()
+        }
+        "initengineplatform" => {
+            platform::init_engine(obj, entity);
+            ActionInit { hidden_but_alive: true, ..default() }
+        }
+        "initplatform" => {
+            platform::init_platform(obj, false, entity);
+            ActionInit::default()
+        }
+        "initbodyplatform" => {
+            platform::init_platform(obj, true, entity);
+            ActionInit::default()
+        }
+        "initteleport" => {
+            platform::init_teleport(obj, entity);
             ActionInit::default()
         }
         "initrestart" => {

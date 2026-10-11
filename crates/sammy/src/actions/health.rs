@@ -139,7 +139,7 @@ pub fn detect_deaths(
     commands.entity(e).insert(Dying { kind, stage: Stage::Dying, ticks: 0.0, alpha: 100.0, sound_played: false });
 }
 
-fn set_alpha(materials: &mut Assets<StandardMaterial>, mat: &MeshMaterial3d<StandardMaterial>, alpha: f32) {
+pub fn set_alpha(materials: &mut Assets<StandardMaterial>, mat: &MeshMaterial3d<StandardMaterial>, alpha: f32) {
     if let Some(mut m) = materials.get_mut(&mat.0) {
         let a = (alpha / 100.0).clamp(0.0, 1.0);
         m.alpha_mode = if a < 1.0 { AlphaMode::Blend } else { AlphaMode::Opaque };

@@ -36,3 +36,12 @@ fn walking_into_maze_wall_is_blocked() {
 fn dot2(n: [f32; 3], d: [f32; 2]) -> f32 {
     n[0] * d[0] + n[1] * d[1]
 }
+
+#[test]
+fn point_trace_hull0_hits_floor_and_walls() {
+    let Some(w) = level() else { return };
+    let tr = w.trace(0, 0, START, [START[0], START[1], START[2] - 1000.0]);
+    assert!(tr.hit() && !tr.start_solid, "{tr:?}");
+    // A point lands on the floor itself (z = 0), unlike the expanded hulls.
+    assert!(tr.end[2].abs() < 1.0, "landed at {:?}", tr.end);
+}
