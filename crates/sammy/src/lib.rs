@@ -58,6 +58,40 @@ pub fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Every feature of the game. Any of them can be left out with
+/// `SammyPlugins.build().disable::<…>()`; music, the intro and the debug tools are also
+/// Cargo features.
+pub struct SammyPlugins;
+
+impl PluginGroup for SammyPlugins {
+    fn build(self) -> bevy::app::PluginGroupBuilder {
+        // Registration order matters to ECS iteration order (and so to some random
+        // rolls) until those systems iterate in a defined order: keep it.
+        let g = bevy::app::PluginGroupBuilder::start::<Self>()
+            .add(schedule::SchedulePlugin)
+            .add(CameraPlugin)
+            .add(ModelPlugin)
+            .add(gameplay::GameplayPlugin)
+            .add(render::material::LevelMaterialPlugin)
+            .add(ui::hud::HudPlugin)
+            .add(flow::FlowPlugin)
+            .add(render::lights::LightsPlugin);
+        #[cfg(feature = "debug-tools")]
+        let g = g.add(platform::debug::DebugPlugin);
+        let g = g
+            .add(render::shadow::ShadowPlugin)
+            .add(render::particles::ParticlePlugin)
+            .add(ui::hud3d::Hud3dPlugin)
+            .add(ui::text::UiTextPlugin)
+            .add(ui::menu::MenuPlugin)
+            .add(ui::options::OptionsPlugin);
+        #[cfg(feature = "music")]
+        let g = g.add(platform::music::MusicPlugin);
+        let g = g.add(ui::intro::IntroPlugin).add(platform::input::InputPlugin).add(platform::display::DisplayPlugin);
+        g
+    }
+}
+
 /// Adds the game (all feature plugins, data and start-up) to an app that already has
 /// Bevy's default plugins (windowed or headless).
 pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
@@ -66,9 +100,7 @@ pub fn add_game(app: &mut App, dir: &Path, args: Args) -> anyhow::Result<()> {
     if !app.world().contains_resource::<platform::save::SaveGame>() {
         app.insert_resource(platform::save::load(dir));
     }
-    app.add_plugins(schedule::SchedulePlugin);
-    app.add_plugins((CameraPlugin, ModelPlugin, gameplay::ActionsPlugin, render::material::LevelMaterialPlugin, ui::hud::HudPlugin, flow::FlowPlugin, render::lights::LightsPlugin, platform::debug::DebugPlugin, render::shadow::ShadowPlugin, render::particles::ParticlePlugin))
-        .add_plugins((ui::hud3d::Hud3dPlugin, ui::text::UiTextPlugin, ui::menu::MenuPlugin, ui::options::OptionsPlugin, platform::music::MusicPlugin, ui::intro::IntroPlugin, platform::input::InputPlugin, platform::display::DisplayPlugin))
+    app.add_plugins(SammyPlugins)
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, (platform::audio::load_sounds, setup))

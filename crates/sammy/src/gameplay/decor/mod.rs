@@ -15,3 +15,13 @@ mod systems;
 pub use components::*;
 pub use spawn::*;
 pub use systems::*;
+
+/// Sky domes following the camera and sprites snapped onto the floor.
+pub struct DecorPlugin;
+
+impl Plugin for DecorPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, snap_sprites.in_set(crate::schedule::GameSet::Flow))
+            .add_systems(PostUpdate, follow_sky.before(TransformSystems::Propagate));
+    }
+}

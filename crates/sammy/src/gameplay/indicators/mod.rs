@@ -30,9 +30,9 @@ pub use spawn::*;
 pub use systems::*;
 
 /// Warning light, blob shadows, the Eye of Truth and the range/call rings.
-pub struct EffectsPlugin;
+pub struct IndicatorsPlugin;
 
-impl Plugin for EffectsPlugin {
+impl Plugin for IndicatorsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,

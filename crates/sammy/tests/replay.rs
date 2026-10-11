@@ -142,6 +142,28 @@ fn run(name: &str, level: &str, seconds: f64, script: impl FnMut(u64) -> Control
     let mut got = String::new();
     for f in 0..frames {
         app.update();
+        // Debug: TRACE_PHASE=n prints the level phase for the first n frames.
+        if std::env::var("TRACE_PHASE").ok().and_then(|v| v.parse::<u64>().ok()).is_some_and(|n| f < n) {
+            let w = app.world_mut();
+            let phase = w.resource::<sammy::flow::CurrentLevel>().phase;
+            let rng = format!("{:?}", w.resource::<sammy::gameplay::state::Rng>().0);
+            eprintln!("PHASE {f} {phase:?} {rng}");
+        }
+        // Debug: TRACE_KEY=from..to prints the held key per frame in that second range.
+        if let Some((a, b)) = std::env::var("TRACE_KEY").ok().and_then(|v| v.split_once("..").map(|(a, b)| (a.parse::<f64>().unwrap(), b.parse::<f64>().unwrap()))) {
+            let sec = f as f64 / FPS;
+            if sec >= a && sec <= b {
+                let w = app.world_mut();
+                let key = w.resource::<sammy::gameplay::state::GameState>().key;
+                let mut gems: Vec<String> = w
+                    .query::<(&sammy::gameplay::pickups::KeyGem, &sammy::gameplay::pickups::PickupPos, &Transform)>()
+                    .iter(w)
+                    .map(|(g, p, t)| format!("{}@{:.0},{:.0},{:.0}s{:.2}", g.color, p.0[0], p.0[1], p.0[2], t.scale.x))
+                    .collect();
+                gems.sort();
+                eprintln!("KEY {f} {key} {}", gems.join(" "));
+            }
+        }
         if f % SAMPLE == 0 {
             let _ = writeln!(got, "{:5.1}s {}", f as f64 / FPS, digest(app.world_mut()));
             // Debug: DUMP_AT=<seconds> writes every entity line of that sample.
@@ -254,8 +276,9 @@ fn dump_update_order() {
     let Some(mut app) = headless("1", |_| Controls::default()) else { return };
     app.update();
     let schedules = app.world().resource::<bevy::ecs::schedule::Schedules>();
-    let s = schedules.get(Update).unwrap();
-    for (_, sys) in s.systems().unwrap() {
-        println!("ORDER {}", sys.name());
+    for (label, s) in [("Pre", schedules.get(PreUpdate).unwrap()), ("Upd", schedules.get(Update).unwrap()), ("Post", schedules.get(PostUpdate).unwrap())] {
+        for (_, sys) in s.systems().unwrap() {
+            println!("ORDER {label} {}", sys.name());
+        }
     }
 }
