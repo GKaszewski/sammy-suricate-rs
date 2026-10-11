@@ -55,7 +55,7 @@ enum Question {
 
 #[derive(Resource, Default)]
 pub struct OptionsState {
-    mode: Option<OptionsMode>,
+    pub mode: Option<OptionsMode>,
     /// `LastOptionChoose`: Help first (5), then remembered.
     tab: Tab,
     help_page: u32,

@@ -95,6 +95,8 @@ pub struct CurrentLevel {
     pub file: String,
     pub phase: Phase,
     pub intro_ticks: f32,
+    /// Bumped by every level load (reloads of the same file included).
+    pub loads: u32,
 }
 
 /// Request to (re)load a level file on the next frame.
@@ -166,7 +168,7 @@ fn load_pending(
     // `sun_angle`: pan 135 / tilt 85 in levels (mm1.wdl:618-620), pan 90 in the extro (Extro.wdl:81).
     commands.insert_resource(if slot == Some(EXTRO_SLOT) { crate::shadow::SunAngle(90.0, 85.0) } else { crate::shadow::SunAngle::default() });
     let phase = if file.eq_ignore_ascii_case(crate::menu::MENU_FILE) { Phase::Menu } else { Phase::Intro };
-    *current = CurrentLevel { slot, file: file.clone(), phase, intro_ticks: 0.0 };
+    *current = CurrentLevel { slot, file: file.clone(), phase, intro_ticks: 0.0, loads: current.loads + 1 };
     let mut spawner = Spawner {
         commands: &mut commands,
         files: &files,
