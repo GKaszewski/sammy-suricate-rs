@@ -39,8 +39,8 @@ void main() {
     vec3 light = texture2D(u_lightmap, v_uv2).rgb * GAMMA_MAX;
 #ifdef DYNAMIC
     // Added on top of the lightmap in gamma space (as A4's 16-bit renderer did): no pow.
-    for (int i = 0; i < 8; i++) {
-        if (i >= u_light_count) break;
+    // DYNAMIC is the exact count: a fixed loop the GPU compiler can unroll.
+    for (int i = 0; i < DYNAMIC; i++) {
         vec4 p = u_lights[i * 2];
         light += u_lights[i * 2 + 1].rgb * max(0.0, 1.0 - distance(v_world, p.xyz) / p.w) * GAMMA_MAX;
     }
@@ -257,9 +257,9 @@ pub struct Lights {
 
 pub struct Gfx {
     pub gl: glow::Context,
-    /// Level: lightmap only, and with dynamic lights.
+    /// Level: lightmap only, and with 1..=MAX_LIGHTS dynamic lights.
     world: Program,
-    world_dynamic: Program,
+    world_dynamic: Vec<Program>,
     /// Models: opaque, and colour-keyed (alpha test).
     model: Program,
     model_cutoff: Program,
@@ -284,7 +284,7 @@ impl Gfx {
         let world_attribs = &["a_pos", "a_uv", "a_uv2"];
         let model_attribs = &["a_pos", "a_normal", "a_uv"];
         let world = Program::new(&gl, WORLD_VS, WORLD_FS, "", world_attribs, WORLD_UNIFORMS)?;
-        let world_dynamic = Program::new(&gl, WORLD_VS, WORLD_FS, "#define DYNAMIC\n", world_attribs, WORLD_UNIFORMS)?;
+        let world_dynamic = (1..=MAX_LIGHTS).map(|n| Program::new(&gl, WORLD_VS, WORLD_FS, &format!("#define DYNAMIC {n}\n"), world_attribs, WORLD_UNIFORMS)).collect::<anyhow::Result<_>>()?;
         let model = Program::new(&gl, MODEL_VS, MODEL_FS, "", model_attribs, MODEL_UNIFORMS)?;
         let model_cutoff = Program::new(&gl, MODEL_VS, MODEL_FS, "#define CUTOFF\n", model_attribs, MODEL_UNIFORMS)?;
         let ui = Program::new(&gl, UI_VS, UI_FS, "", &["a_pos", "a_uv"], &["u_mvp", "u_tex", "u_color"])?;
@@ -336,7 +336,7 @@ impl Gfx {
     /// A level batch: texture × lightmap (or flat light) plus dynamic lights.
     pub fn draw_world(&self, mesh: &Mesh, view_proj: &Mat4, tex: Texture, lightmap: Option<Texture>, lights: &Lights) {
         let gl = &self.gl;
-        let p = if lights.count > 0 { &self.world_dynamic } else { &self.world };
+        let p = if lights.count > 0 { &self.world_dynamic[lights.count - 1] } else { &self.world };
         unsafe {
             gl.use_program(Some(p.program));
             gl.uniform_matrix_4_f32_slice(p.loc("u_mvp"), false, &view_proj.to_cols_array());
