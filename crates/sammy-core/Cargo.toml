@@ -1,0 +1,12 @@
+[package]
+name = "sammy-core"
+version = "0.1.0"
+edition.workspace = true
+description = "Sammy Suricate game rules: engine-agnostic, no I/O, no clocks"
+
+[dependencies]
+formats.workspace = true
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"

@@ -39,10 +39,11 @@ fn headless(level: &str, script: impl FnMut(u64) -> Controls + Send + Sync + 'st
     );
     app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / FPS)));
     // Every level open; nothing ever written to the player's save.
-    let mut save = sammy::save::SaveGame { readonly: true, ..default() };
+    let mut save = sammy::save::SaveGame::default();
+    save.readonly = true;
     for s in save.level_state.iter_mut().skip(1) {
-        if *s != sammy::save::ABSENT {
-            *s = sammy::save::UNLOCKED;
+        if *s != sammy::save::LevelState::Absent {
+            *s = sammy::save::LevelState::Unlocked;
         }
     }
     save.games_started = 1;

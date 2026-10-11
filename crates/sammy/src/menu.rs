@@ -13,11 +13,11 @@ use crate::camera::{CameraParams, MainCamera};
 use crate::coords;
 use crate::flow::{CurrentLevel, Phase};
 use crate::hud::load_ui_image;
-use crate::save::{SaveGame, ABSENT, LOCKED};
+use crate::save::{LevelState, SaveGame};
 use crate::ui_text::{BitmapText, FontKind, WdlStrings};
 use crate::vfs::GameFiles;
 
-pub const MENU_FILE: &str = "menu_greenpepper.wmb";
+pub use sammy_core::levels::MENU_FILE;
 
 pub struct MenuPlugin;
 
@@ -135,7 +135,7 @@ fn style_items(
             c if c > 100 => {
                 let n = c - 100;
                 let in_world = matches!(n, 1..=12 | 17..=28 | 33..=44);
-                save.state(n) == ABSENT && !in_world
+                save.state(n) == LevelState::Absent && !in_world
             }
             _ => false,
         };
@@ -148,7 +148,7 @@ fn style_items(
         if item.code > 100 && !save.playable(item.code - 100) {
             item.locked = true;
             alpha = 50.0;
-            dark = save.state(item.code - 100) != LOCKED;
+            dark = save.state(item.code - 100) != LevelState::Locked;
         }
         if let Some(mut mat) = mat
             && (alpha < 100.0 || dark)
@@ -526,7 +526,7 @@ fn overlay(
     let dx = if item.locked { 32.0 } else { 20.0 };
     (tn.left, tn.top) = (px(cursor.x + dx), px(cursor.y));
     if item.locked {
-        let msg = if save.state(n) == LOCKED { "mustbewin_Str" } else { "LevelNothere_Str" };
+        let msg = if save.state(n) == LevelState::Locked { "mustbewin_Str" } else { "LevelNothere_Str" };
         let bytes = strings.get(msg).to_vec();
         if mt.bytes != bytes {
             mt.bytes = bytes;

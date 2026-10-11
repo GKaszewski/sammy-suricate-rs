@@ -47,7 +47,7 @@ position and a hash of all named entity transforms, and compares them with
 
 1. Library + thin binary, replay harness. **(done)**
 2. `formats`: `no_std` + `alloc` (verified with `--target thumbv7em-none-eabihf`). **(done)**
-3. `sammy-core` skeleton: units, coords, rng, constants tables, save model, game state.
+3. `sammy-core` skeleton: time, angles, rng, level table, save model (`LevelState` enum), game state; the Bevy side wraps them in `Deref` newtype resources. **(done)**
 4. Move gameplay into the core one feature at a time (collision, player, pickups and
    gems, doors, platforms and teleports, health, enemies, wasps, extro, intro walker,
    flow), the Bevy side becoming adapters.

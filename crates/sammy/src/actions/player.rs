@@ -33,8 +33,7 @@ const ANIM_JUMP: f32 = 14.0;
 const ANIM_FIN_JUMP: f32 = 14.0;
 const ANIM_FIN_JUMP_FAST: f32 = 18.0;
 
-/// `widthbarBoost`: WindowBoost runs 0 (full) .. 150 (empty).
-pub const BOOST_MAX: f32 = 150.0;
+pub use crate::game::BOOST_MAX;
 const MEDIUM_SLOPE: f32 = 2.0;
 const SPEED_ROTATION_PENTE: f32 = 0.05;
 
