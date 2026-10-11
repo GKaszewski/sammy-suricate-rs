@@ -6,13 +6,14 @@
 
 use bevy::prelude::*;
 use formats::wmb::Object;
+use sammy_core::health::{BIG_HEART_SPIN, BOOST_AWAY_SHRINK, BOOST_HIDDEN, DeathEvent, HEART_AWAY_SHRINK, HEART_HIDDEN_BELOW, HEART_REGROW, Victim};
 
 use super::pickups::{Collected, GemSprites, PickupPos, Respawnable, Shrinking, SnapToGround};
 use super::player::{Player, State, TICKS};
 use crate::audio::Sfx;
 use crate::camera::FollowState;
 use crate::coords;
-use crate::game::{GameState, ResetScan, MAX_HEARTS, MAX_LIVES};
+use crate::game::{GameState, ResetScan};
 use crate::model::ModelAnimator;
 
 #[derive(Component)]
@@ -21,69 +22,38 @@ pub struct DeathTile;
 #[derive(Component)]
 pub struct LavaTile;
 
-#[derive(Component)]
+/// A small heart ([`sammy_core::health::SmallHeart`]) and its full size.
+#[derive(Component, Deref, DerefMut)]
 pub struct SmallHeart {
-    amount: f32,
+    #[deref]
+    heart: sammy_core::health::SmallHeart,
     scale: Vec3,
-    /// Health was full: hidden for this many ticks, then grows back.
-    away: Option<f32>,
 }
 
-#[derive(Component)]
-pub struct BigHeart {
-    lives: i32,
-}
+#[derive(Component, Deref)]
+pub struct BigHeart(sammy_core::health::BigHeart);
 
-/// Boost pickup (`InitBoost`, mm1.wdl:4315-4464).
-#[derive(Component)]
+/// Boost pickup ([`sammy_core::health::BoostPickup`]) and its full size.
+#[derive(Component, Deref, DerefMut)]
 pub struct BoostPickup {
-    amount: f32,
+    #[deref]
+    boost: sammy_core::health::BoostPickup,
     scale: Vec3,
-    /// Boost was full: hidden for this many ticks, then grows back.
-    away: Option<f32>,
+}
+
+#[derive(Component, Deref, DerefMut)]
+pub struct Checkpoint(sammy_core::health::Checkpoint);
+
+/// Running death/respawn sequence on Sammy ([`sammy_core::health::Dying`]).
+#[derive(Component, Deref, DerefMut)]
+pub struct Dying(sammy_core::health::Dying);
+
+fn wed_scale(obj: &Object) -> Vec3 {
+    Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs()
 }
 
 pub fn init_boost(obj: &Object, entity: &mut EntityCommands) {
-    let amount = if obj.skills[1] == 0.0 { 1.0 } else { obj.skills[1] };
-    entity.insert((BoostPickup { amount, scale: Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs(), away: None }, PickupPos(obj.origin)));
-}
-
-#[derive(Component)]
-pub struct Checkpoint {
-    home: [f32; 3],
-    /// Skill8: Sammy's pan after respawning here.
-    pan: f32,
-    /// Skill2-4 spin speeds (Flag3).
-    spin: Option<[f32; 3]>,
-    angles: [f32; 3],
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum DeathKind {
-    /// Deadly tile: lose a life, fade out, respawn (no death animation).
-    Tile,
-    /// Out of health: death animation, lose a life, blink, respawn.
-    Kaputt,
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Stage {
-    Dying,
-    FadeOut,
-    Blink,
-    FadeIn,
-    GameOver,
-}
-
-/// Running death/respawn sequence on Sammy.
-#[derive(Component)]
-pub struct Dying {
-    kind: DeathKind,
-    stage: Stage,
-    ticks: f32,
-    /// Sammy's opacity in percent (`my.alpha`).
-    alpha: f32,
-    sound_played: bool,
+    entity.insert((BoostPickup { boost: sammy_core::health::BoostPickup::from_object(obj), scale: wed_scale(obj) }, PickupPos(obj.origin)));
 }
 
 pub fn init_tile_death(entity: &mut EntityCommands) {
@@ -95,30 +65,20 @@ pub fn init_lava(entity: &mut EntityCommands) {
 }
 
 pub fn init_small_heart(obj: &Object, entity: &mut EntityCommands) {
-    let amount = if obj.skills[1] == 0.0 { 12.0 } else { obj.skills[1] };
-    let scale = Vec3::new(obj.scale[1], obj.scale[2], obj.scale[0]).abs();
-    entity.insert((SmallHeart { amount, scale, away: None }, PickupPos(obj.origin)));
-    if obj.flags & (1 << 5) == 0 {
+    let heart = sammy_core::health::SmallHeart::from_object(obj);
+    let snap = heart.snap;
+    entity.insert((SmallHeart { heart, scale: wed_scale(obj) }, PickupPos(obj.origin)));
+    if snap {
         entity.insert(SnapToGround);
     }
 }
 
 pub fn init_bonus_vie(obj: &Object, entity: &mut EntityCommands) {
-    entity.insert((BigHeart { lives: obj.skills[1] as i32 }, PickupPos(obj.origin)));
+    entity.insert((BigHeart(sammy_core::health::BigHeart::from_object(obj)), PickupPos(obj.origin)));
 }
 
 pub fn init_restart(obj: &Object, entity: &mut EntityCommands) {
-    let s = &obj.skills;
-    entity.insert((
-        Checkpoint {
-            home: obj.origin,
-            pan: s[7],
-            spin: (obj.flags & (1 << 2) != 0).then_some([s[1], s[2], s[3]]),
-            angles: obj.angles,
-        },
-        PickupPos(obj.origin),
-        Respawnable,
-    ));
+    entity.insert((Checkpoint(sammy_core::health::Checkpoint::from_object(obj)), PickupPos(obj.origin), Respawnable));
 }
 
 /// Records the level spawn as the first respawn point.
@@ -140,18 +100,9 @@ pub fn detect_deaths(
         return;
     }
     let (death, lava) = p.ground_entity.filter(|_| p.grounded && p.vz == 0.0).and_then(|g| tiles.get(g).ok()).unwrap_or_default();
-    if lava {
-        game.hearts -= time.delta_secs() * TICKS; // 1 heart per tick
+    if let Some(kind) = sammy_core::health::check_death(&mut game, death, lava, time.delta_secs() * TICKS) {
+        commands.entity(e).insert(Dying(sammy_core::health::Dying::new(kind)));
     }
-    let kind = if death {
-        DeathKind::Tile
-    } else if game.hearts <= 0.0 {
-        DeathKind::Kaputt
-    } else {
-        return;
-    };
-    game.hearts = game.hearts.max(0.0);
-    commands.entity(e).insert(Dying { kind, stage: Stage::Dying, ticks: 0.0, alpha: 100.0, sound_played: false });
 }
 
 pub fn set_alpha(materials: &mut Assets<StandardMaterial>, mat: &MeshMaterial3d<StandardMaterial>, alpha: f32) {
@@ -174,113 +125,51 @@ pub fn run_death(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut follow: Query<&mut FollowState>,
     mut player: Query<(Entity, &mut Player, &mut Dying, &mut Visibility, &MeshMaterial3d<StandardMaterial>, Option<&mut ModelAnimator>)>,
+    mut events: Local<Vec<DeathEvent>>,
 ) {
     let Ok((e, mut p, mut d, mut vis, mat, mut anim)) = player.single_mut() else { return };
     let t = time.delta_secs() * TICKS;
-    d.ticks += t;
-    match d.stage {
-        Stage::Dying => {
-            if d.ticks == t {
-                // ResetSammy: input off; the held key is dropped unless the goal is reached.
-                p.state = State::Dead;
-                if game.key != 0 && !game.goal_reached {
-                    // EjectNewKey: a decorative gem pops out (fate 0, never collectable).
-                    let key = game.key;
-                    game.key = 0;
-                    let pos = [p.pos[0], p.pos[1], p.pos[2] + 30.0];
-                    let hs = p.vel[0].abs() + p.vel[1].abs();
-                    super::gems::launch_gem(&mut commands, &sprites, &jump, sammy_core::gems::Launch { color: key, pos, pan: p.pan, hspeed: hs, vz: 40.0, fate: sammy_core::gems::Fate::Decorative });
-                }
-                if d.kind == DeathKind::Kaputt
-                    && let Some(a) = anim.as_deref_mut()
-                {
-                    a.play("kaputt", false, 0.0);
-                    a.set_speed_pct(3.0, TICKS);
+    let victim = Victim { pos: p.pos, pan: p.pan, vel: p.vel };
+    events.clear();
+    // Opacity is applied on frames that run a fade stage (not on the frame one starts).
+    let fading = d.fading();
+    d.step(&mut game, anim.as_deref_mut().map(|a| &mut a.anim), victim, t, &mut events);
+    if fading {
+        set_alpha(&mut materials, mat, d.alpha);
+    }
+    for ev in events.drain(..) {
+        match ev {
+            DeathEvent::Started => p.state = State::Dead,
+            DeathEvent::DropKey(l) => super::gems::launch_gem(&mut commands, &sprites, &jump, l),
+            DeathEvent::Sound(s) => sfx.play(s),
+            DeathEvent::CameraLookDown { t } => {
+                for mut f in follow.iter_mut() {
+                    f.tilt_scale = Some(sammy_core::health::look_down(f.tilt_scale.unwrap_or(1.0), t));
                 }
             }
-            let done = match d.kind {
-                DeathKind::Tile => true,
-                DeathKind::Kaputt => {
-                    // Camera_PlusTilt -= Camera_PlusTilt*0.75*time: the camera looks down at Sammy.
+            DeathEvent::GameOver => {
+                for mut f in follow.iter_mut() {
+                    f.tilt_scale = Some(0.0);
+                    f.orbit = true;
+                }
+            }
+            DeathEvent::Respawn(at) => {
+                reset.write(ResetScan);
+                if let Some((pos, pan)) = at {
+                    p.teleport(pos, pan);
+                    let snap = sammy_core::platforms::CAMERA_SNAP;
                     for mut f in follow.iter_mut() {
-                        let k = f.tilt_scale.unwrap_or(1.0);
-                        f.tilt_scale = Some((k - k * 0.75 * t).max(0.0));
+                        f.snap_to([pos[0] + snap[0], pos[1] + snap[1], pos[2] + snap[2]]);
                     }
-                    if d.ticks >= 8.0 && !d.sound_played {
-                        sfx.play("Kaputt_son");
-                        d.sound_played = true;
-                    }
-                    d.ticks >= 64.0 || anim.as_deref().is_some_and(|a| a.finished())
                 }
-            };
-            if done {
-                game.lives -= 1;
-                d.ticks = 0.0;
-                d.stage = if game.lives <= 0 {
-                    game.lost = true;
-                    for mut f in follow.iter_mut() {
-                        f.tilt_scale = Some(0.0);
-                        f.orbit = true;
-                    }
-                    if let Some(a) = anim.as_deref_mut() {
-                        a.play("finkaputt", true, 0.0);
-                        a.set_speed_pct(2.0, TICKS);
-                    }
-                    Stage::GameOver
-                } else if d.kind == DeathKind::Tile {
-                    Stage::FadeOut
-                } else {
-                    Stage::Blink
-                };
             }
-        }
-        Stage::FadeOut => {
-            d.alpha = (d.alpha - 2.0 * t).max(0.0);
-            set_alpha(&mut materials, mat, d.alpha);
-            if d.alpha <= 0.0 {
-                d.stage = respawn(&mut p, &mut d, &mut game, &mut reset, &mut follow);
-            }
-        }
-        Stage::Blink => {
-            // ~46 ticks of invisible/visible flicker, faster towards the end.
-            let period = if d.ticks < 16.0 { 4.0 } else if d.ticks < 30.0 { 3.0 } else { 2.0 };
-            *vis = if (d.ticks / period) as i32 % 2 == 0 { Visibility::Hidden } else { Visibility::Inherited };
-            if d.ticks >= 46.0 {
-                *vis = Visibility::Inherited;
-                d.alpha = 0.0;
-                d.stage = respawn(&mut p, &mut d, &mut game, &mut reset, &mut follow);
-            }
-        }
-        Stage::FadeIn => {
-            d.alpha = (d.alpha + 10.0 * t).min(100.0);
-            set_alpha(&mut materials, mat, d.alpha);
-            if d.alpha >= 100.0 {
+            DeathEvent::Visible(v) => *vis = if v { Visibility::Inherited } else { Visibility::Hidden },
+            DeathEvent::Finished => {
                 p.state = State::Stand;
                 commands.entity(e).remove::<Dying>();
             }
         }
-        Stage::GameOver => {}
     }
-}
-
-/// `RestartSammy`: reset scan, full health, back to the respawn point, fade in.
-fn respawn(
-    p: &mut Player,
-    d: &mut Dying,
-    game: &mut GameState,
-    reset: &mut MessageWriter<ResetScan>,
-    follow: &mut Query<&mut FollowState>,
-) -> Stage {
-    reset.write(ResetScan);
-    game.hearts = MAX_HEARTS;
-    if let Some((pos, pan)) = game.start {
-        p.teleport(pos, pan);
-        for mut f in follow.iter_mut() {
-            f.snap_to([pos[0] + 32.0, pos[1] + 32.0, pos[2] + 150.0]);
-        }
-    }
-    d.ticks = 0.0;
-    Stage::FadeIn
 }
 
 #[allow(clippy::type_complexity)]
@@ -299,26 +188,23 @@ pub fn collect_health(
     if p.state == State::Dead {
         return;
     }
-    let near = |q: &[f32; 3]| (0..3).map(|i| (q[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt() <= p.scan_radius;
+    let near = |q: &[f32; 3]| sammy_core::pickups::in_scan(p.pos, p.scan_radius, *q);
 
     for (e, pos, mut heart) in &mut hearts {
         if heart.away.is_some() || !near(&pos.0) {
             continue;
         }
-        if game.hearts >= MAX_HEARTS {
-            heart.away = Some(48.0); // full: duck away and come back
-            continue;
+        if !sammy_core::health::take_small_heart(&mut heart, &mut game) {
+            continue; // full: duck away and come back
         }
         sfx.play("Gagne1");
         sfx.play("Chimes2");
         let at = pos.0;
         crate::effects::queue(&mut commands, move |ps| crate::effects::small_heart(ps, at));
-        game.hearts = (game.hearts + heart.amount).min(MAX_HEARTS);
         commands.entity(e).insert(Shrinking);
     }
     for (e, pos, b) in &big {
-        if game.lives < MAX_LIVES && near(&pos.0) {
-            game.lives = (game.lives + b.lives).min(MAX_LIVES);
+        if near(&pos.0) && sammy_core::health::take_big_heart(b, &mut game) {
             sfx.play("Getlife_son");
             // One `particle_Getlife` every 2 ticks while the light shrinks (mm1.wdl:2696-2706).
             let at = pos.0;
@@ -332,11 +218,11 @@ pub fn collect_health(
     }
     for (e, pos, mut b, mut tf, mut vis) in &mut boosts {
         if let Some(left) = b.away {
-            // Ducked away because boost was full: shrink, hide 64 ticks, grow back.
+            // Ducked away because boost was full: shrink, hide, grow back.
             let t = time.delta_secs() * TICKS;
             let left = left - t;
-            if left > 64.0 {
-                tf.scale *= 0.9f32.powf(t);
+            if left > BOOST_HIDDEN {
+                tf.scale *= BOOST_AWAY_SHRINK.powf(t);
             } else {
                 *vis = Visibility::Hidden;
             }
@@ -349,22 +235,16 @@ pub fn collect_health(
             }
             continue;
         }
-        if !near(&pos.0) {
+        if !near(&pos.0) || !sammy_core::health::take_boost(&mut b, &mut game) {
             continue;
         }
-        if game.boost <= 0.0 {
-            b.away = Some(64.0 + 40.0);
-            continue;
-        }
-        game.boost = (game.boost - b.amount).max(0.0);
         sfx.play("chimes2");
         commands.entity(e).insert((Shrinking, crate::lights::flash([150.0, 50.0, 100.0], 200.0, 10.0, 64.0)));
     }
     for (e, pos, c) in &checkpoints {
         if near(&pos.0) {
             sfx.play("Restart_Son");
-            game.start = Some(([c.home[0], c.home[1], c.home[2] + 150.0], c.pan));
-            game.checkpoint = true;
+            sammy_core::health::take_checkpoint(c, &mut game);
             commands.entity(e).insert(Shrinking);
         }
     }
@@ -377,14 +257,14 @@ pub fn animate_hearts(time: Res<Time>, mut q: Query<(&mut SmallHeart, &mut Trans
         let Some(left) = h.away else { continue };
         let left = left - t;
         if left > 0.0 {
-            tf.scale *= 0.8f32.powf(t);
-            if tf.scale.x < 0.1 {
+            tf.scale *= HEART_AWAY_SHRINK.powf(t);
+            if tf.scale.x < HEART_HIDDEN_BELOW {
                 *vis = Visibility::Hidden;
             }
             h.away = Some(left);
         } else {
             *vis = Visibility::Inherited;
-            tf.scale = (tf.scale.max(Vec3::splat(0.1)) * 1.5f32.powf(t)).min(h.scale);
+            tf.scale = (tf.scale.max(Vec3::splat(HEART_HIDDEN_BELOW)) * HEART_REGROW.powf(t)).min(h.scale);
             if tf.scale.x >= h.scale.x {
                 h.away = None;
             }
@@ -392,7 +272,7 @@ pub fn animate_hearts(time: Res<Time>, mut q: Query<(&mut SmallHeart, &mut Trans
     }
 }
 
-/// Big hearts spin 10°/tick; checkpoints spin when Flag3 is set.
+/// Big hearts spin; checkpoints spin when Flag3 is set.
 pub fn spin_pickups(
     time: Res<Time>,
     mut hearts: Query<(&mut Transform, &PickupPos), (With<BigHeart>, Without<Checkpoint>)>,
@@ -400,7 +280,7 @@ pub fn spin_pickups(
 ) {
     let t = time.delta_secs() * TICKS;
     for (mut tf, _) in &mut hearts {
-        tf.rotate_y((10.0 * t).to_radians());
+        tf.rotate_y((BIG_HEART_SPIN * t).to_radians());
     }
     for (mut tf, mut c) in &mut checkpoints {
         if let Some(spin) = c.spin {
