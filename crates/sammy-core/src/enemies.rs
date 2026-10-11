@@ -290,7 +290,7 @@ impl Enemy {
         let d = self.dist.max(1.0);
         let calm = |e: &Enemy| {
             let skin = if d < e.attack_range + (e.react_range - e.attack_range) * 0.5 { 2 } else { 1 };
-            (skin, (100.0 / (e.attack_range / d)).min(99.0).max(60.0), e.attack_range)
+            (skin, (100.0 / (e.attack_range / d)).clamp(60.0, 99.0), e.attack_range)
         };
         if display_mode > 1.0 {
             return Some(if self.etat == 2 { self.chase_ring(d) } else { calm(self) });
@@ -313,7 +313,7 @@ impl Enemy {
                 radius = d + 128.0;
             }
         }
-        (skin, (100.0 / (radius / d)).min(99.0).max(55.0), radius)
+        (skin, (100.0 / (radius / d)).clamp(55.0, 99.0), radius)
     }
 
     pub fn alive(&self) -> bool {
@@ -709,8 +709,8 @@ pub fn tick(e: &mut Enemy, me: Id, anim: &mut Anim, model: &Mdl, player: Option<
         }
         // Moving platforms carry the lion (`LionForce` = platform motion).
         if let Some((_, d)) = w.platforms.iter().find(|(id, _)| *id == fe) {
-            for i in 0..3 {
-                e.pos[i] += d[i];
+            for (p, d) in e.pos.iter_mut().zip(d) {
+                *p += d;
             }
         }
     }
@@ -1242,8 +1242,8 @@ fn handle_speed(e: &mut Enemy, ctx: &mut Ctx<'_>) {
 
     // Muzzle wall probe (:1122-1162): 32 quants ahead of the head vertex.
     e.muzzle = None;
-    if e.head_vertex != 0 && ctx.g.dist_muzzle != 0.0 {
-        if let Some(head) = head_pos(e, ctx.head_local) {
+    if e.head_vertex != 0 && ctx.g.dist_muzzle != 0.0
+        && let Some(head) = head_pos(e, ctx.head_local) {
             e.muzzle = Some(head);
             let f = forward(e.pan, e.tilt);
             let tip = [0, 1, 2].map(|i| head[i] + f[i] * ctx.g.dist_muzzle);
@@ -1257,7 +1257,6 @@ fn handle_speed(e: &mut Enemy, ctx: &mut Ctx<'_>) {
                 on_block(e, ctx, tr.trace.normal);
             }
         }
-    }
 
     // Knockback channel (:1164-1204), decaying linearly (AverageFps reference 50).
     if e.bounce != [0.0; 3] {

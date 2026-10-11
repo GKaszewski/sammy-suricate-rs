@@ -253,8 +253,8 @@ pub fn logo_tick(l: &mut Logo, fog: &mut f32) {
 /// menu pose; true once within 2 quants in X and Z (then snap exactly).
 pub fn glide(pos: &mut [f32; 3], pan: &mut f32, tilt: &mut f32, to: ([f32; 3], f32, f32), t: f32) -> bool {
     let k = (GLIDE_RATE * t).min(1.0);
-    for i in 0..3 {
-        pos[i] += (to.0[i] - pos[i]) * k;
+    for (p, to) in pos.iter_mut().zip(to.0) {
+        *p += (to - *p) * k;
     }
     *pan += ang(to.1 - *pan) * k;
     *tilt += (to.2 - *tilt) * k;

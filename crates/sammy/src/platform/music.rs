@@ -59,7 +59,7 @@ impl Iterator for MidiDecoder {
             self.pos = 0;
         }
         let i = self.pos / 2;
-        let s = if self.pos % 2 == 0 { self.left[i] } else { self.right[i] };
+        let s = if self.pos.is_multiple_of(2) { self.left[i] } else { self.right[i] };
         self.pos += 1;
         Some(s)
     }

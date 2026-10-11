@@ -217,9 +217,9 @@ impl SaveGame {
             s.best_scores[i] = *v as i32;
         }
         let (xs, ys, zs) = (best.array(ids::RESTART_X), best.array(ids::RESTART_Y), best.array(ids::RESTART_Z));
-        for i in 0..NBR_LEVELS.min(xs.len()) {
-            if xs[i] != 0.0 {
-                s.checkpoints[i] = Some([xs[i], ys.get(i).copied().unwrap_or(0.0), zs.get(i).copied().unwrap_or(0.0)]);
+        for (i, &x) in xs.iter().enumerate().take(NBR_LEVELS) {
+            if x != 0.0 {
+                s.checkpoints[i] = Some([x, ys.get(i).copied().unwrap_or(0.0), zs.get(i).copied().unwrap_or(0.0)]);
             }
         }
         let skill = |n: &str| best.skill(n).unwrap_or(0.0);

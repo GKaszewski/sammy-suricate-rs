@@ -51,7 +51,7 @@ const UNSIGNED_INT: u32 = 5125;
 
 impl Glb {
     fn push_view(&mut self, bytes: &[u8], target: Option<u32>) -> usize {
-        while self.bin.len() % 4 != 0 {
+        while !self.bin.len().is_multiple_of(4) {
             self.bin.push(0);
         }
         let mut view = json!({ "buffer": 0, "byteOffset": self.bin.len(), "byteLength": bytes.len() });
@@ -235,7 +235,7 @@ impl Glb {
             json_bytes.push(b' ');
         }
         let mut bin = self.bin;
-        while bin.len() % 4 != 0 {
+        while !bin.len().is_multiple_of(4) {
             bin.push(0);
         }
         let total = 12 + 8 + json_bytes.len() + 8 + bin.len();

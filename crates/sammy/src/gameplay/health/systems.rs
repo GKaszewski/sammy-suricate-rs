@@ -203,8 +203,8 @@ pub fn spin_pickups(
     }
     for (mut tf, mut c) in &mut checkpoints {
         if let Some(spin) = c.spin {
-            for i in 0..3 {
-                c.angles[i] += spin[i] * t;
+            for (a, s) in c.angles.iter_mut().zip(spin) {
+                *a += s * t;
             }
             tf.rotation = coords::rotation(c.angles);
         }

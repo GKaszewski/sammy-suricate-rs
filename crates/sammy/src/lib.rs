@@ -1,5 +1,7 @@
 //! Sammy Suricate on Bevy: the frontend for [`sammy_core`] (rendering, audio, input,
 //! windows, UI) and the feature plugins that drive the core rules each frame.
+// Bevy systems take their parameters (queries, resources) as arguments.
+#![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 pub mod camera;
 pub mod flow;
@@ -87,8 +89,8 @@ impl PluginGroup for SammyPlugins {
             .add(ui::options::OptionsPlugin);
         #[cfg(feature = "music")]
         let g = g.add(platform::music::MusicPlugin);
-        let g = g.add(ui::intro::IntroPlugin).add(platform::input::InputPlugin).add(platform::display::DisplayPlugin);
-        g
+        
+        g.add(ui::intro::IntroPlugin).add(platform::input::InputPlugin).add(platform::display::DisplayPlugin)
     }
 }
 

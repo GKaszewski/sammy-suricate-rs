@@ -256,7 +256,7 @@ impl Dying {
                     self.stage = if game.lives <= 0 {
                         game.lost = true;
                         out.push(DeathEvent::GameOver);
-                        if let Some(a) = anim.as_deref_mut() {
+                        if let Some(a) = anim {
                             a.play("finkaputt", true, 0.0);
                             a.set_speed_pct(FINKAPUTT_ANIM_SPEED, TICKS_PER_SEC);
                         }

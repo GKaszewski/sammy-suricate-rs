@@ -46,8 +46,8 @@ impl EyePickup {
     /// Spins; true if it has a spin.
     pub fn spin(&mut self, t: f32) -> bool {
         let Some(spin) = self.spin else { return false };
-        for i in 0..3 {
-            self.angles[i] += spin[i] * t;
+        for (a, s) in self.angles.iter_mut().zip(spin) {
+            *a += s * t;
         }
         true
     }

@@ -407,10 +407,10 @@ impl Player {
         {
             let force = [n[0] * tuning.force_pente, n[1] * tuning.force_pente, SLOPE_DOWN_FORCE];
             let v2 = 1.0 - n[2];
-            for i in 0..3 {
-                self.pente[i] += tuning.acc_pente * force[i].signum() * v2;
-                if self.pente[i].abs() > force[i].abs() {
-                    self.pente[i] = force[i];
+            for (p, f) in self.pente.iter_mut().zip(force) {
+                *p += tuning.acc_pente * f.signum() * v2;
+                if p.abs() > f.abs() {
+                    *p = f;
                 }
             }
             if self.pente[0].abs() > LEAN_MIN_SLIDE || self.pente[1].abs() > LEAN_MIN_SLIDE {
@@ -576,7 +576,7 @@ impl Player {
             }
             self.state = next;
         }
-        if let Some(a) = anim.as_deref_mut() {
+        if let Some(a) = anim {
             match self.state {
                 State::Air => a.set_speed_pct(ANIM_JUMP, TICKS_PER_SEC),
                 State::Land => {
