@@ -71,19 +71,13 @@ fn segment_box(start: [f32; 3], end: [f32; 3], min: [f32; 3], max: [f32; 3]) -> 
             continue;
         }
         let (mut t0, mut t1) = ((min[i] - start[i]) / d, (max[i] - start[i]) / d);
-        let mut n = -d.signum();
         if t0 > t1 {
             std::mem::swap(&mut t0, &mut t1);
         }
         if t0 > t_in {
             t_in = t0;
             normal = [0.0; 3];
-            if d > 0.0 {
-                n = -1.0;
-            } else {
-                n = 1.0;
-            }
-            normal[i] = n;
+            normal[i] = -d.signum(); // entering face points against the motion
         }
         t_out = t_out.min(t1);
         if t_in > t_out {
