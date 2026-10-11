@@ -134,7 +134,7 @@ pub(super) fn lifetimes(sim: &mut Sim, dt: Dt) {
     for (id, at, color) in burst {
         sim.world.despawn(id);
         sim.sound("broken4"); // GemExplose
-        sim.effect(Effect::GemExplode { at, color: color });
+        sim.effect(Effect::GemExplode { at, color });
     }
 }
 

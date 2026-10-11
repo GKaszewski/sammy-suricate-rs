@@ -56,7 +56,7 @@ pub(super) fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
 
 impl DoorGem {
     pub fn new(color: KeyColor, sammy: [f32; 3]) -> Self {
-        Self { color: color, pos: [sammy[0], sammy[1], sammy[2] + DOOR_GEM_START], phase: DoorGemPhase::Approach, timer: APPROACH_TICKS }
+        Self { color, pos: [sammy[0], sammy[1], sammy[2] + DOOR_GEM_START], phase: DoorGemPhase::Approach, timer: APPROACH_TICKS }
     }
 
     /// One frame: `Some(true)` arrived (validate the door), `Some(false)` back with Sammy
