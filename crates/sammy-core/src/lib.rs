@@ -9,6 +9,7 @@
 pub mod angle;
 pub mod anim;
 pub mod collision;
+pub mod doors;
 pub mod game;
 pub mod levels;
 pub mod rng;

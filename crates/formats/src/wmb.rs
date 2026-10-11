@@ -262,6 +262,18 @@ pub struct Object {
     pub string2: Option<String>,
 }
 
+impl Object {
+    /// WDL `SkillN`, 1-based (0 when the entity has fewer skills).
+    pub fn skill(&self, n: usize) -> f32 {
+        self.skills.get(n.wrapping_sub(1)).copied().unwrap_or(0.0)
+    }
+
+    /// WDL `FlagN`, 1-based (1..=8).
+    pub fn flag(&self, n: u32) -> bool {
+        (1..=8).contains(&n) && self.flags & (1 << (n - 1)) != 0
+    }
+}
+
 impl Entity {
     pub fn kind(&self) -> u32 {
         match self {
