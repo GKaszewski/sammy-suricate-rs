@@ -12,6 +12,7 @@ use crate::id::Id;
 use crate::keys::{KeyOutcome, MASTER_KEY, light_color, take_key};
 use crate::pickups::{KeySpec, NARROW_FLOOR_OFFSET, SHRINK_GONE, SHRINK_PER_TICK, SNAP_START, in_scan};
 use crate::player::State;
+use crate::points::Points;
 
 mod collect;
 mod keys;
@@ -27,7 +28,7 @@ const FLOOR_PROBE: f32 = 2000.0;
 
 impl Sim {
     /// `AddPoints`, playing `ScoreReach_son` when the goal is reached.
-    pub(super) fn add_points(&mut self, points: i32) {
+    pub(super) fn add_points(&mut self, points: Points) {
         if self.game.add_points(points) {
             self.sound("ScoreReach_son");
         }

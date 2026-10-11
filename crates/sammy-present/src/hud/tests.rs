@@ -1,8 +1,9 @@
 use super::*;
+use sammy_core::points::Points;
 
 #[test]
 fn digits_are_right_aligned_without_leading_zeros() {
-    let game = GameState { score: 42, goal: 540, ..Default::default() };
+    let game = GameState { score: Points(42), goal: Points(540), ..Default::default() };
     let q = Hud::default().quads(&game, [W, H], |_| [10.0, 20.0]);
     let score: Vec<&Quad> = q.iter().filter(|q| q.image == "boink24.pcx").collect();
     assert_eq!(score.len(), 2);

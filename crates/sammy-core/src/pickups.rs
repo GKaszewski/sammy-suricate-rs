@@ -4,13 +4,14 @@
 
 use formats::wmb::Object;
 use crate::keys::KeyColor;
+use crate::points::Points;
 
 /// A picked-up item shrinks ×0.8 per tick (`ScaleDownGem`) ...
 pub const SHRINK_PER_TICK: f32 = 0.8;
 /// ... and is gone below this scale.
 pub const SHRINK_GONE: f32 = 0.05;
 /// Diamonds worth these points also fly a "+50" / "+100" popup.
-pub const POPUP_POINTS: [i32; 2] = [50, 100];
+pub const POPUP_POINTS: [Points; 2] = [Points(50), Points(100)];
 /// Ground snapping traces start this far above an item and use the narrow hull, whose
 /// floor contact is 16 quants above the real floor.
 pub const SNAP_START: f32 = 8.0;
@@ -20,14 +21,14 @@ pub const NARROW_FLOOR_OFFSET: f32 = 16.0;
 #[derive(Clone, Copy, Debug)]
 pub struct Diamond {
     /// Skill2.
-    pub points: i32,
+    pub points: Points,
     /// Snap to the floor + `HeightGem` (Flag6 keeps the WED height).
     pub snap: bool,
 }
 
 impl Diamond {
     pub fn from_object(obj: &Object) -> Self {
-        Self { points: obj.skill(2) as i32, snap: !obj.flag(6) }
+        Self { points: Points(obj.skill(2) as i32), snap: !obj.flag(6) }
     }
 
     pub fn has_popup(&self) -> bool {

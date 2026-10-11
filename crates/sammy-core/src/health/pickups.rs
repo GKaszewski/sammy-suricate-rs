@@ -84,7 +84,7 @@ pub fn take_big_heart(heart: &BigHeart, game: &mut GameState) -> bool {
     if game.lives >= MAX_LIVES {
         return false;
     }
-    game.lives = (game.lives + heart.lives).min(MAX_LIVES);
+    game.lives = game.lives.gain(heart.lives);
     true
 }
 

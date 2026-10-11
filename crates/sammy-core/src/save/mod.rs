@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::levels::{FIRST_OF_WORLD, LAST_OF_WORLD, LEVELS, LevelSlot, NBR_LEVELS};
 use crate::percent::Percent;
+use crate::points::Points;
 
 mod display;
 mod level_state;
@@ -19,7 +20,7 @@ pub struct SaveGame {
     /// `LevelsInfo[0..50]`.
     pub level_state: Vec<LevelState>,
     /// `BestScores`.
-    pub best_scores: Vec<i32>,
+    pub best_scores: Vec<Points>,
     /// `Player1RestartX/Y/Z`: checkpoint to start from (A4 coords).
     pub checkpoints: Vec<Option<[f32; 3]>>,
     /// `LevelEnCours`: the level "Play" resumes.
@@ -60,7 +61,7 @@ impl Default for SaveGame {
         Self {
             version: 1,
             level_state,
-            best_scores: vec![0; NBR_LEVELS],
+            best_scores: vec![Points::ZERO; NBR_LEVELS],
             checkpoints: vec![None; NBR_LEVELS],
             last_level: FIRST_OF_WORLD[0],
             previous_level: LevelSlot::default(),
@@ -101,7 +102,7 @@ impl SaveGame {
 
     /// End of a game (mm1.wdl:972-997): checkpoint (`StoreCurrentSkills`), best score,
     /// and on a win the level and the next one become playable.
-    pub fn record_game(&mut self, slot: LevelSlot, score: i32, checkpoint: Option<[f32; 3]>, won: bool, next: Option<LevelSlot>) {
+    pub fn record_game(&mut self, slot: LevelSlot, score: Points, checkpoint: Option<[f32; 3]>, won: bool, next: Option<LevelSlot>) {
         let i = slot.index();
         if i >= NBR_LEVELS {
             return;
@@ -124,7 +125,7 @@ impl SaveGame {
     /// Pads the per-level arrays of an older or hand-edited save.
     pub fn fix_lengths(&mut self) {
         self.level_state.resize(NBR_LEVELS, LevelState::Absent);
-        self.best_scores.resize(NBR_LEVELS, 0);
+        self.best_scores.resize(NBR_LEVELS, Points::ZERO);
         self.checkpoints.resize(NBR_LEVELS, None);
     }
 
@@ -149,7 +150,7 @@ impl SaveGame {
             }
         }
         for (i, v) in best.array(ids::BEST_SCORES).iter().enumerate().take(NBR_LEVELS) {
-            s.best_scores[i] = *v as i32;
+            s.best_scores[i] = Points(*v as i32);
         }
         let (xs, ys, zs) = (best.array(ids::RESTART_X), best.array(ids::RESTART_Y), best.array(ids::RESTART_Z));
         for (i, &x) in xs.iter().enumerate().take(NBR_LEVELS) {

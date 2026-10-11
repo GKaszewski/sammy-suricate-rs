@@ -9,6 +9,7 @@ use sammy_core::flow::Phase;
 use sammy_core::sim::{Event, Sim};
 
 use crate::particles::Particles;
+use sammy_core::points::Points;
 
 mod advance;
 mod draw;
@@ -39,7 +40,7 @@ const CALL_END_SCALE: f32 = 5.0;
 /// `Bonus3_Hit` popups: points → (sprite, life in ticks). The popup starts `POPUP_LIFT`
 /// above the pickup, flies at `POPUP_SPEED` per tick toward the camera tilted up by
 /// `POPUP_TILT_DEG` (`InvDirCamera`), and plays its strip at this many frames per tick.
-const POPUPS: [(i32, &str, f32); 2] = [(50, "plus50+6.pcx", 32.0), (100, "plu100+2.pcx", 48.0)];
+const POPUPS: [(Points, &str, f32); 2] = [(Points(50), "plus50+6.pcx", 32.0), (Points(100), "plu100+2.pcx", 48.0)];
 const POPUP_LIFT: f32 = 32.0;
 const POPUP_SPEED: f32 = 40.0;
 const POPUP_TILT_DEG: f32 = 20.0;

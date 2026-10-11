@@ -29,6 +29,7 @@ pub mod menu;
 pub mod physics;
 pub mod percent;
 pub mod pickups;
+pub mod points;
 pub mod platforms;
 pub mod player;
 pub mod rng;

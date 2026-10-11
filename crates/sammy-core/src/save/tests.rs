@@ -4,10 +4,10 @@ use super::*;
 fn win_unlocks_next_and_keeps_best() {
     let mut s = SaveGame::default();
     assert!(s.playable(LevelSlot(1)) && !s.playable(LevelSlot(2)) && s.playable(LevelSlot(17)));
-    s.record_game(LevelSlot(1), 300, None, true, Some(LevelSlot(2)));
-    s.record_game(LevelSlot(1), 100, Some([1.0, 2.0, 3.0]), false, None);
+    s.record_game(LevelSlot(1), Points(300), None, true, Some(LevelSlot(2)));
+    s.record_game(LevelSlot(1), Points(100), Some([1.0, 2.0, 3.0]), false, None);
     assert!(s.playable(LevelSlot(2)));
-    assert_eq!(s.best_scores[1], 300);
+    assert_eq!(s.best_scores[1], Points(300));
     assert_eq!(s.checkpoints[1], Some([1.0, 2.0, 3.0]));
     assert_eq!(s.last_level, LevelSlot(1));
     // Registered: 21 opens with 20.

@@ -3,6 +3,7 @@
 
 use crate::space::Pos;
 use crate::keys::KeyColor;
+use crate::points::Points;
 
 /// A particle effect at a native position (docs/particles.md).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,7 +36,7 @@ pub enum Event {
     Sound(&'static str),
     Effect(Effect),
     /// Diamond score popup (`+50` / `+100`) at a pickup.
-    Popup { at: Pos, points: i32 },
+    Popup { at: Pos, points: Points },
     /// A lion called its friends: three expanding rings at this position.
     CallRings { at: Pos },
     /// The save changed (write it out).

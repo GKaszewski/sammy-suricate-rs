@@ -39,7 +39,7 @@ pub fn options() -> DebugOptions {
         }),
         // SAMMY_KEY=<colour> starts with a key (255 = master).
         key: var("SAMMY_KEY").and_then(|v| v.parse().ok()),
-        lives: num("SAMMY_LIVES").map(|l| l as i32),
+        lives: num("SAMMY_LIVES").map(|l| sammy_core::game::Lives(l as i32)),
         hearts: num("SAMMY_HEARTS"),
         eye: var("SAMMY_EYE").is_some(),
         // SAMMY_AMMO=count,type

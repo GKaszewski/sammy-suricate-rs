@@ -7,7 +7,7 @@ pub struct DebugOptions {
     pub start: Option<([f32; 3], Option<f32>)>,
     /// Starting key colour (255 = master).
     pub key: Option<u32>,
-    pub lives: Option<i32>,
+    pub lives: Option<crate::game::Lives>,
     pub hearts: Option<f32>,
     /// Eye of Truth for the whole level.
     pub eye: bool,

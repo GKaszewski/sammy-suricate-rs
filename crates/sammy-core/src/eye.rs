@@ -85,9 +85,8 @@ impl EyePickup {
 
 /// The Eye's effect wears off; dying (`Player_Kaputt`) ends it at once.
 pub fn wear_off(game: &mut GameState, sammy_dead: bool, t: Ticks) {
-    let t = t.get();
     if sammy_dead {
-        game.eye_ticks = 0.0;
+        game.eye_ticks = Ticks::ZERO;
     }
-    game.eye_ticks = (game.eye_ticks - t).max(0.0);
+    game.eye_ticks = (game.eye_ticks - t).max(Ticks::ZERO);
 }

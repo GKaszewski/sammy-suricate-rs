@@ -3,6 +3,7 @@
 use super::*;
 use crate::time::Ticks;
 use crate::keys::KeyColor;
+use crate::game::Lives;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Stage {
@@ -131,9 +132,9 @@ impl Dying {
                     }
                 };
                 if done {
-                    game.lives -= 1;
+                    game.lives = game.lives.lose_one();
                     self.ticks = 0.0;
-                    self.stage = if game.lives <= 0 {
+                    self.stage = if game.lives <= Lives::NONE {
                         game.lost = true;
                         out.push(DeathEvent::GameOver);
                         if let Some(a) = anim {

@@ -13,12 +13,14 @@ use crate::physics::JumpParams;
 use crate::player::PlayerTuning;
 use crate::levels::LevelSlot;
 use crate::keys::KeyColor;
+use crate::time::Ticks;
+use crate::game::Lives;
 
 /// Level 10 hard-codes 4 lives (Loads.wdl:80).
 const FIXED_LIVES_SLOT: LevelSlot = LevelSlot(10);
-const FIXED_LIVES: i32 = 4;
+const FIXED_LIVES: Lives = Lives(4);
 /// Debug eye: Eye of Truth ticks for the whole level.
-const DEBUG_EYE_TICKS: f32 = 1.0e9;
+const DEBUG_EYE_TICKS: Ticks = Ticks(1.0e9);
 /// Poison per ammo type 1..7 for the debug ammo override.
 const AMMO_POISON: [f32; 7] = [3.0, 2.0, 1.0, 1.0, 4.0, 6.0, 1.0];
 
@@ -117,7 +119,7 @@ impl Sim {
 
     /// `OuiRestartLevel`: no lives left → the lose screen, then the same level again.
     pub fn give_up(&mut self) {
-        self.game.lives = 0;
+        self.game.lives = Lives::NONE;
         self.game.lost = true;
     }
 }

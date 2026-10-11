@@ -151,7 +151,7 @@ impl Hud {
             image("panboost.pcx", Anchor::BottomLeft, BOOST_DINO, None, 1.0);
         }
         // Digits: lives (tens, ones), score, goal (flashing in boink20), ammo.
-        let lives = game.lives.clamp(0, MAX_LIVES) as u64;
+        let lives = game.lives.get().clamp(0, MAX_LIVES.get()) as u64;
         let flash = game.warn_score > WARN_FLASH_TICKS;
         let mut digits = |font: &'static str, anchor: Anchor, (x, y): (f32, f32), n: u32, value: u64| {
             let [cw, ch] = cell(font);
@@ -167,11 +167,11 @@ impl Hud {
         };
         digits("boink22.pcx", Anchor::TopLeft, LIVES_TENS_POS, 1, lives / 10);
         digits("boink22.pcx", Anchor::TopLeft, LIVES_ONES_POS, 1, lives % 10);
-        digits("boink24.pcx", Anchor::TopRight, SCORE_POS, SCORE_DIGITS, game.score.max(0) as u64);
+        digits("boink24.pcx", Anchor::TopRight, SCORE_POS, SCORE_DIGITS, game.score.get().max(0) as u64);
         if flash {
-            digits("boink20.pcx", Anchor::TopRight, GOAL_FLASH_POS, SCORE_DIGITS, game.goal.max(0) as u64);
+            digits("boink20.pcx", Anchor::TopRight, GOAL_FLASH_POS, SCORE_DIGITS, game.goal.get().max(0) as u64);
         } else {
-            digits("lucidd14.pcx", Anchor::TopRight, GOAL_POS, SCORE_DIGITS, game.goal.max(0) as u64);
+            digits("lucidd14.pcx", Anchor::TopRight, GOAL_POS, SCORE_DIGITS, game.goal.get().max(0) as u64);
         }
         if game.ammo > 0 {
             digits("boink22.pcx", Anchor::BottomRight, AMMO_POS, SCORE_DIGITS, game.ammo as u64);

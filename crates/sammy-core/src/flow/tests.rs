@@ -1,4 +1,5 @@
 use super::*;
+use crate::points::Points;
 
 #[test]
 fn wins_route_to_next_menu_or_extro() {
@@ -14,7 +15,7 @@ fn wins_route_to_next_menu_or_extro() {
 fn a_win_is_recorded_once() {
     let mut save = SaveGame::default();
     let mut f = LevelFlow { slot: Some(LevelSlot(1)), file: "10001.wmb".into(), phase: Phase::Playing, intro_ticks: 0.0 };
-    let game = GameState { won: true, score: 500, ..Default::default() };
+    let game = GameState { won: true, score: Points(500), ..Default::default() };
     assert!(f.step(FlowInput { t: Ticks(1.0), ..Default::default() }, &game, &mut save).saved);
     assert_eq!(f.phase, Phase::Won(0.0));
     assert!(save.playable(LevelSlot(2)));
