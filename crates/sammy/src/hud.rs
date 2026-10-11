@@ -88,7 +88,7 @@ fn update(
     }
     if let Ok((mut t, mut c)) = key.single_mut() {
         let (name, color) = key_name(game.key);
-        t.0 = format!("key: {name}   lives: {}   health: {}", game.lives, game.hearts.ceil() as i32);
+        t.0 = format!("key: {name}   lives: {}   health: {}   wasps: {}", game.lives, game.hearts.ceil() as i32, game.ammo);
         c.0 = color;
     }
     if let Ok(mut t) = banner.single_mut() {

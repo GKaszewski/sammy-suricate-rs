@@ -8,6 +8,7 @@ pub mod pickups;
 pub mod platform;
 pub mod player;
 pub mod title;
+pub mod wasp;
 
 use bevy::prelude::*;
 use formats::wmb::Object;
@@ -25,6 +26,7 @@ impl Plugin for ActionsPlugin {
             .init_resource::<crate::game::Rng>()
             .init_resource::<pickups::GemSprites>()
             .add_message::<crate::game::ResetScan>()
+            .add_message::<wasp::WaspHit>()
             .add_systems(
                 Update,
                 (
@@ -45,6 +47,15 @@ impl Plugin for ActionsPlugin {
                         platform::enter_teleports.run_if(is_playing),
                     ),
                     platform::run_teleports,
+                    (
+                        wasp::collect_ammo.run_if(is_playing),
+                        wasp::fire,
+                        wasp::spin_pickups,
+                        wasp::fly_wasps,
+                        wasp::update_weak_doors,
+                        wasp::fly_planks,
+                    )
+                        .chain(),
                     (health::run_death, pickups::reset_keys, health::reset_checkpoints, health::animate_hearts, health::spin_pickups),
                     title::update_titles,
                 )
@@ -65,6 +76,10 @@ pub struct ActionInit {
     pub title: bool,
     /// Invisible logic entity that still runs (platform engines).
     pub hidden_but_alive: bool,
+    /// Model skin (A4 1-based `my.skin`).
+    pub skin: Option<u32>,
+    /// Starting animation scene and speed (% of the scene per tick).
+    pub anim: Option<(&'static str, f32)>,
 }
 
 fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
@@ -158,6 +173,14 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initteleport" => {
             platform::init_teleport(obj, entity);
+            ActionInit::default()
+        }
+        "initammo1" => {
+            let (skin, anim) = wasp::init_ammo(obj, entity);
+            ActionInit { skin: Some(skin), anim: Some(("stand", anim)), ..default() }
+        }
+        "initdoorweak" => {
+            wasp::init_door_weak(obj, entity);
             ActionInit::default()
         }
         "initrestart" => {

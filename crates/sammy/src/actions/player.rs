@@ -83,6 +83,9 @@ pub enum State {
     Win,
     /// Dying / respawning (`PlayerEtat == 3`): no input, animation owned by health.rs.
     Dead,
+    /// Throwing a wasp: "TirA" wind-up, then "TirB" follow-through (`PlayerEtat == 2`).
+    FireA,
+    FireB,
 }
 
 #[derive(Component)]

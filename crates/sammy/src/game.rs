@@ -40,6 +40,10 @@ pub struct GameState {
     pub hearts: f32,
     /// `Player1Start` / `Player1AngleStart`: respawn point (spawn or checkpoint).
     pub start: Option<([f32; 3], f32)>,
+    /// `NbrAmmo1`, `WaspCurrentType`, `WaspCurrentPoison`.
+    pub ammo: i32,
+    pub ammo_type: u32,
+    pub ammo_poison: f32,
 }
 
 impl Default for GameState {
@@ -56,6 +60,9 @@ impl Default for GameState {
             warn_score: 0.0,
             hearts: MAX_HEARTS,
             start: None,
+            ammo: 0,
+            ammo_type: 0,
+            ammo_poison: 0.0,
         }
     }
 }

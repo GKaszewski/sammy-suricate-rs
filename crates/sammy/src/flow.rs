@@ -111,6 +111,7 @@ impl Plugin for FlowPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentLevel>()
             .init_resource::<PendingLoad>()
+            .init_resource::<crate::level::GameAssets>()
             .add_systems(PreUpdate, load_pending)
             .add_systems(Update, run_flow);
     }
@@ -124,7 +125,7 @@ fn load_pending(
     files: Res<GameFiles>,
     old: Query<Entity, Or<(With<LevelRoot>, With<LevelScoped>)>>,
     mut follow: Query<&mut FollowState>,
-    (mut game, mut jump, mut cam): (ResMut<GameState>, ResMut<JumpParams>, ResMut<CameraParams>),
+    (mut game, mut jump, mut cam, mut assets): (ResMut<GameState>, ResMut<JumpParams>, ResMut<CameraParams>, ResMut<crate::level::GameAssets>),
     (mut meshes, mut images, mut materials, mut level_materials): (
         ResMut<Assets<Mesh>>,
         ResMut<Assets<Image>>,
@@ -154,6 +155,7 @@ fn load_pending(
         images: &mut images,
         materials: &mut materials,
         level_materials: &mut level_materials,
+        assets: &mut assets,
     };
     if let Err(e) = spawner.spawn_level(&file) {
         error!("loading {file}: {e}");
@@ -172,6 +174,15 @@ fn load_pending(
         }
         if let Some(h) = env("SAMMY_HEARTS") {
             g.hearts = h;
+        }
+        // SAMMY_AMMO=count,type
+        if let Some((n, k)) = std::env::var("SAMMY_AMMO").ok().and_then(|v| {
+            let (a, b) = v.split_once(',')?;
+            Some((a.parse::<i32>().ok()?, b.parse::<u32>().ok()?))
+        }) {
+            g.ammo = n;
+            g.ammo_type = k;
+            g.ammo_poison = [3.0, 2.0, 1.0, 1.0, 4.0, 6.0, 1.0][(k.clamp(1, 7) - 1) as usize];
         }
     });
     info!("loaded level {file} (slot {slot:?})");

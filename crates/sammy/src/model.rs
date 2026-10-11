@@ -21,7 +21,10 @@ impl Plugin for ModelPlugin {
 pub struct LoadedModel {
     pub mdl: Mdl,
     pub vb: VertexBuffer,
+    /// Skin 1 (the default) material.
     pub material: Handle<StandardMaterial>,
+    /// One material per skin (A4 `my.skin` is 1-based).
+    pub skins: Vec<Handle<StandardMaterial>>,
     /// Per-frame vertex positions/normals in Bevy space, precomputed.
     frames: Vec<(Vec<[f32; 3]>, Vec<[f32; 3]>)>,
 }
@@ -39,15 +42,28 @@ impl LoadedModel {
                 (p, n)
             })
             .collect();
-        let skin = mdl.skins.first().map(|s| images.add(crate::image::to_bevy(&s.image, true, false)));
-        let alpha = mdl.skins.first().is_some_and(|s| s.image.data.chunks_exact(4).any(|p| p[3] < 255));
-        let material = materials.add(StandardMaterial {
-            base_color_texture: skin,
-            perceptual_roughness: 1.0,
-            alpha_mode: if alpha { AlphaMode::Mask(0.5) } else { AlphaMode::Opaque },
-            ..default()
-        });
-        Ok(Self { mdl, vb, material, frames })
+        let mut skins: Vec<Handle<StandardMaterial>> = mdl
+            .skins
+            .iter()
+            .map(|s| {
+                let alpha = s.image.data.chunks_exact(4).any(|p| p[3] < 255);
+                materials.add(StandardMaterial {
+                    base_color_texture: Some(images.add(crate::image::to_bevy(&s.image, true, false))),
+                    perceptual_roughness: 1.0,
+                    alpha_mode: if alpha { AlphaMode::Mask(0.5) } else { AlphaMode::Opaque },
+                    ..default()
+                })
+            })
+            .collect();
+        if skins.is_empty() {
+            skins.push(materials.add(StandardMaterial::default()));
+        }
+        Ok(Self { mdl, vb, material: skins[0].clone(), skins, frames })
+    }
+
+    /// Material for A4 skin number `n` (1-based; 0 means the default skin 1).
+    pub fn skin(&self, n: u32) -> Handle<StandardMaterial> {
+        self.skins[(n.max(1) as usize - 1).min(self.skins.len() - 1)].clone()
     }
 
     pub fn build_mesh(&self, frame: usize) -> Mesh {

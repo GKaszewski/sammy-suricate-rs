@@ -28,12 +28,41 @@ pub const NEAR_LAYER: RenderLayers = RenderLayers::layer(2);
 #[derive(Component)]
 pub struct LevelObject(#[allow(dead_code)] pub Object);
 
-#[derive(Default)]
-struct Cache {
-    models: HashMap<String, Option<Arc<LoadedModel>>>,
-    prefabs: HashMap<String, Option<(Arc<Wmb>, Vec<(Handle<Mesh>, Handle<StandardMaterial>)>)>>,
+/// A prefab WMB: its BSP (collision) and render parts.
+pub type Prefab = (Arc<Wmb>, Vec<(Handle<Mesh>, Handle<StandardMaterial>)>);
+
+/// Models, prefabs and sprites loaded from the game files, kept across levels so
+/// gameplay systems can spawn and morph things at runtime.
+#[derive(Resource, Default)]
+pub struct GameAssets {
+    pub models: HashMap<String, Option<Arc<LoadedModel>>>,
+    pub prefabs: HashMap<String, Option<Prefab>>,
     sprites: HashMap<String, Option<(Handle<Mesh>, Handle<StandardMaterial>, u32)>>,
 }
+
+impl GameAssets {
+    pub fn model(&self, file: &str) -> Option<Arc<LoadedModel>> {
+        self.models.get(&file.to_lowercase()).cloned().flatten()
+    }
+
+    pub fn prefab(&self, file: &str) -> Option<Prefab> {
+        self.prefabs.get(&file.to_lowercase()).cloned().flatten()
+    }
+}
+
+/// Files gameplay may need at runtime (morphs, projectiles, debris), loaded with every level.
+const PRELOAD: &[&str] = &[
+    "wasp1.mdl",
+    "plank1.mdl",
+    "plank2.mdl",
+    "plank3.mdl",
+    "doorwk1.wmb",
+    "doorwk2.wmb",
+    "doorwk3.wmb",
+    "doorwk4.wmb",
+    "doordark.wmb",
+    "platfor1.wmb",
+];
 
 pub struct Spawner<'a, 'w, 's> {
     pub commands: &'a mut Commands<'w, 's>,
@@ -42,6 +71,7 @@ pub struct Spawner<'a, 'w, 's> {
     pub images: &'a mut Assets<Image>,
     pub materials: &'a mut Assets<StandardMaterial>,
     pub level_materials: &'a mut Assets<LevelMaterial>,
+    pub assets: &'a mut GameAssets,
 }
 
 impl Spawner<'_, '_, '_> {
@@ -71,7 +101,13 @@ impl Spawner<'_, '_, '_> {
         });
         let start = player.map(|o| (coords::pos(o.origin), o.angles[0]));
         let pov_z = player.map_or(0.0, |o| o.origin[2]);
-        let mut cache = Cache::default();
+        for file in PRELOAD {
+            if file.ends_with(".mdl") {
+                self.load_model(file);
+            } else {
+                self.load_prefab(file);
+            }
+        }
         let mut gems = actions::pickups::GemSprites::default();
         for color in [1, 2, 3, 4, 5, 6, crate::game::MASTER_KEY] {
             let file = actions::pickups::gem_file(color).unwrap();
@@ -83,7 +119,7 @@ impl Spawner<'_, '_, '_> {
         self.commands.insert_resource(gems);
         for ent in &wmb.entities {
             let WmbEntity::Object(obj) = ent else { continue };
-            self.spawn_object(obj.clone(), pov_z, root, &mut cache);
+            self.spawn_object(obj.clone(), pov_z, root);
         }
         Ok(start)
     }
@@ -136,7 +172,31 @@ impl Spawner<'_, '_, '_> {
             .collect()
     }
 
-    fn spawn_object(&mut self, mut obj: Object, pov_z: f32, parent: bevy::ecs::entity::Entity, cache: &mut Cache) {
+    pub fn load_model(&mut self, file: &str) -> Option<Arc<LoadedModel>> {
+        let file = file.to_lowercase();
+        if let Some(m) = self.assets.models.get(&file) {
+            return m.clone();
+        }
+        let m = self.files.read(&file).ok().and_then(|d| LoadedModel::load(&d, self.images, self.materials).map(Arc::new).ok());
+        self.assets.models.insert(file, m.clone());
+        m
+    }
+
+    pub fn load_prefab(&mut self, file: &str) -> Option<Prefab> {
+        let file = file.to_lowercase();
+        if let Some(p) = self.assets.prefabs.get(&file) {
+            return p.clone();
+        }
+        let p = self.files.read(&file).ok().and_then(|d| formats::wmb::parse(&d).ok()).map(|w| {
+            let w = Arc::new(w);
+            let meshes = self.prefab_meshes(&w);
+            (w, meshes)
+        });
+        self.assets.prefabs.insert(file, p.clone());
+        p
+    }
+
+    fn spawn_object(&mut self, mut obj: Object, pov_z: f32, parent: bevy::ecs::entity::Entity) {
         if obj.flags & entity_flags::INVISIBLE != 0 || obj.file.is_empty() {
             return;
         }
@@ -167,38 +227,20 @@ impl Spawner<'_, '_, '_> {
             self.commands.entity(id).insert(SKY_LAYER);
         }
         if file.ends_with(".mdl") {
-            let model = cache
-                .models
-                .entry(file.clone())
-                .or_insert_with(|| {
-                    let data = self.files.read(&file).ok()?;
-                    LoadedModel::load(&data, self.images, self.materials).map(Arc::new).ok()
-                })
-                .clone();
-            let Some(model) = model else {
+            let Some(model) = self.load_model(&file) else {
                 self.commands.entity(id).despawn();
                 return warn!("missing model {file}");
             };
-            let frames = model.animation("stand");
-            let mesh = self.meshes.add(model.build_mesh(frames.first().copied().unwrap_or(0)));
-            let material = if init.sky { self.unlit(&model.material) } else { model.material.clone() };
-            self.commands.entity(id).insert((
-                base,
-                Mesh3d(mesh),
-                MeshMaterial3d(material),
-                ModelAnimator::new(model.clone(), frames, 8.0),
-            ));
+            let (scene, pct) = init.anim.unwrap_or(("stand", 2.0));
+            let mut animator = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
+            animator.play(scene, true, 0.0);
+            animator.set_speed_pct(pct, actions::player::TICKS);
+            let mesh = self.meshes.add(model.build_mesh(animator.frames.first().copied().unwrap_or(0)));
+            let skin = model.skin(init.skin.unwrap_or(1));
+            let material = if init.sky { self.unlit(&skin) } else { skin };
+            self.commands.entity(id).insert((base, Mesh3d(mesh), MeshMaterial3d(material), animator));
         } else if file.ends_with(".wmb") {
-            let parts = cache
-                .prefabs
-                .entry(file.clone())
-                .or_insert_with(|| {
-                    let wmb = Arc::new(formats::wmb::parse(&self.files.read(&file).ok()?).ok()?);
-                    let meshes = self.prefab_meshes(&wmb);
-                    Some((wmb, meshes))
-                })
-                .clone();
-            let Some((wmb, parts)) = parts else {
+            let Some((wmb, parts)) = self.load_prefab(&file) else {
                 self.commands.entity(id).despawn();
                 return warn!("missing prefab {file}");
             };
@@ -211,7 +253,14 @@ impl Spawner<'_, '_, '_> {
                 }
             });
         } else if file.ends_with(".pcx") {
-            let sprite = cache.sprites.entry(file.clone()).or_insert_with(|| self.load_sprite(&file)).clone();
+            let sprite = match self.assets.sprites.get(&file) {
+                Some(s) => s.clone(),
+                None => {
+                    let s = self.load_sprite(&file);
+                    self.assets.sprites.insert(file.clone(), s.clone());
+                    s
+                }
+            };
             let Some((mesh, mat, frames)) = sprite else {
                 self.commands.entity(id).despawn();
                 return warn!("missing sprite {file}");
