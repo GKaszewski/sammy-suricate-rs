@@ -13,7 +13,7 @@ use formats::wmb::Object;
 use super::player::{Player, PlayerTouched, State as PlayerState, TICKS};
 use super::wasp::{Wasp, WaspHit};
 use crate::audio::Sfx;
-use crate::collision::{BoxCollider, CollisionWorld};
+use crate::collision::{BoxCollider, CollisionWorld, Hull};
 use crate::coords;
 use crate::game::{GameState, Rng};
 use crate::model::ModelAnimator;
@@ -24,7 +24,7 @@ const LION: u32 = 8888;
 const WIN_MODEL: u32 = 99;
 const ELEPHANT: u32 = 1111;
 /// Enemies collide with the fat hull.
-const HULL: usize = 2;
+const HULL: Hull = Hull::Fat;
 
 /// Per-level tuning globals (`InitLevelglobal` values, §1.5), overridable by
 /// `InitLionSkills1/2` and `InitGame6/7`.
@@ -755,7 +755,7 @@ fn init_runtime(e: &mut Enemy, anim: &ModelAnimator, world: &CollisionWorld, me:
     e.initialised = true;
     e.circle_z = 8.0 + rng.random(12.0);
     // `Sonar my,2000`, then hover at 28×scale (15×scale for scorpions) (lion.wdl:151-173).
-    let tr = world.trace(0, e.pos, [e.pos[0], e.pos[1], e.pos[2] - 2000.0], Some(me)).trace;
+    let tr = world.trace(Hull::Point, e.pos, [e.pos[0], e.pos[1], e.pos[2] - 2000.0], Some(me)).trace;
     if tr.hit() {
         e.floor = tr.end[2];
     }
@@ -807,7 +807,7 @@ fn test_dist(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, g: &LionGlobals) 
 /// `LionShootPlayer` (§2.6): line of sight from the lion origin to Sammy.
 fn sees_sammy(e: &mut Enemy, ctx: &Ctx<'_, '_, '_, '_, '_>) -> bool {
     let Some((s, sp, _)) = ctx.sammy else { return false };
-    let hit = ctx.world.trace(0, e.pos, [sp[0], sp[1], sp[2] + 15.0], Some(ctx.me));
+    let hit = ctx.world.trace(Hull::Point, e.pos, [sp[0], sp[1], sp[2] + 15.0], Some(ctx.me));
     let seen = !hit.trace.hit() || hit.entity == Some(s);
     if hit.trace.hit() {
         e.avu = seen;
@@ -1010,7 +1010,7 @@ fn patrol(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, nodes: &[&PathNode],
             e.target = n.pos;
             e.target_pan = n.pan;
             e.target_tilt = ang(n.tilt);
-            let tr = ctx.world.trace_static(0, n.pos, e.pos).trace;
+            let tr = ctx.world.trace_static(Hull::Point, n.pos, e.pos).trace;
             if !tr.hit() {
                 accepted = true;
             }
@@ -1112,7 +1112,7 @@ fn randomize(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) {
 /// `HandleGravityEnnemy` (§2.4): hover at a constant height over the traced floor.
 fn gravity(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) {
     let g = ctx.g;
-    let hit = ctx.world.trace(0, e.pos, [e.pos[0], e.pos[1], e.pos[2] - 2000.0], Some(ctx.me));
+    let hit = ctx.world.trace(Hull::Point, e.pos, [e.pos[0], e.pos[1], e.pos[2] - 2000.0], Some(ctx.me));
     e.floor_entity = hit.entity.filter(|_| hit.trace.hit());
     if hit.trace.hit() {
         e.floor = hit.trace.end[2];
@@ -1227,7 +1227,7 @@ fn handle_speed(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, anim: &ModelAn
             e.muzzle = Some(head);
             let f = forward(e.pan, e.tilt);
             let tip = [0, 1, 2].map(|i| head[i] + f[i] * ctx.g.dist_muzzle);
-            let tr = ctx.world.trace_static(0, head, tip);
+            let tr = ctx.world.trace_static(Hull::Point, head, tip);
             if tr.trace.start_solid {
                 let a = if e.etat == 6 { e.pan } else { e.pan - 180.0 };
                 let (s, c) = a.to_radians().sin_cos();
@@ -1323,7 +1323,7 @@ fn stuck_roar(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) -> bool {
         e.guard_stuck = 0.0;
         // The original traces from Sammy+100 to the lion+100 against level geometry only.
         let clear = ctx.sammy.is_some_and(|(_, sp, _)| {
-            !ctx.world.trace_static(0, [sp[0], sp[1], sp[2] + 100.0], [e.pos[0], e.pos[1], e.pos[2] + 100.0]).trace.hit()
+            !ctx.world.trace_static(Hull::Point, [sp[0], sp[1], sp[2] + 100.0], [e.pos[0], e.pos[1], e.pos[2] + 100.0]).trace.hit()
         });
         if clear {
             e.dest_pan = ang(e.pan - 180.0);
@@ -1657,7 +1657,7 @@ pub fn run_start_triggers(clock: Res<AiClock>, mut triggers: Query<&mut StartTri
 pub fn add_enemy_colliders(mut commands: Commands, q: Query<(Entity, &Enemy), Without<BoxCollider>>) {
     for (ent, e) in &q {
         if e.initialised {
-            commands.entity(ent).insert(BoxCollider { center: [e.pos[0], e.pos[1], e.pos[2] + e.center_z], half: e.half, solid: true });
+            commands.entity(ent).insert(BoxCollider(sammy_core::collision::BoxCollider { center: [e.pos[0], e.pos[1], e.pos[2] + e.center_z], half: e.half, solid: true }));
         }
     }
 }
@@ -1670,7 +1670,7 @@ pub fn add_player_collider(mut commands: Commands, q: Query<(Entity, &Player, &M
         let hx = (f.bbox_max[0] - f.bbox_min[0]).max(f.bbox_max[1] - f.bbox_min[1]) * 0.25 * s;
         let hz = (f.bbox_max[2] - f.bbox_min[2]) * 0.5 * s;
         let cz = (f.bbox_max[2] + f.bbox_min[2]) * 0.5 * s;
-        commands.entity(ent).insert((BoxCollider { center: [p.pos[0], p.pos[1], p.pos[2] + cz], half: [hx, hx, hz], solid: true }, PlayerBoxOffset(cz)));
+        commands.entity(ent).insert((BoxCollider(sammy_core::collision::BoxCollider { center: [p.pos[0], p.pos[1], p.pos[2] + cz], half: [hx, hx, hz], solid: true }), PlayerBoxOffset(cz)));
     }
 }
 

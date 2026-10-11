@@ -8,7 +8,7 @@ use formats::wmb::Object;
 use super::pickups::{PickupPos, Shrinking};
 use super::player::{Player, State, TICKS};
 use crate::audio::Sfx;
-use crate::collision::{Brush, CollisionWorld};
+use crate::collision::{Brush, CollisionWorld, Hull};
 use crate::coords;
 use crate::game::{GameState, Rng};
 use crate::level::{GameAssets, LevelObject};
@@ -336,7 +336,7 @@ pub fn fly_wasps(
         }
         let dir = forward(w.pan, w.tilt);
         let target = [0, 1, 2].map(|i| w.pos[i] + dir[i] * w.speed * t);
-        let hit = world.trace(0, w.pos, target, w.shooter);
+        let hit = world.trace(Hull::Point, w.pos, target, w.shooter);
         w.last_disp = [0, 1, 2].map(|i| hit.trace.end[i] - w.pos[i]);
         w.pos = hit.trace.end;
         // Invisible until 80 quants from Sammy (it starts behind him).
@@ -434,7 +434,7 @@ pub fn fly_planks(time: Res<Time>, world: CollisionWorld, mut sfx: Sfx, mut comm
     for (e, mut p, mut tf) in &mut q {
         p.v[2] -= 1.5 * t;
         let target = [0, 1, 2].map(|i| p.pos[i] + p.v[i] * t);
-        let hit = world.trace(0, p.pos, target, None).trace;
+        let hit = world.trace(Hull::Point, p.pos, target, None).trace;
         p.pos = hit.end;
         if hit.hit() && hit.normal[2] > 0.5 {
             if p.v[2].abs() > 6.0 {
@@ -606,7 +606,7 @@ pub fn fly_hive_wasps(
             continue; // frozen at spawn forever
         }
         let ground = {
-            let tr = world.trace_static(0, w.pos, [w.pos[0], w.pos[1], w.pos[2] - 2000.0]).trace;
+            let tr = world.trace_static(Hull::Point, w.pos, [w.pos[0], w.pos[1], w.pos[2] - 2000.0]).trace;
             if tr.hit() { tr.end[2] } else { w.pos[2] - 2000.0 }
         };
         if w.vz == 0.0 && w.pos[2] - ground > 26.0 {
@@ -635,7 +635,7 @@ pub fn fly_hive_wasps(
         w.tilt -= if w.bounces == 0.0 { 2.0 * t } else { w.tilt * 0.1 * t };
         let (s, c) = w.pan.to_radians().sin_cos();
         let d = [c * w.speed * t.min(1.0), s * w.speed * t.min(1.0), vstep];
-        let hit = world.trace_static(0, w.pos, [w.pos[0] + d[0], w.pos[1] + d[1], w.pos[2] + d[2]]);
+        let hit = world.trace_static(Hull::Point, w.pos, [w.pos[0] + d[0], w.pos[1] + d[1], w.pos[2] + d[2]]);
         let before = w.pos;
         w.pos = hit.trace.end;
         if hit.trace.hit() && hit.trace.normal[2].abs() < 0.7 {

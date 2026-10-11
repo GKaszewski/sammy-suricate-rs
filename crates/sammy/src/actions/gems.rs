@@ -4,6 +4,7 @@
 //! gravity/hover for Flag7 gems, surprise colours, boulders, and the gem that
 //! flies into a permanent door (`CreateGemKeyAnim` / `AnimGemKey`).
 
+use crate::collision::Hull;
 use bevy::prelude::*;
 use formats::wmb::Object;
 
@@ -203,7 +204,7 @@ pub fn fly_gems(
     let t = (time.delta_secs() * TICKS).min(1.0);
     for (e, mut g, mut pp, mut tf, collectable) in &mut q {
         let floor = {
-            let tr = world.trace_static(0, g.pos, [g.pos[0], g.pos[1], g.pos[2] - 2000.0]).trace;
+            let tr = world.trace_static(Hull::Point, g.pos, [g.pos[0], g.pos[1], g.pos[2] - 2000.0]).trace;
             if tr.hit() { tr.end[2] } else { g.pos[2] - 2000.0 }
         };
         let thrown = g.kind == FlightKind::Thrown;
@@ -255,7 +256,7 @@ pub fn fly_gems(
         }
         let (s, c) = g.pan.to_radians().sin_cos();
         let target = [g.pos[0] + c * g.speed * t, g.pos[1] + s * g.speed * t, g.pos[2] + dz];
-        let hit = world.trace_static(0, g.pos, target);
+        let hit = world.trace_static(Hull::Point, g.pos, target);
         let before = g.pos;
         if hit.trace.start_solid {
             g.pos = g.last_good;
@@ -360,7 +361,7 @@ pub fn gem_gravity(
 ) {
     let t = time.delta_secs() * TICKS;
     for (g, mut p, mut tf) in &mut q {
-        let hit = world.trace(0, p.0, [p.0[0], p.0[1], p.0[2] - 2000.0], None);
+        let hit = world.trace(Hull::Point, p.0, [p.0[0], p.0[1], p.0[2] - 2000.0], None);
         if !hit.trace.hit() {
             continue;
         }

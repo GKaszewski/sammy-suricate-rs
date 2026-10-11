@@ -2,6 +2,7 @@
 //! (`InitKey`/`Key_Hit`/`EjectOldKey`/`LaunchYouKey`, gems.wdl:40-960).
 //! Both are picked up by Sammy's scan (id 1, radius `BlobZoneScan`).
 
+use crate::collision::Hull;
 use std::collections::HashMap;
 
 use bevy::prelude::*;
@@ -127,7 +128,7 @@ pub fn snap_pickups(
     }
     for (e, mut p, mut tf, extra, gravity, hover) in &mut q {
         let [x, y, z] = p.0;
-        let tr = world.trace(1, [x, y, z + 8.0], [x, y, z - 2000.0], None).trace;
+        let tr = world.trace(Hull::Narrow, [x, y, z + 8.0], [x, y, z - 2000.0], None).trace;
         if hover && let Some(mut g) = gravity {
             // Flag5: keep the WED height above the floor (+HeightGem) as the rest height.
             g.set_rest(z - (tr.end[2] - 16.0) + HEIGHT_GEM);

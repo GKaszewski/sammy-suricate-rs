@@ -1,6 +1,7 @@
 //! Cameras: the game's type-3 follow camera (camera.wdl `HandleCamera3`,
 //! simplified) and a free-fly debug camera. F1 toggles between them.
 
+use crate::collision::Hull;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use formats::wmb::Object;
@@ -289,7 +290,7 @@ pub fn camera_zones(
             if rt.cam_type == ty && params.dist == z.s[1] && params.height == z.s[2] && params.plus_tilt == z.s[4] {
                 continue;
             }
-            if level.0.trace(0, 0, z.pos, sp).hit() {
+            if level.0.trace(0, Hull::Point.index(), z.pos, sp).hit() {
                 continue;
             }
             z.pending = true;
@@ -438,7 +439,7 @@ pub fn follow(
     let a = (st.ang + params.back).to_radians();
     let eye = [pov.pos[0], pov.pos[1], pov.pos[2] + params.plus_tilt * st.tilt_scale.unwrap_or(1.0)];
     let ideal_at = |d: f32, h: f32| [pov.pos[0] + a.cos() * d, pov.pos[1] + a.sin() * d, pov.pos[2] + h];
-    let blocked = |to: [f32; 3]| level.as_ref().map(|l| l.0.trace(0, 1, eye, to)).filter(|tr| tr.hit() && !tr.start_solid);
+    let blocked = |to: [f32; 3]| level.as_ref().map(|l| l.0.trace(0, Hull::Narrow.index(), eye, to)).filter(|tr| tr.hit() && !tr.start_solid);
 
     // 4. Emergency camera (camera.wdl `Camera2_Syn`): while a wall hides Sammy, zoom in
     //    (distance ×(1-0.75·time) down to 50, height -50/tick down to 105); when the
@@ -580,16 +581,16 @@ fn follow_type2(
     let mut pos = [syn[0] + delta[0], syn[1] + delta[1], syn[2] + delta[2]];
     if let Some(l) = level {
         let cam_dist = ((me[0] - syn[0]).powi(2) + (me[1] - syn[1]).powi(2) + (me[2] - syn[2]).powi(2)).sqrt();
-        let los = l.0.trace(0, 0, me, syn);
+        let los = l.0.trace(0, Hull::Point.index(), me, syn);
         let near_obstacle = los.hit() && los.fraction * cam_dist >= cam_dist * 0.8;
         if near_obstacle {
-            let tr = l.0.trace(0, 1, syn, pos);
+            let tr = l.0.trace(0, Hull::Narrow.index(), syn, pos);
             if !tr.start_solid {
                 pos = tr.end;
             }
         }
         // Ground clearance: keep at least 80 above the floor.
-        let floor = l.0.trace(0, 0, pos, [pos[0], pos[1], pos[2] - 1000.0]);
+        let floor = l.0.trace(0, Hull::Point.index(), pos, [pos[0], pos[1], pos[2] - 1000.0]);
         if floor.hit() && pos[2] - floor.end[2] < 80.0 {
             pos[2] += (floor.end[2] + 80.0 - pos[2]) * (0.1 * t).min(1.0);
         }

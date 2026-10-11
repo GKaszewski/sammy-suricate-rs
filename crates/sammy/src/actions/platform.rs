@@ -8,6 +8,7 @@
 //! on them. An engine with Skill6 is locked until Sammy stands on its platform
 //! holding a matching key.
 
+use crate::collision::Hull;
 use bevy::prelude::*;
 use formats::wmb::Object;
 
@@ -164,7 +165,7 @@ pub fn run_engines(
             EngineState::Moving => {
                 let dir = forward(e.angles);
                 let target = [0, 1, 2].map(|i| e.pos[i] + dir[i] * speed * t);
-                let tr = level.0.trace(0, 0, e.pos, target); // tiny sprite: point collision
+                let tr = level.0.trace(0, Hull::Point.index(), e.pos, target); // tiny sprite: point collision
                 if tr.start_solid {
                     EngineState::Moving
                 } else {

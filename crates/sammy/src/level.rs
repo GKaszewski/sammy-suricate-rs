@@ -282,7 +282,7 @@ impl Spawner<'_, '_, '_> {
                     let sc = obj.scale.map(f32::abs);
                     let center = std::array::from_fn(|i| obj.origin[i] + (fr.bbox_min[i] + fr.bbox_max[i]) * 0.5 * sc[i]);
                     let half = std::array::from_fn(|i| (fr.bbox_max[i] - fr.bbox_min[i]) * 0.5 * sc[i]);
-                    self.commands.entity(id).insert(crate::collision::BoxCollider { center, half, solid: true });
+                    self.commands.entity(id).insert(crate::collision::BoxCollider(sammy_core::collision::BoxCollider { center, half, solid: true }));
                 }
                 return;
             }
@@ -299,7 +299,7 @@ impl Spawner<'_, '_, '_> {
             };
             // Map entities are solid unless passable (A4 collides with their BSP hulls).
             let solid = obj.flags & entity_flags::PASSABLE == 0 && !actions::is_passable(&obj.action);
-            let brush = Brush { wmb, origin: obj.origin, pan: obj.angles[0], solid };
+            let brush = Brush(sammy_core::collision::Brush { wmb, origin: obj.origin, pan: obj.angles[0], solid });
             self.commands.entity(id).insert((base, brush)).with_children(|c| {
                 for (mesh, mat) in parts {
                     c.spawn((Mesh3d(mesh), MeshMaterial3d(mat)));

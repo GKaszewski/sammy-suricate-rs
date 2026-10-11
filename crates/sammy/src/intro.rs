@@ -3,6 +3,7 @@
 //! A5, publisher and Suricate logos fade in front of the camera. Node key 999, Enter,
 //! Esc or the right mouse button end it: the camera glides to the menu pose.
 
+use crate::collision::Hull;
 use bevy::prelude::*;
 use formats::wmb::Object;
 
@@ -274,7 +275,7 @@ fn tick(
     for (mut w, mut tf, anim) in &mut walkers {
         let [x, y, z] = w.pos;
         if world.ready() {
-            let tr = world.trace_static(0, [x, y, z + 200.0], [x, y, z - 2000.0]).trace;
+            let tr = world.trace_static(Hull::Point, [x, y, z + 200.0], [x, y, z - 2000.0]).trace;
             if tr.hit() && !tr.start_solid {
                 w.pos[2] = tr.end[2] + BLOB_HAUT;
                 w.snapped = true;

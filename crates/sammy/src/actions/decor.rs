@@ -1,5 +1,6 @@
 //! Decoration actions from mm1.wdl: `InitSkyMenu` (mm1.wdl:3379) and `InitDecor` (mm1.wdl:3461).
 
+use crate::collision::Hull;
 use bevy::prelude::*;
 use formats::wmb::Object;
 
@@ -126,7 +127,7 @@ pub fn snap_sprites(world: crate::collision::CollisionWorld, mut commands: Comma
     }
     for (e, g, mut tf) in &mut q {
         let [x, y, z] = g.origin;
-        let tr = world.trace_static(0, [x, y, z], [x, y, z - 2000.0]).trace;
+        let tr = world.trace_static(Hull::Point, [x, y, z], [x, y, z - 2000.0]).trace;
         if tr.hit() && !tr.start_solid {
             tf.translation = coords::pos([x, y, tr.end[2] + g.dz]);
         }

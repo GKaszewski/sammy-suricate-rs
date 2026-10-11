@@ -4,6 +4,7 @@
 //! and BSP collision. Slopes, platforms, knockback, boost, firing and the
 //! U-turn are not ported yet.
 
+use crate::collision::Hull;
 use std::sync::Arc;
 
 use bevy::prelude::*;
@@ -22,7 +23,7 @@ pub const SCALE: f32 = 8.0;
 /// Floors stop hull-1 traces with the origin this far above them (±16 cube).
 const HULL1_HALF: f32 = 16.0;
 /// Sammy collides with the "fat" hull (`my.fat=1`).
-const HULL: usize = 2;
+const HULL: Hull = Hull::Fat;
 
 // Animation speeds in % of the scene per tick (mm1.wdl:39-85, anims.wdl).
 const ANIM_STAND: f32 = 2.0;
@@ -249,7 +250,7 @@ pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
 /// belongs to, or None over the void.
 fn floor_below(world: &CollisionWorld, p: [f32; 3]) -> Option<(f32, Option<Entity>, [f32; 3])> {
     let start = [p[0], p[1], p[2] + 8.0];
-    let hit = world.trace(1, start, [p[0], p[1], p[2] - 2000.0], None);
+    let hit = world.trace(Hull::Narrow, start, [p[0], p[1], p[2] - 2000.0], None);
     (hit.trace.hit() && !hit.trace.start_solid).then(|| (hit.trace.end[2] - HULL1_HALF, hit.entity, hit.trace.normal))
 }
 

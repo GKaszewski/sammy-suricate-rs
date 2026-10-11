@@ -4,6 +4,7 @@
 //! `sun_angle` (pan 135, tilt 85 in levels, mm1.wdl:618-620; pan 90 in the extro,
 //! Extro.wdl:81). The exact A4 projection and darkness are [U]; 50 % black is used.
 
+use crate::collision::Hull;
 use bevy::asset::embedded_asset;
 use bevy::light::NotShadowCaster;
 use bevy::mesh::MeshVertexBufferLayoutRef;
@@ -124,7 +125,7 @@ fn update_shadows(
     for (s, mat) in &q {
         let Ok(gt) = owners.get(s.owner) else { continue };
         let o = coords::native(gt.translation());
-        let tr = world.trace_static(0, [o[0], o[1], o[2] + 8.0], [o[0], o[1], o[2] - 2000.0]).trace;
+        let tr = world.trace_static(Hull::Point, [o[0], o[1], o[2] + 8.0], [o[0], o[1], o[2] - 2000.0]).trace;
         let floor = if tr.hit() && !tr.start_solid { tr.end[2] } else { o[2] - 2000.0 };
         if let Some(mut m) = materials.get_mut(&mat.0) {
             m.params.sun = dir.extend((floor + 0.5) / coords::QUANTS_PER_UNIT);
