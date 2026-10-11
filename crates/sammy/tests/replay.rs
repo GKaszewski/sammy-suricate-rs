@@ -16,7 +16,8 @@ use bevy::render::RenderPlugin;
 use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::ExitCondition;
-use sammy::input::{Controls, ScriptedInput};
+use sammy::input::ScriptedInput;
+use sammy_core::input::Controls;
 
 const FPS: f64 = 60.0;
 /// Frames between digests (0.5 s).

@@ -464,7 +464,7 @@ fn sliders(
         {
             value = ((p.x + 0.5).clamp(0.0, 1.0) * 100.0).round();
         } else if focus.0 == Some(e)
-            && let Some(d) = controls.nav.filter(|d| d.x != 0)
+            && let Some(d) = controls.nav_dir().filter(|d| d.x != 0)
         {
             value = (value + 5.0 * d.x as f32).clamp(0.0, 100.0);
             changed = true;
@@ -507,7 +507,7 @@ fn choices(
         let step = if rel.cursor_over && mouse.just_pressed(MouseButton::Left) {
             rel.normalized.map(|p| if p.x < 0.0 { -1 } else { 1 })
         } else if focus.0 == Some(e) {
-            controls.nav.filter(|d| d.x != 0).map(|d| d.x).or(controls.accept.then_some(1))
+            controls.nav_dir().filter(|d| d.x != 0).map(|d| d.x).or(controls.accept.then_some(1))
         } else {
             None
         };
@@ -604,7 +604,7 @@ fn focus_nav(
         }
         return;
     };
-    let Some(d) = controls.nav else { return };
+    let Some(d) = controls.nav_dir() else { return };
     if horizontal && d.x != 0 {
         return;
     }

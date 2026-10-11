@@ -13,6 +13,8 @@ pub mod doors;
 pub mod game;
 pub mod gems;
 pub mod health;
+pub mod id;
+pub mod input;
 pub mod keys;
 pub mod levels;
 pub mod physics;

@@ -381,7 +381,7 @@ fn pad_focus(
         }
         return None;
     };
-    let Some(d) = controls.nav else { return current };
+    let Some(d) = controls.nav_dir() else { return current };
     let dir = Vec2::new(d.x as f32, -d.y as f32);
     on_screen
         .iter()

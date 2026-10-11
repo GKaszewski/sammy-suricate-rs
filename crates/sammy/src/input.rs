@@ -21,37 +21,22 @@ const DEADZONE: f32 = 0.25;
 const NAV_DELAY: f32 = 0.4;
 const NAV_REPEAT: f32 = 0.15;
 
-#[derive(Resource, Default, Debug, Clone)]
-pub struct Controls {
-    /// Right(+)/left(-) and forward(+)/back(-), -1..1 (analog on a stick).
-    pub turn: f32,
-    pub forward: f32,
-    pub jump: bool,
-    pub jump_hit: bool,
-    pub fire_hit: bool,
-    pub boost: bool,
-    pub uturn_hit: bool,
-    /// Enter / pad Back: dismiss hints, skip intros.
-    pub confirm: bool,
-    /// Esc / pad Start: open or close the options.
-    pub options: bool,
-    /// Pad B: back out of a menu level or dialog.
-    pub back: bool,
-    /// Pad A in menus (activate the focused item).
-    pub accept: bool,
-    /// A focus move this frame (x right, y up), from the D-pad or the stick.
-    pub nav: Option<IVec2>,
-    /// Any key or pad button was pressed this frame.
-    pub any: bool,
-    /// The last input came from a gamepad (the menus show focus instead of the cursor).
-    pub pad: bool,
+/// This frame's [`sammy_core::input::Controls`].
+#[derive(Resource, Default, Debug, Clone, Deref, DerefMut)]
+pub struct Controls(pub sammy_core::input::Controls);
+
+impl Controls {
+    /// The focus move as a vector (x right, y up).
+    pub fn nav_dir(&self) -> Option<IVec2> {
+        self.nav.map(IVec2::from)
+    }
 }
 
 /// Replaces the devices (tests, replays): `frame -> controls`, called once per frame.
 #[derive(Resource)]
 pub struct ScriptedInput {
     pub frame: u64,
-    pub script: Box<dyn FnMut(u64) -> Controls + Send + Sync>,
+    pub script: Box<dyn FnMut(u64) -> sammy_core::input::Controls + Send + Sync>,
 }
 
 #[derive(Default)]
@@ -73,13 +58,13 @@ fn read_controls(
     if let Some(mut s) = scripted {
         let f = s.frame;
         s.frame += 1;
-        *c = (s.script)(f);
+        c.0 = (s.script)(f);
         return;
     }
     let key = |k: &[KeyCode]| k.iter().any(|k| keys.pressed(*k));
     let hit = |k: &[KeyCode]| k.iter().any(|k| keys.just_pressed(*k));
     let axis = |pos: KeyCode, neg: KeyCode| keys.pressed(pos) as i32 as f32 - keys.pressed(neg) as i32 as f32;
-    let mut out = Controls {
+    let mut out = sammy_core::input::Controls {
         turn: axis(KeyCode::ArrowRight, KeyCode::ArrowLeft),
         forward: axis(KeyCode::ArrowUp, KeyCode::ArrowDown),
         jump: key(&[KeyCode::ControlLeft, KeyCode::ControlRight]),
@@ -153,7 +138,7 @@ fn read_controls(
         }
         None => repeat.dir = None,
     }
-    out.nav = nav;
+    out.nav = nav.map(|d: IVec2| d.to_array());
     // Debug: SAMMY_PAD_NAV=right,down,a,b,... presses one pad input every 0.5 s from 3 s on.
     if let Ok(script) = std::env::var("SAMMY_PAD_NAV") {
         let t = time.elapsed_secs() - 3.0;
@@ -163,10 +148,10 @@ fn read_controls(
         {
             out.pad = true;
             match cmd {
-                "left" => out.nav = Some(IVec2::NEG_X),
-                "right" => out.nav = Some(IVec2::X),
-                "up" => out.nav = Some(IVec2::Y),
-                "down" => out.nav = Some(IVec2::NEG_Y),
+                "left" => out.nav = Some([-1, 0]),
+                "right" => out.nav = Some([1, 0]),
+                "up" => out.nav = Some([0, 1]),
+                "down" => out.nav = Some([0, -1]),
                 "a" => (out.accept, out.jump_hit, out.any) = (true, true, true),
                 "b" => (out.back, out.uturn_hit) = (true, true),
                 "start" => out.options = true,
@@ -175,7 +160,7 @@ fn read_controls(
         }
         out.pad |= t >= 0.0;
     }
-    *c = out;
+    c.0 = out;
 }
 
 fn dz(v: f32) -> f32 {
