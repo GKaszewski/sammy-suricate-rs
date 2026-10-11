@@ -1,4 +1,5 @@
 use super::*;
+use crate::{GameFiles, Storage};
 
 /// Real-time cost of each song at a few qualities (needs the game files and a
 /// SoundFont): `cargo test --release -p sammy-platform --features music -- --ignored --nocapture`.

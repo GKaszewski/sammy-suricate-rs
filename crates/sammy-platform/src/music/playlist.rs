@@ -1,16 +1,9 @@
-//! MIDI music (`sons.wdl:66-74`, `PlayCurrentMusique` mm1.wdl:3935-3946), for any
-//! frontend: which song plays when ([`Playlist`]), finding a General MIDI SoundFont (not
-//! part of the game data) and rendering a song with `rustysynth` ([`Song`]). The
-//! original played `sammy0N.mid` through the Windows MIDI synth.
+//! Which song plays when.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
-use rustysynth::{MidiFile, MidiFileSequencer, SoundFont, Synthesizer, SynthesizerSettings};
 use sammy_core::levels::EXTRO_SLOT;
 use sammy_core::sim::Sim;
 
-use crate::{GameFiles, Storage};
+use super::FILES;
 
 /// `MusicOrder[]` has one entry per level slot.
 const LEVEL_SLOTS: usize = 50;
@@ -28,11 +21,6 @@ const BONUS_ROLL_B: std::ops::RangeInclusive<usize> = 33..=36;
 const XORSHIFT: (u32, u32, u32) = (13, 7, 17);
 /// The options volume test plays musique4.
 const TEST_SONG: u8 = 4;
-/// Rendering block (samples per channel).
-pub const BLOCK: usize = 1024;
-
-/// `Music musique1..9`: musique8/9 reuse sammy01/02.
-const FILES: [&str; 7] = ["sammy01.mid", "sammy02.mid", "sammy03.mid", "sammy04.mid", "sammy05.mid", "sammy06.mid", "sammy07.mid"];
 
 /// A song change for the frontend's player.
 #[derive(Clone, Debug, PartialEq)]
@@ -139,88 +127,3 @@ impl Playlist {
         sim.save.music / FULL_VOLUME * self.song_volume / FULL_VOLUME
     }
 }
-
-/// `SAMMY_SOUNDFONT`, else the first `.sf2` next to the executable (releases bundle
-/// one; on the Vita in the package), in the player's storage, among the game files, or in `/usr/share/soundfonts`.
-/// Returns the file's bytes and a name for messages.
-pub fn find_soundfont(storage: &Storage, files: &GameFiles) -> Option<(String, Vec<u8>)> {
-    let from_path = |p: PathBuf| std::fs::read(&p).ok().map(|d| (p.display().to_string(), d));
-    let first_in = |d: PathBuf| {
-        let mut v: Vec<_> = std::fs::read_dir(d).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("sf2"))).collect();
-        v.sort();
-        v.into_iter().next()
-    };
-    if let Ok(p) = std::env::var("SAMMY_SOUNDFONT") {
-        return from_path(p.into());
-    }
-    let mut dirs: Vec<PathBuf> = Vec::new();
-    #[cfg(not(any(target_arch = "wasm32", target_os = "vita")))]
-    dirs.extend(crate::locate::beside_executable());
-    // The Vita package itself.
-    #[cfg(target_os = "vita")]
-    dirs.push("app0:".into());
-    dirs.extend(storage.dir().map(PathBuf::from));
-    if let Some(p) = dirs.into_iter().find_map(first_in) {
-        return from_path(p);
-    }
-    if let Some(name) = files.find_extension("sf2") {
-        return files.read(&name).ok().map(|d| (name, d));
-    }
-    #[cfg(target_os = "linux")]
-    if let Some(p) = first_in("/usr/share/soundfonts".into()) {
-        return from_path(p);
-    }
-    None
-}
-
-/// Parses a SoundFont.
-pub fn parse_soundfont(data: &[u8]) -> anyhow::Result<Arc<SoundFont>> {
-    SoundFont::new(&mut &data[..]).map(Arc::new).map_err(|e| anyhow::anyhow!("{e:?}"))
-}
-
-/// How a song is synthesised: the output rate, the most voices at once, and the
-/// reverb/chorus effects (cheaper without, for handhelds).
-#[derive(Clone, Copy, Debug)]
-pub struct Quality {
-    pub rate: u32,
-    pub polyphony: usize,
-    pub effects: bool,
-}
-
-impl Default for Quality {
-    fn default() -> Self {
-        Self { rate: 44100, polyphony: 64, effects: true }
-    }
-}
-
-/// A song being rendered: stereo blocks from a MIDI file.
-pub struct Song {
-    seq: MidiFileSequencer,
-    looping: bool,
-}
-
-impl Song {
-    pub fn new(font: &Arc<SoundFont>, files: &GameFiles, file: &str, looping: bool, quality: Quality) -> anyhow::Result<Self> {
-        let data = files.read(file)?;
-        let midi = MidiFile::new(&mut data.as_slice()).map_err(|e| anyhow::anyhow!("{file}: {e:?}"))?;
-        let mut settings = SynthesizerSettings::new(quality.rate as i32);
-        settings.maximum_polyphony = quality.polyphony;
-        settings.enable_reverb_and_chorus = quality.effects;
-        let synth = Synthesizer::new(font, &settings).map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        let mut seq = MidiFileSequencer::new(synth);
-        seq.play(&Arc::new(midi), looping);
-        Ok(Self { seq, looping })
-    }
-
-    /// Fills both channels (equal lengths); false once a non-looping song has ended.
-    pub fn render(&mut self, left: &mut [f32], right: &mut [f32]) -> bool {
-        if !self.looping && self.seq.end_of_sequence() {
-            return false;
-        }
-        self.seq.render(left, right);
-        true
-    }
-}
-
-#[cfg(test)]
-mod tests;
