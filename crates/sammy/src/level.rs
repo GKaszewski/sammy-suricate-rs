@@ -244,13 +244,28 @@ impl Spawner<'_, '_, '_> {
                 self.commands.entity(id).despawn();
                 return warn!("missing model {file}");
             };
+            let skin_n = init.skin.unwrap_or(1);
+            let skin = if init.overlay { model.overlay_skin(skin_n, self.images, self.materials) } else { model.skin(skin_n) };
+            let material = if init.sky { self.unlit(&skin) } else { skin };
+            // Scenery without an action (or `InitMdl`) keeps a fixed frame; A4 frames are 1-based.
+            let frame = init.frame.or(obj.action.is_empty().then_some(1.0));
+            if let Some(f) = frame {
+                let index = (f.floor().max(1.0) as usize - 1).min(model.mdl.frames.len().saturating_sub(1));
+                let mesh = self.meshes.add(model.build_mesh(index));
+                self.commands.entity(id).insert((base, Mesh3d(mesh), MeshMaterial3d(material)));
+                if init.solid_box && let Some(fr) = model.mdl.frames.get(index) {
+                    let sc = obj.scale.map(f32::abs);
+                    let center = std::array::from_fn(|i| obj.origin[i] + (fr.bbox_min[i] + fr.bbox_max[i]) * 0.5 * sc[i]);
+                    let half = std::array::from_fn(|i| (fr.bbox_max[i] - fr.bbox_min[i]) * 0.5 * sc[i]);
+                    self.commands.entity(id).insert(crate::collision::BoxCollider { center, half, solid: true });
+                }
+                return;
+            }
             let (scene, pct) = init.anim.unwrap_or(("stand", 2.0));
             let mut animator = ModelAnimator::new(model.clone(), Vec::new(), 8.0);
             animator.play(scene, true, 0.0);
             animator.set_speed_pct(pct, actions::player::TICKS);
             let mesh = self.meshes.add(model.build_mesh(animator.frames.first().copied().unwrap_or(0)));
-            let skin = model.skin(init.skin.unwrap_or(1));
-            let material = if init.sky { self.unlit(&skin) } else { skin };
             self.commands.entity(id).insert((base, Mesh3d(mesh), MeshMaterial3d(material), animator));
         } else if file.ends_with(".wmb") {
             let Some((wmb, parts)) = self.load_prefab(&file) else {
@@ -283,6 +298,11 @@ impl Spawner<'_, '_, '_> {
                 let mut m = self.materials.get(&mat).cloned().unwrap_or_default();
                 m.alpha_mode = AlphaMode::Blend;
                 (self.materials.add(m), None)
+            } else if init.alpha.is_some_and(|a| a < 100.0) {
+                let mut m = self.materials.get(&mat).cloned().unwrap_or_default();
+                m.alpha_mode = AlphaMode::Blend;
+                m.base_color.set_alpha(init.alpha.unwrap_or(100.0) / 100.0);
+                (self.materials.add(m), None)
             } else if frames > 1 {
                 let m = self.materials.get(&mat).cloned().unwrap_or_default();
                 // Deterministic stand-in for WDL `random(frames)` start frame.
@@ -295,10 +315,20 @@ impl Spawner<'_, '_, '_> {
             let mut e = self.commands.entity(id);
             if init.title {
                 // `Visibility::Hidden` from init_title must survive `base`'s default visibility.
-                e.insert((base, Mesh3d(mesh), MeshMaterial3d(mat), ScreenAligned, NEAR_LAYER));
+                e.insert((base, Mesh3d(mesh.clone()), MeshMaterial3d(mat), ScreenAligned, NEAR_LAYER));
                 e.insert(Visibility::Hidden);
+            } else if init.facing {
+                e.insert((base, Mesh3d(mesh.clone()), MeshMaterial3d(mat), ScreenAligned));
+            } else if init.oriented {
+                e.insert((base, Mesh3d(mesh.clone()), MeshMaterial3d(mat)));
             } else {
-                e.insert((base, Mesh3d(mesh), MeshMaterial3d(mat), Billboard));
+                e.insert((base, Mesh3d(mesh.clone()), MeshMaterial3d(mat), Billboard));
+            }
+            if let Some(dz) = init.ground
+                && let Some(top) = self.meshes.get(&mesh).and_then(|m| m.attribute(Mesh::ATTRIBUTE_POSITION)?.as_float3()?.iter().map(|p| p[1]).reduce(f32::max))
+            {
+                let half_h = top * coords::QUANTS_PER_UNIT * obj.scale[2].abs();
+                e.insert(actions::decor::SpriteGround { origin: obj.origin, dz: half_h + dz });
             }
             if let Some(anim) = anim {
                 e.insert(anim);

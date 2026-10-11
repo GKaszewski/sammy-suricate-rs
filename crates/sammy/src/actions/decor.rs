@@ -50,6 +50,90 @@ pub fn init_decor(obj: &mut Object) {
     obj.scale[2] = if s[3] == 0.0 { 1.5 } else { s[3] };
 }
 
+/// Deterministic stand-in for WDL `random(1)` at spawn, seeded by the editor origin.
+fn spawn_random(obj: &Object, salt: u32) -> f32 {
+    let mut h = obj.origin.iter().fold(0x9E37_79B9u32 ^ salt, |h, v| (h ^ v.to_bits()).wrapping_mul(0x0100_0193));
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2C1B_3C6D);
+    h ^= h >> 12;
+    (h >> 8) as f32 / (1 << 24) as f32
+}
+
+/// `InitArbre` (mm1.wdl:1652-1724): grass and tree sprites. Every shipped one gets the ×0.3
+/// trunk hull, but sprite collision in A4 4.22 is unverified so none is added here.
+pub fn init_arbre(obj: &mut Object) -> ActionInit {
+    let flag = |n: u32| obj.flags & (1 << (n - 1)) != 0;
+    let s = obj.skills.clone();
+    let mut init = ActionInit { ground: Some(-4.0), oriented: obj.angles != [0.0; 3], ..default() };
+    if s[6] != 0.0 {
+        init.alpha = Some(s[6]);
+    }
+    if flag(1) {
+        init.facing = true;
+        init.ground = Some(0.0);
+    }
+    if flag(2) {
+        init.oriented = true;
+        init.ground = Some(0.0);
+    }
+    if flag(4) {
+        // Random X/Y scale in [0.5, 1.5); the height offset keeps the unscaled half height.
+        obj.scale[0] *= 0.5 + spawn_random(obj, 1);
+        obj.scale[1] *= 0.5 + spawn_random(obj, 2);
+        init.ground = Some(-4.0);
+    }
+    init
+}
+
+/// `OnGround` (mm1.wdl:3911-3933).
+pub fn on_ground(obj: &mut Object) -> ActionInit {
+    ActionInit { ground: Some(-2.0), alpha: (obj.skills[0] != 0.0).then_some(obj.skills[0]), ..default() }
+}
+
+/// `InitMdl` (mm1.wdl:4817-4868, the live definition): static decoration models.
+pub fn init_mdl(obj: &mut Object) -> ActionInit {
+    let s = obj.skills.clone();
+    for i in 0..3 {
+        if s[1 + i] != 0.0 {
+            obj.scale[i] = s[1 + i];
+        }
+    }
+    let frame = match (s[5], s[6]) {
+        (0.0, _) => 1.0,
+        (lo, 0.0) => lo,
+        (lo, hi) => lo + spawn_random(obj, 3) * (hi - lo),
+    };
+    ActionInit {
+        skin: (s[0] != 0.0).then_some(s[0] as u32),
+        frame: Some(frame),
+        overlay: obj.flags & 1 != 0,
+        solid_box: obj.flags & formats::wmb::entity_flags::PASSABLE == 0,
+        ..default()
+    }
+}
+
+/// Snaps a sprite onto the floor below its editor origin once collision is loaded.
+#[derive(Component)]
+pub struct SpriteGround {
+    pub origin: [f32; 3],
+    /// Height offset above the floor (half sprite height + action offset).
+    pub dz: f32,
+}
+
+pub fn snap_sprites(world: crate::collision::CollisionWorld, mut commands: Commands, mut q: Query<(Entity, &SpriteGround, &mut Transform)>) {
+    if !world.ready() {
+        return;
+    }
+    for (e, g, mut tf) in &mut q {
+        let [x, y, z] = g.origin;
+        let tr = world.trace_static(0, [x, y, z], [x, y, z - 2000.0]).trace;
+        if tr.hit() && !tr.start_solid {
+            tf.translation = coords::pos([x, y, tr.end[2] + g.dz]);
+        }
+        commands.entity(e).remove::<SpriteGround>();
+    }
+}
+
 pub fn follow_sky(
     time: Res<Time>,
     cam: Query<&Transform, (With<crate::camera::MainCamera>, Without<SkyFollow>)>,

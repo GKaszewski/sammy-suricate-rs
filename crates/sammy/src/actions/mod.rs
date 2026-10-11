@@ -1,7 +1,7 @@
 //! Ports of the WDL entity actions (see docs/gameplay.md). Each level object's
 //! action name is dispatched here when the level is spawned.
 
-mod decor;
+pub mod decor;
 pub mod door;
 pub mod enemy;
 pub mod fx;
@@ -103,6 +103,7 @@ impl Plugin for ActionsPlugin {
                 )
                     .chain(),
             )
+            .add_systems(Update, decor::snap_sprites)
             .add_systems(PostUpdate, decor::follow_sky.before(TransformSystems::Propagate));
     }
 }
@@ -122,6 +123,20 @@ pub struct ActionInit {
     pub skin: Option<u32>,
     /// Starting animation scene and speed (% of the scene per tick).
     pub anim: Option<(&'static str, f32)>,
+    /// Sprites: snap to the floor below at `floor + half height + offset` (`InitArbre`, `OnGround`).
+    pub ground: Option<f32>,
+    /// Sprites: non-zero angles are drawn oriented (fixed in the world) instead of camera-facing.
+    pub oriented: bool,
+    /// Sprites: `facing` (screen-parallel).
+    pub facing: bool,
+    /// Opacity in percent (`ent_alphaset`), below 100 = blended.
+    pub alpha: Option<f32>,
+    /// Models: fixed frame (A4 1-based, fractions floored), no animation.
+    pub frame: Option<f32>,
+    /// Models: `overlay` colour key (palette index 0 / black is transparent).
+    pub overlay: bool,
+    /// Models: solid bounding box collider.
+    pub solid_box: bool,
 }
 
 fn is_playing(current: Res<crate::flow::CurrentLevel>) -> bool {
@@ -323,6 +338,9 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
             decor::init_decor(obj);
             ActionInit::default()
         }
+        "initarbre" => decor::init_arbre(obj),
+        "onground" => decor::on_ground(obj),
+        "initmdl" => decor::init_mdl(obj),
         _ => ActionInit::default(),
     }
 }

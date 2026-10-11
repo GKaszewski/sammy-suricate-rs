@@ -62,6 +62,26 @@ impl LoadedModel {
     }
 
     /// Material for A4 skin number `n` (1-based; 0 means the default skin 1).
+    /// Skin `n` with A4 `overlay`: palette index 0 (or black for true-colour skins) is transparent.
+    pub fn overlay_skin(&self, n: u32, images: &mut Assets<Image>, materials: &mut Assets<StandardMaterial>) -> Handle<StandardMaterial> {
+        let Some(skin) = self.mdl.skins.get((n.max(1) as usize - 1).min(self.mdl.skins.len().saturating_sub(1))) else {
+            return self.skin(n);
+        };
+        let mut img = skin.image.clone();
+        match &skin.indices {
+            Some(idx) => img.data.chunks_exact_mut(4).zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
+            None => img.data.chunks_exact_mut(4).filter(|px| px[..3] == [0, 0, 0]).for_each(|px| px[3] = 0),
+        }
+        materials.add(StandardMaterial {
+            base_color_texture: Some(images.add(crate::image::to_bevy(&img, true, false))),
+            perceptual_roughness: 1.0,
+            alpha_mode: AlphaMode::Mask(0.5),
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        })
+    }
+
     pub fn skin(&self, n: u32) -> Handle<StandardMaterial> {
         self.skins[(n.max(1) as usize - 1).min(self.skins.len() - 1)].clone()
     }
