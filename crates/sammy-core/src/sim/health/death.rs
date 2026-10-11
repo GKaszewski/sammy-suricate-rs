@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::angle::Degrees;
-use crate::percent::Percent;
 use crate::space::Placement;
 use crate::space::Pos;
 

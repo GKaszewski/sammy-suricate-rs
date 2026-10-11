@@ -6,7 +6,6 @@ use crate::angle::Angles;
 use crate::collision::BoxCollider;
 use crate::enemies::{Impact, Out, Shared, World};
 use crate::id::Id;
-use crate::percent::Percent;
 use crate::player::{SCALE, State};
 use crate::space::Pos;
 

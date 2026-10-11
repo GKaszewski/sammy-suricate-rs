@@ -6,7 +6,6 @@ use crate::extro::{Body, FADE_SPEED, RESUME_LEVEL, TriggerKind, Wanted, cut_came
 use crate::id::Id;
 use crate::input::Controls;
 use crate::levels::MENU_FILE;
-use crate::percent::Percent;
 use crate::player::State;
 
 /// The fade starts at `FADE_START` and the extro ends at `FADE_FULL` (fog percent).

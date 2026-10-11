@@ -7,7 +7,6 @@
 use super::{Dt, Sim};
 use crate::collision::Hull;
 use crate::id::Id;
-use crate::percent::Percent;
 use crate::platforms::{CAMERA_SNAP, Platform, TeleportStep, UNLOCKED_PLATFORM};
 use crate::player::State;
 use crate::space::Pos;
