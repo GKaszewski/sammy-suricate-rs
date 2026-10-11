@@ -29,6 +29,7 @@ mod patrol;
 mod sense;
 mod start;
 mod tick;
+mod view;
 
 pub use self::{clock::*, contact::*, enemy::*, globals::*, homing::*, init::*, start::*, tick::*};
 use self::{anim::*, behavior::*, math::*, movement::*, patrol::*, sense::*};
