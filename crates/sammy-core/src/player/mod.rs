@@ -38,13 +38,14 @@ pub use self::tuning::PlayerTuning;
 use self::intent::Intent;
 use crate::time::Ticks;
 use crate::space::Quants;
+use crate::angle::Degrees;
 
 #[derive(Clone, Debug)]
 pub struct Player {
     /// Native position (quants).
     pub pos: [f32; 3],
     /// Degrees, counter-clockwise from +X.
-    pub pan: f32,
+    pub pan: Degrees,
     /// Walk speed in quants/tick (Skill2 `SpeedBalle`).
     pub speed: f32,
     /// `BlobVspeed` (quants/tick) and `BlobFricVspeed`.
@@ -113,7 +114,7 @@ impl Player {
     pub fn at(pos: [f32; 3], pan: f32, speed: f32, scan_radius: Quants) -> Self {
         Self {
             pos,
-            pan,
+            pan: Degrees(pan),
             speed,
             vz: 0.0,
             fric: 0.0,
@@ -137,7 +138,7 @@ impl Player {
     /// Moves Sammy to a respawn point; he is re-snapped to the floor next frame.
     pub fn teleport(&mut self, pos: [f32; 3], pan: f32) {
         self.pos = pos;
-        self.pan = pan;
+        self.pan = Degrees(pan);
         self.vz = 0.0;
         self.grounded = true;
         self.snapped = false;
@@ -145,7 +146,7 @@ impl Player {
 
     /// Model orientation: pan plus the slope lean (upright while dancing).
     pub fn angles(&self) -> [f32; 3] {
-        if self.state == State::Win { [self.pan, 0.0, 0.0] } else { [self.pan, self.tilt, self.roll] }
+        if self.state == State::Win { [self.pan.0, 0.0, 0.0] } else { [self.pan.0, self.tilt, self.roll] }
     }
 
     /// One frame of `HandleSpeedPlayer`.

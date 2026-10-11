@@ -39,7 +39,7 @@ fn spawn_flying(sim: &mut Sim, name: &str, color: KeyColor, gem: FlyingGem) {
 
 /// `EjectOldKey` + `LaunchYouKey`: the old key flies forward at 2× Sammy's walk speed.
 pub(super) fn throw_back_key(sim: &mut Sim, color: KeyColor, p: &Player, life: f32) {
-    spawn_flying(sim, "thrown key", color, FlyingGem::thrown(p.pos, p.pan, p.speed, life));
+    spawn_flying(sim, "thrown key", color, FlyingGem::thrown(p.pos, p.pan.get(), p.speed, life));
 }
 
 /// `EjectNewKey` → `LaunchNewKey`: a gem launched from `pos` (boulders, Sammy's death).

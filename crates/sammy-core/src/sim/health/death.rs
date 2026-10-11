@@ -27,7 +27,7 @@ pub(in crate::sim) fn detect_deaths(sim: &mut Sim, dt: Dt) {
 pub(in crate::sim) fn run_death(sim: &mut Sim, dt: Dt) {
     let w = &mut sim.world;
     let Some((me, p)) = w.player() else { return };
-    let victim = Victim { pos: p.pos, pan: p.pan, vel: p.vel };
+    let victim = Victim { pos: p.pos, pan: p.pan.get(), vel: p.vel };
     let Some(d) = w.dying.get_mut(&me) else { return };
     let mut events = Vec::new();
     // Opacity is applied on frames that run a fade stage (not on the frame one starts).

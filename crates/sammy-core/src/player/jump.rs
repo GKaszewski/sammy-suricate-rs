@@ -21,7 +21,7 @@ impl Player {
     /// Step 3: moving jumps take off at once; standing ones wind up first.
     pub(super) fn jump<S: Space>(&mut self, intent: &Intent, slope: SlopeFeel, f: &Frame<S>, mut anim: Option<&mut Anim>) {
         let mut take_off = false;
-        let slope_ok = !slope.big || wrap(slope.pan, self.pan).abs() <= SLOPE_JUMP_ANGLE;
+        let slope_ok = !slope.big || wrap(slope.pan, self.pan.0).abs() <= SLOPE_JUMP_ANGLE;
         if intent.jump_hit && slope_ok && self.grounded && matches!(self.state, State::Stand | State::Walk | State::Turn) {
             if intent.forward != 0.0 {
                 take_off = true;

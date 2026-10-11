@@ -51,7 +51,7 @@ fn digest(sim: &Sim) -> String {
         g.lost
     );
     for p in sim.world.players.values() {
-        let _ = write!(out, " | sammy {} {} {} pan {}", r(p.pos[0] / 32.0), r(p.pos[1] / 32.0), r(p.pos[2] / 32.0), r(p.pan));
+        let _ = write!(out, " | sammy {} {} {} pan {}", r(p.pos[0] / 32.0), r(p.pos[1] / 32.0), r(p.pos[2] / 32.0), r(p.pan.get()));
     }
     let lines: Vec<String> = sim
         .world

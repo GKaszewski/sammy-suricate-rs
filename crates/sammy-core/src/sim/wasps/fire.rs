@@ -28,7 +28,7 @@ pub(in crate::sim) fn fire(sim: &mut Sim, controls: &Controls, dt: Dt) {
     let Some(anim) = w.animators.get_mut(&me) else { return };
     let kind = sim.game.ammo_type.clamp(1, KINDS);
     let fired = crate::wasps::fire(p, &mut anim.anim, &mut sim.game, trigger, playing);
-    let pan = p.pan;
+    let pan = p.pan.get();
     let mut shots = Vec::new();
     // Release due shots of the current fan.
     if let Some(pending) = w.pending_shots.get_mut(&me)

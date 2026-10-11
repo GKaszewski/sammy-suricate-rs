@@ -3,6 +3,7 @@
 use super::intent::Intent;
 use super::{Frame, HULL, Player, StepOut, Touch};
 use crate::collision::{Space, slide_move};
+use crate::angle::Degrees;
 
 /// Slopes: medium ones damp turning, big ones (tuning) strafe and steer downhill.
 const MEDIUM_SLOPE: f32 = 2.0;
@@ -48,14 +49,14 @@ impl Player {
             v *= 0.75;
             strafe = -ix * self.speed * 0.75 * t;
             angle_force = 0.0;
-            self.pan += wrap(slope_pan, self.pan) * SPEED_ROTATION_PENTE * t;
+            self.pan += Degrees(wrap(slope_pan, self.pan.0) * SPEED_ROTATION_PENTE * t);
         } else if medium {
             v *= 0.9;
             strafe = -ix * self.speed * 0.5 * t;
             angle_force *= 0.25;
         }
-        self.pan -= angle_force;
-        let (s, c) = self.pan.to_radians().sin_cos();
+        self.pan -= Degrees(angle_force);
+        let (s, c) = self.pan.radians().sin_cos();
         let (pos, touched) = slide_move(f.space, HULL, self.pos, [c * v - s * strafe, s * v + c * strafe, 0.0], Some(f.me));
         self.pos = pos;
         if let Some((e, n)) = touched {

@@ -56,7 +56,7 @@ impl Player {
 
     /// Eases the visual tilt and roll toward the floor normal `n`.
     fn lean(&mut self, n: [f32; 3], t: f32) {
-        let (sp, cp) = (-self.pan).to_radians().sin_cos();
+        let (sp, cp) = (-self.pan).radians().sin_cos();
         let local = [n[0] * cp - n[1] * sp, n[0] * sp + n[1] * cp];
         let want_tilt = -local[0].asin().to_degrees();
         let want_roll = -local[1].asin().to_degrees();

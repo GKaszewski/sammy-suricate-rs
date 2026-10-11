@@ -4,6 +4,7 @@ use super::intent::Intent;
 use super::{Player, State};
 use crate::anim::Anim;
 use crate::time::TICKS_PER_SEC;
+use crate::angle::Degrees;
 
 // Animation speeds in % of the scene per tick (mm1.wdl:39-85, anims.wdl).
 const ANIM_STAND: f32 = 2.0;
@@ -27,7 +28,7 @@ impl Player {
                 a.set_speed_pct(ANIM_WIN, TICKS_PER_SEC);
             }
         }
-        self.pan += WIN_SPIN * t;
+        self.pan += Degrees(WIN_SPIN * t);
     }
 
     /// Step 6: stand / walk / turn from the intent, and the jump scenes' speeds.

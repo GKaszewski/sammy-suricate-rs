@@ -6,6 +6,7 @@ use crate::anim::Anim;
 use crate::collision::Space;
 use crate::game::{BOOST_MAX, GameState};
 use crate::time::TICKS_PER_SEC;
+use crate::angle::Degrees;
 
 /// Boost: the engine doubles `Key_Force`; the script keeps turning ×0.75 (net ×1.5).
 const BOOST_TURN_FORCE: f32 = 1.5;
@@ -63,7 +64,7 @@ impl Player {
     pub(super) fn u_turn<S: Space>(&mut self, f: &Frame<S>, anim: Option<&mut Anim>, sounds: &mut Vec<&'static str>, t: f32) {
         if f.controls.uturn_hit && f.input && self.grounded && matches!(self.state, State::Stand | State::Walk | State::Turn) {
             self.state = State::UTurn;
-            self.uturn = Some((self.pan + 180.0, false));
+            self.uturn = Some((self.pan.0 + 180.0, false));
             sounds.push("Blouit_son");
             if let Some(a) = anim {
                 a.play("turn", true, 0.0);
@@ -71,9 +72,9 @@ impl Player {
             }
         }
         if let (State::UTurn, Some((dest, started))) = (self.state, self.uturn) {
-            let step = ang((dest - self.pan) * if started { UTURN_NEXT } else { UTURN_FIRST });
+            let step = ang((dest - self.pan.0) * if started { UTURN_NEXT } else { UTURN_FIRST });
             if step > UTURN_DONE {
-                self.pan += step * t;
+                self.pan += Degrees(step * t);
                 self.uturn = Some((dest, true));
             } else {
                 self.uturn = None;

@@ -13,7 +13,7 @@ pub(super) fn init(sim: &mut Sim, id: Id, obj: &mut Object) {
     obj.scale = [SCALE; 3];
     let mut p = Player::from_object(obj);
     if let Some((pos, pan)) = sim.debug.start {
-        p = Player::at(pos, pan.unwrap_or(p.pan), p.speed, p.scan_radius);
+        p = Player::at(pos, pan.unwrap_or(p.pan.get()), p.speed, p.scan_radius);
     }
     sim.world.players.insert(id, p);
 }

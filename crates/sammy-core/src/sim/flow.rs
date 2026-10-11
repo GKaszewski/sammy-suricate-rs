@@ -61,7 +61,7 @@ impl Sim {
         if let Some(cp) = slot.and_then(|s| self.save.checkpoints.get(s.index()).copied().flatten()) {
             let mut pan = 0.0;
             for p in self.world.players.values_mut() {
-                pan = p.pan;
+                pan = p.pan.get();
                 p.teleport(cp, pan);
             }
             self.game.start = Some(Placement::new(cp, pan));

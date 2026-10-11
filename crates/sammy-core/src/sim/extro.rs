@@ -18,7 +18,7 @@ pub const FADE_FULL: f32 = 100.0;
 pub(super) fn update_pov(sim: &mut Sim) {
     let w = &sim.world;
     sim.scanners.0.clear();
-    let sammy: Option<Body> = w.player().map(|(id, p)| (id, p.pos, p.pan, p.vel));
+    let sammy: Option<Body> = w.player().map(|(id, p)| (id, p.pos, p.pan.get(), p.vel));
     if let Some((_, pos, ..)) = sammy {
         sim.scanners.0.push(pos);
     }

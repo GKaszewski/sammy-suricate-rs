@@ -43,7 +43,7 @@ pub fn fire(p: &mut Player, anim: &mut Anim, game: &mut GameState, trigger: bool
         }
     }
     if p.state == State::FireA && anim.finished() {
-        let (s, c) = (p.pan + 180.0).to_radians().sin_cos();
+        let (s, c) = (p.pan.0 + 180.0).to_radians().sin_cos();
         let spawn = [p.pos[0] + c * SPAWN_BEHIND, p.pos[1] + s * SPAWN_BEHIND, p.pos[2] + SPAWN_HEIGHT];
         game.ammo -= 1;
         let shots = if matches!(kind, 3 | 4) {
