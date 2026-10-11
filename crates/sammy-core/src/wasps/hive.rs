@@ -20,7 +20,7 @@ pub struct Hive {
     pub(super) kind: u32,
     /// Skill8: emission period (0 = never).
     pub(super) period: f32,
-    pub(super) timer: f32,
+    pub(super) timer: Ticks,
     pub(super) pan: f32,
     pub pos: [f32; 3],
 }
@@ -61,7 +61,7 @@ impl Hive {
             hspeed: obj.skill(7),
             kind: obj.skill(6) as u32,
             period: obj.skill(8),
-            timer: HIVE_START + obj.skill(8),
+            timer: Ticks(HIVE_START + obj.skill(8)),
             pan: obj.angles[0],
             pos: obj.origin,
         }
@@ -69,15 +69,14 @@ impl Hive {
 
     /// One frame; returns a launch and whether the hive is now exhausted.
     pub fn step(&mut self, game: &GameState, rng: &mut Rng, t: Ticks) -> Option<(HiveLaunch, bool)> {
-        let t = t.get();
         if self.period <= 0.0 {
             return None;
         }
         self.timer -= t;
-        if self.timer > 0.0 {
+        if self.timer > Ticks::ZERO {
             return None;
         }
-        self.timer += self.period;
+        self.timer += Ticks(self.period);
         if game.ammo >= self.cap && game.ammo_type == self.kind {
             return None; // capped: the hive looks empty
         }
@@ -132,7 +131,6 @@ impl HiveWasp {
     /// One frame; `trace` sweeps a point through the level and map entities. Returns the
     /// pickup it settles into (and that pickup's lifetime, if any).
     pub fn step(&mut self, trace: impl Fn([f32; 3], [f32; 3]) -> Trace, rng: &mut Rng, t: Ticks, sounds: &mut Vec<&'static str>) -> Option<(AmmoPickup, Option<f32>)> {
-        let t = t.get();
         if self.fate == FROZEN {
             return None;
         }
@@ -165,7 +163,7 @@ impl HiveWasp {
         }
         self.tilt -= if self.bounces == 0.0 { 2.0 * t } else { self.tilt * 0.1 * t };
         let (s, c) = self.pan.to_radians().sin_cos();
-        let d = [c * self.speed * t.min(1.0), s * self.speed * t.min(1.0), vstep];
+        let d = [c * self.speed * t.min(Ticks(1.0)), s * self.speed * t.min(Ticks(1.0)), vstep];
         let hit = trace(self.pos, [self.pos[0] + d[0], self.pos[1] + d[1], self.pos[2] + d[2]]);
         let before = self.pos;
         self.pos = hit.end;
@@ -175,14 +173,14 @@ impl HiveWasp {
             self.pan = n[1].atan2(n[0]).to_degrees();
             self.speed = (self.speed - 8.0).max(0.1);
         }
-        self.speed -= 0.05 * t.min(1.0);
+        self.speed -= 0.05 * t.min(Ticks(1.0));
         let moved = (self.pos[0] - before[0]).abs() + (self.pos[1] - before[1]).abs();
         let mut settled = false;
         if moved < 1.0 {
-            self.vz_org -= 0.5 * t.min(1.0);
+            self.vz_org -= 0.5 * t.min(Ticks(1.0));
             settled |= self.vz_org.abs() < 1.5;
         } else {
-            self.vz_org -= 0.02 * t.min(1.0);
+            self.vz_org -= 0.02 * t.min(Ticks(1.0));
         }
         if self.speed < 1.0 {
             self.speed = 1.0;

@@ -16,9 +16,9 @@ pub(super) enum Stage {
 }
 
 /// The death animation's sound plays this many ticks in.
-pub(super) const KAPUTT_SOUND_AT: f32 = 8.0;
+pub(super) const KAPUTT_SOUND_AT: Ticks = Ticks(8.0);
 /// The death animation ends at the latest after this many ticks.
-pub(super) const KAPUTT_MAX: f32 = 64.0;
+pub(super) const KAPUTT_MAX: Ticks = Ticks(64.0);
 /// Speeds of the death animations (percent per tick).
 pub(super) const KAPUTT_ANIM_SPEED: f32 = 3.0;
 pub(super) const FINKAPUTT_ANIM_SPEED: f32 = 2.0;
@@ -33,7 +33,7 @@ pub fn look_down(k: f32, t: f32) -> f32 {
 pub(super) const FADE_OUT_SPEED: f32 = 2.0;
 pub(super) const FADE_IN_SPEED: f32 = 10.0;
 /// Blink after a death animation: ticks, and the flicker period over time.
-pub(super) const BLINK_TICKS: f32 = 46.0;
+pub(super) const BLINK_TICKS: Ticks = Ticks(46.0);
 pub(super) fn blink_period(ticks: f32) -> f32 {
     if ticks < 16.0 {
         4.0
@@ -65,7 +65,7 @@ pub enum DeathEvent {
     DropKey(Launch),
     Sound(&'static str),
     /// The camera looks down at Sammy: apply [`look_down`] to its PlusTilt scale.
-    CameraLookDown { t: f32 },
+    CameraLookDown { t: Ticks },
     /// Out of lives: the camera stops tilting and orbits.
     GameOver,
     /// `RestartSammy`: reset scan, back to the respawn point (if any).
@@ -81,7 +81,7 @@ pub enum DeathEvent {
 pub struct Dying {
     pub kind: DeathKind,
     pub(super) stage: Stage,
-    pub(super) ticks: f32,
+    pub(super) ticks: Ticks,
     /// Sammy's opacity in percent (`my.alpha`).
     pub alpha: f32,
     pub(super) sound_played: bool,
@@ -89,7 +89,7 @@ pub struct Dying {
 
 impl Dying {
     pub fn new(kind: DeathKind) -> Self {
-        Self { kind, stage: Stage::Dying, ticks: 0.0, alpha: 100.0, sound_played: false }
+        Self { kind, stage: Stage::Dying, ticks: Ticks::ZERO, alpha: 100.0, sound_played: false }
     }
 
     /// Whether the sequence is fading Sammy (the frontend applies [`Dying::alpha`]).
@@ -99,7 +99,6 @@ impl Dying {
 
     /// One frame of `t` ticks.
     pub fn step(&mut self, game: &mut GameState, anim: Option<&mut Anim>, victim: Victim, t: Ticks, out: &mut Vec<DeathEvent>) {
-        let t = t.get();
         self.ticks += t;
         let mut anim = anim;
         match self.stage {
@@ -134,7 +133,7 @@ impl Dying {
                 };
                 if done {
                     game.lives = game.lives.lose_one();
-                    self.ticks = 0.0;
+                    self.ticks = Ticks::ZERO;
                     self.stage = if game.lives <= Lives::NONE {
                         game.lost = true;
                         out.push(DeathEvent::GameOver);
@@ -157,7 +156,7 @@ impl Dying {
                 }
             }
             Stage::Blink => {
-                let visible = (self.ticks / blink_period(self.ticks)) as i32 % 2 != 0;
+                let visible = (self.ticks.get() / blink_period(self.ticks.get())) as i32 % 2 != 0;
                 if self.ticks >= BLINK_TICKS {
                     out.push(DeathEvent::Visible(true));
                     self.alpha = 0.0;
@@ -180,7 +179,7 @@ impl Dying {
     pub(super) fn respawn(&mut self, game: &mut GameState, out: &mut Vec<DeathEvent>) {
         game.hearts = MAX_HEARTS;
         out.push(DeathEvent::Respawn(game.start));
-        self.ticks = 0.0;
+        self.ticks = Ticks::ZERO;
         self.stage = Stage::FadeIn;
     }
 }

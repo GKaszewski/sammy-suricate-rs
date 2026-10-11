@@ -11,7 +11,7 @@ impl Door {
             top: obj.origin[2] + rise,
             up_speed: obj.skill(4),
             down_speed: obj.skill(5),
-            hold: if obj.skill(8) == 0.0 { DEFAULT_HOLD } else { obj.skill(8) },
+            hold: if obj.skill(8) == 0.0 { DEFAULT_HOLD } else { Ticks(obj.skill(8)) },
             open_dist: if obj.skill(3) == 0.0 { DEFAULT_OPEN_DIST } else { obj.skill(3) },
             color: KeyColor(obj.skill(6) as u32),
             scan_id: obj.skill(7),
@@ -20,12 +20,12 @@ impl Door {
             keyless: obj.flag(6),
             exact: obj.flag(7),
             state: DoorState::Down,
-            flash: 0.0,
+            flash: Ticks::ZERO,
             rise,
             gem_flying: false,
             validated: false,
             refreshed: false,
-            bell: 0.0,
+            bell: Ticks::ZERO,
             clear_pass: 0,
         }
     }
@@ -44,7 +44,6 @@ impl Door {
 
     /// One frame (`t` ticks); `origin` is the door brush's position, moved here.
     pub fn step(&mut self, origin: &mut [f32; 3], game: &mut GameState, view: &DoorView, t: Ticks, out: &mut Vec<DoorEvent>) {
-        let t = t.get();
         let o = *origin;
         let p = view.sammy;
         let horiz = ((o[0] - p[0]).powi(2) + (o[1] - p[1]).powi(2)).sqrt();
@@ -53,7 +52,7 @@ impl Door {
         // has no event any more (no recall, no flash).
         let scanned = self.scan_id == SAMMY_SCAN_ID && dist <= RANGE_SCAN_DOOR && !view.sammy_dead && self.state != DoorState::Open;
         let accepts = self.accepts(game.key);
-        self.flash = (self.flash - t).max(0.0);
+        self.flash = (self.flash - t).max(Ticks::ZERO);
 
         // OuvrePortail, reached with the right key (or while a gem is flying).
         if scanned && (accepts || self.gem_flying) {
@@ -84,7 +83,7 @@ impl Door {
                 }
                 self.state = DoorState::Rising;
             }
-        } else if scanned && !accepts && self.flash == 0.0 && matches!(self.state, DoorState::Down) {
+        } else if scanned && !accepts && self.flash == Ticks::ZERO && matches!(self.state, DoorState::Down) {
             // Wrong or no key: flash (and blink the score for the exit door).
             self.flash = WRONG_KEY_FLASH;
             if self.color == EXIT_COLOR && !game.goal_reached {
@@ -101,7 +100,7 @@ impl Door {
                     DoorState::Open // burn door
                 } else {
                     self.refreshed = false;
-                    self.bell = 0.0;
+                    self.bell = Ticks::ZERO;
                     DoorState::Up { hold: self.hold }
                 }
             }
@@ -114,14 +113,14 @@ impl Door {
                     let hold = hold - t;
                     if self.hold > BELL_WINDOW {
                         self.bell -= t;
-                        if self.bell <= 0.0 {
+                        if self.bell <= Ticks::ZERO {
                             self.bell = BELL_PERIOD;
                             if hold < BELL_WINDOW && hold > BELL_QUIET {
                                 out.push(DoorEvent::Sound("Bell1"));
                             }
                         }
                     }
-                    if hold > 0.0 {
+                    if hold > Ticks::ZERO {
                         DoorState::Up { hold }
                     } else if self.refreshed || self.gem_flying {
                         self.refreshed = false;

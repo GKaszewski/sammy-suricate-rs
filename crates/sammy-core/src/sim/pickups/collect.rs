@@ -58,7 +58,7 @@ pub(in crate::sim) fn collect(sim: &mut Sim) {
         if let Some(lk) = w.level_keys.get_mut(&id) {
             lk.home.get_or_insert(at.to_array());
         }
-        let life = w.gem_lifetimes.get(&id).map_or(0.0, |l| l.ticks);
+        let life = w.gem_lifetimes.get(&id).map_or(0.0, |l| l.ticks.get());
         sim.sound("ColoredGem_son");
         sim.effect(Effect::GemCatch { at, color });
         let held = sim.game.key;

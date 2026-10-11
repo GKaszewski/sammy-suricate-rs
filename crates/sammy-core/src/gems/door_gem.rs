@@ -12,7 +12,7 @@ pub struct DoorGem {
     pub color: KeyColor,
     pub pos: [f32; 3],
     pub(super) phase: DoorGemPhase,
-    pub(super) timer: f32,
+    pub(super) timer: Ticks,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -26,8 +26,8 @@ pub(super) enum DoorGemPhase {
 pub(super) const DOOR_AIM_HEIGHT: f32 = 100.0;
 /// The gem leaves this high above Sammy.
 pub(super) const DOOR_GEM_START: f32 = 40.0;
-pub(super) const APPROACH_TICKS: f32 = 80.0;
-pub(super) const FINAL_TICKS: f32 = 16.0;
+pub(super) const APPROACH_TICKS: Ticks = Ticks(80.0);
+pub(super) const FINAL_TICKS: Ticks = Ticks(16.0);
 
 /// What the door says about the gem.
 #[derive(Clone, Copy, Debug)]
@@ -62,13 +62,12 @@ impl DoorGem {
     /// One frame: `Some(true)` arrived (validate the door), `Some(false)` back with Sammy
     /// (return the key), `None` still flying.
     pub fn fly(&mut self, target: DoorGemTarget, sammy: [f32; 3], t: Ticks) -> Option<bool> {
-        let t = t.get();
         let aim = [target.door_pos[0], target.door_pos[1], target.door_pos[2] + DOOR_AIM_HEIGHT];
         match self.phase {
             DoorGemPhase::Approach => {
                 let dist = move_toward(&mut self.pos, aim, SPEED_GEM_KEY * t);
                 self.timer -= t;
-                if dist <= 20.0 || !target.wanted || self.timer <= 0.0 || target.validated {
+                if dist <= 20.0 || !target.wanted || self.timer <= Ticks::ZERO || target.validated {
                     self.phase = DoorGemPhase::Final;
                     self.timer = FINAL_TICKS;
                 }
@@ -79,7 +78,7 @@ impl DoorGem {
                 move_toward(&mut self.pos, aim, len * 0.7 * t);
                 self.timer -= t;
                 let dist = distance(self.pos, aim);
-                if dist <= 16.0 || self.timer <= 0.0 {
+                if dist <= 16.0 || self.timer <= Ticks::ZERO {
                     if dist <= 20.0 && target.wanted {
                         return Some(true);
                     }
@@ -92,7 +91,7 @@ impl DoorGem {
                 let home = [sammy[0], sammy[1], sammy[2] + DOOR_AIM_HEIGHT];
                 let len = distance(self.pos, home);
                 self.timer -= t;
-                if len <= 32.0 || self.timer <= 0.0 {
+                if len <= 32.0 || self.timer <= Ticks::ZERO {
                     return Some(false);
                 }
                 let v = if len > 128.0 { 40.0 * t } else { len * 0.9 * t };

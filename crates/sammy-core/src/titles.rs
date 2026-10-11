@@ -10,7 +10,7 @@ enum Phase {
     Waiting,
     FadeIn,
     Near,
-    Linger(f32),
+    Linger(Ticks),
     FadeOut,
     Done,
 }
@@ -30,7 +30,7 @@ pub struct Title {
     alpha_max: f32,
     /// Fade-in ticks, lifetime after leaving, fade-out ticks (Skill5/6/7).
     fade_in: f32,
-    life: f32,
+    life: Ticks,
     fade_out: f32,
     /// Opacity in percent.
     pub alpha: f32,
@@ -46,7 +46,7 @@ impl Title {
             range: if range == 0.0 { DEFAULT_RANGE } else { range },
             alpha_max: if obj.skill(8) == 0.0 { 100.0 } else { obj.skill(8) },
             fade_in: or1(obj.skill(5)),
-            life: or1(obj.skill(6)),
+            life: Ticks(or1(obj.skill(6))),
             fade_out: or1(obj.skill(7)),
             alpha: 0.0,
             phase: Phase::Waiting,
@@ -55,7 +55,6 @@ impl Title {
 
     /// One frame; `nearest` is the nearest scanner's distance. Returns whether shown.
     pub fn step(&mut self, nearest: Option<f32>, enter: bool, t: Ticks) -> bool {
-        let t = t.get();
         let near = nearest.is_some_and(|d| d <= self.range);
         self.phase = match self.phase {
             Phase::Waiting if near => Phase::FadeIn,
@@ -70,7 +69,7 @@ impl Title {
                 }
             }
             Phase::Near if !near => Phase::Linger(self.life),
-            Phase::Linger(left) if left - t <= 0.0 => Phase::FadeOut,
+            Phase::Linger(left) if left - t <= Ticks::ZERO => Phase::FadeOut,
             Phase::Linger(left) => Phase::Linger(left - t),
             Phase::FadeOut => {
                 self.alpha -= self.alpha_max / self.fade_out * t;

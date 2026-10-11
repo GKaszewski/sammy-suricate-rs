@@ -44,7 +44,7 @@ pub(in crate::sim) fn run_death(sim: &mut Sim, dt: Dt) {
             DeathEvent::Sound(s) => sim.sound(s),
             DeathEvent::CameraLookDown { t } => {
                 let f = &mut sim.camera.follow;
-                f.tilt_scale = Some(crate::health::look_down(f.tilt_scale.unwrap_or(1.0), t));
+                f.tilt_scale = Some(crate::health::look_down(f.tilt_scale.unwrap_or(1.0), t.get()));
             }
             DeathEvent::GameOver => {
                 sim.camera.follow.tilt_scale = Some(0.0);

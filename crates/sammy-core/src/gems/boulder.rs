@@ -27,7 +27,7 @@ pub struct Boulder {
     pub(super) hspeed: f32,
     /// Skill8: ticks between automatic gems (0 = impact only).
     pub(super) period: f32,
-    pub(super) timer: f32,
+    pub(super) timer: Ticks,
     pub(super) spread: f32,
     pub(super) pan: f32,
     pub(super) pos: [f32; 3],
@@ -55,7 +55,7 @@ impl Boulder {
             color: obj.skill(6),
             hspeed: obj.skill(7),
             period: obj.skill(8),
-            timer: BOULDER_START + obj.skill(8),
+            timer: Ticks(BOULDER_START + obj.skill(8)),
             spread,
             pan: obj.angles[0],
             pos: obj.origin,
@@ -81,15 +81,14 @@ impl Boulder {
 
     /// Auto mode: a gem every Skill8 ticks.
     pub fn step(&mut self, rng: &mut Rng, t: Ticks) -> Option<Launch> {
-        let t = t.get();
         if self.period <= 0.0 {
             return None;
         }
         self.timer -= t;
-        if self.timer > 0.0 {
+        if self.timer > Ticks::ZERO {
             return None;
         }
-        self.timer += self.period;
+        self.timer += Ticks(self.period);
         let pan = self.pan + rng.random(self.spread) - self.spread * 0.5;
         let hspeed = self.hspeed + rng.random(3.0);
         let vz = self.vz + rng.random(4.0);

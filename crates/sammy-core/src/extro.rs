@@ -8,6 +8,7 @@ use crate::anim::Anim;
 use crate::id::Id;
 use crate::time::TICKS_PER_SEC;
 use crate::levels::LevelSlot;
+use crate::time::Ticks;
 
 /// `IdPlayer` (Sammy's Skill1 in scans).
 pub const ID_PLAYER: f32 = 3333.0;
@@ -83,7 +84,7 @@ pub struct Trigger {
     pub pos: [f32; 3],
     /// Skill1 id to find, Skill2 radius, Skill3 subtype / scene, Skill5 speed, Skill6 step.
     s: [f32; 8],
-    timer: f32,
+    timer: Ticks,
     pub done: bool,
 }
 
@@ -107,7 +108,7 @@ impl Trigger {
     pub fn from_object(kind: TriggerKind, obj: &Object) -> Self {
         let mut s = [0.0; 8];
         s.copy_from_slice(&obj.skills[..8]);
-        Self { kind, pos: obj.origin, s, timer: 0.0, done: false }
+        Self { kind, pos: obj.origin, s, timer: Ticks::ZERO, done: false }
     }
 
     /// One tick: whether it scans now (SetPovSyn / SetAnimPlayer every 2 ticks,
@@ -116,11 +117,11 @@ impl Trigger {
         if self.done {
             return false;
         }
-        self.timer -= 1.0;
-        if self.timer > 0.0 {
+        self.timer -= Ticks(1.0);
+        if self.timer > Ticks::ZERO {
             return false;
         }
-        self.timer = if self.kind == TriggerKind::FinExtro { 4.0 } else { 2.0 };
+        self.timer = if self.kind == TriggerKind::FinExtro { Ticks(4.0) } else { Ticks(2.0) };
         true
     }
 

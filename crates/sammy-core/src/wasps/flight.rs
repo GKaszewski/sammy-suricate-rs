@@ -15,7 +15,7 @@ pub struct Wasp {
     pub homing_range: f32,
     pub tilt_gain: f32,
     pub bounce_force: f32,
-    pub(super) life: f32,
+    pub(super) life: Ticks,
     /// Type 5/6 climb, hold and ease timers and dive rate.
     pub(super) climb: Option<[f32; 4]>,
     /// Last frame's displacement (lions read it as knockback).
@@ -49,7 +49,7 @@ impl Wasp {
             homing_range: spec.homing_range,
             tilt_gain: spec.tilt_gain,
             bounce_force: spec.bounce_force,
-            life: spec.life,
+            life: Ticks(spec.life),
             climb,
             last_disp: [0.0; 3],
             find_cd: 0.0,
@@ -69,16 +69,15 @@ impl Wasp {
 
     /// One frame.
     pub fn step(&mut self, space: &impl Space, sammy: Option<[f32; 3]>, t: Ticks) -> WaspStep {
-        let t = t.get();
         // Types 5/6: climb, hold, ease to level, then a slow dive (HandleVspeed, bullets.wdl:922-948).
         if let Some(mut c) = self.climb {
             if c[0] > 0.0 {
-                c[0] -= t;
+                c[0] -= t.get();
                 self.tilt += CLIMB_RATE * t;
             } else if c[1] > 0.0 {
-                c[1] -= t;
+                c[1] -= t.get();
             } else if c[2] > 0.0 && self.tilt > 1.0 {
-                c[2] -= t;
+                c[2] -= t.get();
                 self.tilt -= self.tilt * (0.2 * t).min(0.2);
                 if c[2] <= 0.0 {
                     self.tilt = 0.0;
@@ -97,10 +96,10 @@ impl Wasp {
             self.visible = true;
         }
         self.life -= t;
-        self.find_cd -= t;
+        self.find_cd -= t.get();
         if hit.trace.hit() || hit.trace.start_solid {
             WaspStep::Burst { hit: hit.entity }
-        } else if self.life <= 0.0 {
+        } else if self.life <= Ticks::ZERO {
             WaspStep::Burst { hit: None }
         } else {
             WaspStep::Flying

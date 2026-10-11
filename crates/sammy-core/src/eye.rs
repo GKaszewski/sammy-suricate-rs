@@ -31,7 +31,7 @@ pub enum EyeStage {
 #[derive(Clone, Debug)]
 pub struct EyePickup {
     /// Taken: ticks until it is back.
-    away: Option<f32>,
+    away: Option<Ticks>,
     /// Flag3: spins by Skill2-4 per tick.
     spin: Option<[f32; 3]>,
     pub angles: [f32; 3],
@@ -51,7 +51,6 @@ impl EyePickup {
 
     /// Spins; true if it has a spin.
     pub fn spin(&mut self, t: Ticks) -> bool {
-        let t = t.get();
         let Some(spin) = self.spin else { return false };
         for (a, s) in self.angles.iter_mut().zip(spin) {
             *a += s * t;
@@ -61,21 +60,20 @@ impl EyePickup {
 
     /// One frame: taken when Sammy (alive, playing) is within `radius`.
     pub fn step(&mut self, game: &mut GameState, in_reach: bool, t: Ticks) -> EyeStage {
-        let t = t.get();
         match self.away {
             Some(left) => {
                 let left = left - t;
-                if left <= 0.0 {
+                if left <= Ticks::ZERO {
                     self.away = None;
                     EyeStage::Back
                 } else {
                     self.away = Some(left);
-                    if left > HIDDEN_TICKS { EyeStage::Shrinking } else { EyeStage::Hidden }
+                    if left > Ticks(HIDDEN_TICKS) { EyeStage::Shrinking } else { EyeStage::Hidden }
                 }
             }
             None if in_reach => {
                 game.eye_ticks = game.eye_duration;
-                self.away = Some(HIDDEN_TICKS + SHRINK_TICKS);
+                self.away = Some(Ticks(HIDDEN_TICKS + SHRINK_TICKS));
                 EyeStage::Taken
             }
             None => EyeStage::Idle,

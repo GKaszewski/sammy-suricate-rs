@@ -22,24 +22,24 @@ pub const EXIT_COLOR: KeyColor = KeyColor::EXIT;
 const RISE_DEFAULT_BELOW: f32 = 250.0;
 const MIN_RISE: f32 = 300.0;
 /// Skill8 = 0: ticks held open.
-const DEFAULT_HOLD: f32 = 4.0;
+const DEFAULT_HOLD: Ticks = Ticks(4.0);
 /// Skill3 = 0: open within this horizontal distance.
 const DEFAULT_OPEN_DIST: f32 = RANGE_SCAN_DOOR - 150.0;
 /// Hold extension while Sammy or a gem keeps the door busy (`Skill9 = 4`).
-const HOLD_REFRESH: f32 = 4.0;
+const HOLD_REFRESH: Ticks = Ticks(4.0);
 /// Close enough to walk under: validates a door a gem is flying into.
 const UNDER_DOOR: f32 = 128.0;
 /// Recall margin: Sammy beyond `open_dist - 4` recalls a flying gem.
 const RECALL_MARGIN: f32 = 4.0;
 /// Ticks of the "wrong key" flash.
-const WRONG_KEY_FLASH: f32 = 3.0;
+const WRONG_KEY_FLASH: Ticks = Ticks(3.0);
 /// Ticks the score panel blinks when the exit door is refused (`WarnScoreGoal`).
 const WARN_SCORE_TICKS: Ticks = Ticks(8.0);
 /// Holds longer than this ring bells: a blink every [`BELL_PERIOD`], `Bell1` in the
 /// last [`BELL_WINDOW`] ticks (but not the very last [`BELL_QUIET`]).
-const BELL_WINDOW: f32 = 48.0;
-const BELL_PERIOD: f32 = 12.0;
-const BELL_QUIET: f32 = 4.0;
+const BELL_WINDOW: Ticks = Ticks(48.0);
+const BELL_PERIOD: Ticks = Ticks(12.0);
+const BELL_QUIET: Ticks = Ticks(4.0);
 /// Closing clearance (`DoorScanEntities`): first pass rise + 100, later passes 250.
 const CLEAR_FIRST_EXTRA: f32 = 100.0;
 const CLEAR_LATER: f32 = 250.0;
@@ -48,7 +48,7 @@ const CLEAR_LATER: f32 = 250.0;
 pub enum DoorState {
     Down,
     Rising,
-    Up { hold: f32 },
+    Up { hold: Ticks },
     /// Hold over: wait until nobody is under the door, then lower.
     Clearing,
     Lowering,
@@ -65,7 +65,7 @@ pub struct Door {
     up_speed: f32,
     pub down_speed: f32,
     /// Skill8: ticks held open.
-    hold: f32,
+    hold: Ticks,
     /// Skill3: horizontal open distance.
     open_dist: f32,
     /// Skill6: colour bitmask ([`EXIT_COLOR`] = exit door).
@@ -80,7 +80,7 @@ pub struct Door {
     exact: bool,
     pub state: DoorState,
     /// Ticks left of the "wrong key" flash.
-    flash: f32,
+    flash: Ticks,
     /// Skill2: rise height (at least [`MIN_RISE`]).
     rise: f32,
     /// Skill14: a gem is flying in (or a keyless Flag5 door is engaged).
@@ -90,7 +90,7 @@ pub struct Door {
     /// Sammy came back into reach during the hold.
     refreshed: bool,
     /// Bell/blink timer (Skill16).
-    bell: f32,
+    bell: Ticks,
     /// Closing clearance check pass (first uses the rise, later ones 250).
     clear_pass: u8,
 }

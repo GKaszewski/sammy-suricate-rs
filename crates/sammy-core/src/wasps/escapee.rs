@@ -7,7 +7,7 @@ use crate::time::Ticks;
 /// ticks, turning `ESCAPE_SPIN` degrees per tick (bullets.wdl:749-921).
 pub const ESCAPE_MAX: i32 = 15;
 pub const ESCAPE_SCALE: f32 = 0.5;
-pub(super) const ESCAPE_TICKS: f32 = 80.0;
+pub(super) const ESCAPE_TICKS: Ticks = Ticks(80.0);
 pub(super) const ESCAPE_SPIN: f32 = 20.0;
 /// Pan `random(360)`, tilt `60 + random(40)`, speed `20 + random(10)`.
 pub(super) const ESCAPE_TILT: (f32, f32) = (60.0, 40.0);
@@ -22,7 +22,7 @@ pub struct Escapee {
     pub pan: f32,
     pub tilt: f32,
     pub(super) speed: f32,
-    pub(super) timer: f32,
+    pub(super) timer: Ticks,
 }
 
 impl Escapee {
@@ -30,12 +30,11 @@ impl Escapee {
         let pan = rng.random(360.0);
         let tilt = ESCAPE_TILT.0 + rng.random(ESCAPE_TILT.1);
         let speed = ESCAPE_SPEED.0 + rng.random(ESCAPE_SPEED.1);
-        Self { kind, pos, pan, tilt, speed, timer: 0.0 }
+        Self { kind, pos, pan, tilt, speed, timer: Ticks::ZERO }
     }
 
     /// One frame; true when it is gone.
     pub fn step(&mut self, t: Ticks) -> bool {
-        let t = t.get();
         let dir = forward(self.pan, self.tilt);
         for (p, d) in self.pos.iter_mut().zip(dir) {
             *p += d * self.speed * t;
