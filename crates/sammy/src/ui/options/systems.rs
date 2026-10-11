@@ -154,7 +154,7 @@ pub(crate) fn open_close(
     mut images: ResMut<Assets<Image>>,
     roots: Query<Entity, With<OptionsRoot>>,
     dialogs: Query<Entity, With<DialogRoot>>,
-    strings: Option<Res<WdlStrings>>,
+    strings: Option<Res<Strings>>,
 ) {
     if let Some(mode) = req.open.take() {
         state.mode = Some(mode);
@@ -260,7 +260,7 @@ pub(crate) fn build_tab(
     mut state: ResMut<OptionsState>,
     files: Res<GameFiles>,
     mut images: ResMut<Assets<Image>>,
-    strings: Option<Res<WdlStrings>>,
+    strings: Option<Res<Strings>>,
     content: Query<Entity, With<TabContent>>,
     mut tabs: Query<(&Action, &mut ButtonImages)>,
 ) {
@@ -591,19 +591,8 @@ pub(crate) fn focus_nav(
     if horizontal && d.x != 0 {
         return;
     }
-    // Screen y grows downwards.
-    let dir = Vec2::new(d.x as f32, -d.y as f32);
-    focus.0 = list
-        .iter()
-        .filter(|i| i.0 != focus.0.unwrap())
-        .filter_map(|i| {
-            let v = i.1 - at;
-            let along = v.dot(dir);
-            (along > crate::ui::menu::PAD_MIN_ALONG).then(|| (i.0, along + crate::ui::menu::PAD_CROSS_WEIGHT * (v - dir * along).length()))
-        })
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|i| i.0)
-        .or(focus.0);
+    let cur = focus.0;
+    focus.0 = sammy_present::menu::nearest_in_direction(at.to_array(), d.to_array(), list.iter().filter(|i| Some(i.0) != cur).map(|i| (i.0, i.1.to_array()))).or(cur);
 }
 
 /// A frame around the focused item while the pad is in use.

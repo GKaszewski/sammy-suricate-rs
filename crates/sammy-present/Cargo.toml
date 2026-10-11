@@ -5,4 +5,5 @@ edition.workspace = true
 description = "How Sammy Suricate presents its game state, engine-agnostic: the HUD layout"
 
 [dependencies]
+formats.workspace = true
 sammy-core.workspace = true

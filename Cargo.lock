@@ -5162,6 +5162,7 @@ dependencies = [
  "rustysynth",
  "sammy-core",
  "sammy-platform",
+ "sammy-present",
  "serde",
  "serde_json",
 ]
@@ -5205,6 +5206,7 @@ dependencies = [
 name = "sammy-present"
 version = "0.1.0"
 dependencies = [
+ "formats",
  "sammy-core",
 ]
 

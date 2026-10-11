@@ -8,7 +8,7 @@ use bevy::ui::RelativeCursorPosition;
 use crate::game::Game;
 use sammy_core::flow::Phase;
 use crate::ui::hud::load_ui_image;
-use crate::ui::text::{BitmapText, FontKind, WdlStrings};
+use crate::ui::text::{BitmapText, FontKind, Strings};
 use crate::platform::vfs::GameFiles;
 
 mod components;
