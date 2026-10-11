@@ -47,6 +47,7 @@ pub struct Spinning {
 
 #[derive(Component)]
 pub struct Wasp {
+    #[allow(dead_code)] // type-specific trails/explosions come later
     pub kind: u32,
     pub poison: f32,
     pub pan: f32,
@@ -63,6 +64,8 @@ pub struct Wasp {
     pub last_disp: [f32; 3],
     /// 16-tick cooldown of the fear tag (`FindEnnemy`).
     pub find_cd: f32,
+    /// The thrower: ignored by the wasp's MOVE (`YOU = shooter`, bullets.wdl:377).
+    shooter: Option<Entity>,
 }
 
 impl Wasp {
@@ -246,7 +249,7 @@ pub fn fire(
             if *left > 0.0 {
                 return true;
             }
-            spawn_wasp(&mut commands, &assets, &mut meshes, &mut sfx, kind, poison, spawn, pan + *off);
+            spawn_wasp(&mut commands, &assets, &mut meshes, &mut sfx, kind, poison, spawn, pan + *off, e);
             false
         });
         if pending.shots.is_empty() {
@@ -265,6 +268,7 @@ fn spawn_wasp(
     poison: f32,
     pos: [f32; 3],
     pan: f32,
+    shooter: Entity,
 ) {
     let Some(model) = assets.model("wasp1.mdl") else { return };
     let (scale, speed, homing_range, tilt_gain, bounce_force, life) = FIRED[(kind - 1) as usize];
@@ -285,7 +289,7 @@ fn spawn_wasp(
         Transform { translation: coords::pos(pos), rotation: coords::rotation([pan, 0.0, 0.0]), scale: Vec3::splat(scale) },
         Visibility::Hidden,
         anim,
-        Wasp { kind, poison, pan, tilt: 0.0, pos, speed, homing_range, tilt_gain, bounce_force, life, climb, last_disp: [0.0; 3], find_cd: 0.0 },
+        Wasp { kind, poison, pan, tilt: 0.0, pos, speed, homing_range, tilt_gain, bounce_force, life, climb, last_disp: [0.0; 3], find_cd: 0.0, shooter: Some(shooter) },
     ));
 }
 
@@ -330,7 +334,7 @@ pub fn fly_wasps(
         }
         let dir = forward(w.pan, w.tilt);
         let target = [0, 1, 2].map(|i| w.pos[i] + dir[i] * w.speed * t);
-        let hit = world.trace(0, w.pos, target, None);
+        let hit = world.trace(0, w.pos, target, w.shooter);
         w.last_disp = [0, 1, 2].map(|i| hit.trace.end[i] - w.pos[i]);
         w.pos = hit.trace.end;
         // Invisible until 80 quants from Sammy (it starts behind him).

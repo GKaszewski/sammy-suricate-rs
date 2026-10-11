@@ -3,6 +3,7 @@
 
 mod decor;
 pub mod door;
+pub mod enemy;
 pub mod health;
 pub mod pickups;
 pub mod platform;
@@ -27,6 +28,9 @@ impl Plugin for ActionsPlugin {
             .init_resource::<pickups::GemSprites>()
             .add_message::<crate::game::ResetScan>()
             .add_message::<wasp::WaspHit>()
+            .add_message::<player::PlayerTouched>()
+            .init_resource::<enemy::LionGlobals>()
+            .init_resource::<enemy::AiClock>()
             .add_systems(
                 Update,
                 (
@@ -51,9 +55,21 @@ impl Plugin for ActionsPlugin {
                         wasp::collect_ammo.run_if(is_playing),
                         wasp::fire,
                         wasp::spin_pickups,
+                        enemy::home_wasps,
                         wasp::fly_wasps,
                         wasp::update_weak_doors,
                         wasp::fly_planks,
+                    )
+                        .chain(),
+                    (
+                        enemy::add_player_collider,
+                        enemy::sync_player_collider,
+                        enemy::advance_clock,
+                        enemy::tick_enemies,
+                        enemy::bump_clock,
+                        enemy::add_enemy_colliders,
+                        enemy::sync_enemy_colliders,
+                        enemy::place_enemies,
                     )
                         .chain(),
                     (health::run_death, pickups::reset_keys, health::reset_checkpoints, health::animate_hearts, health::spin_pickups),
@@ -97,7 +113,7 @@ pub fn is_passable(action: &str) -> bool {
 fn is_marker(action: &str) -> bool {
     const PREFIXES: &[&str] = &[
         "initgame", "initcamera", "setcamera", "initextraballes", "initnextraballes", "initpublic", "initinvisible",
-        "initset", "initpath", "initprotection", "initlionskills", "initrangemdl",
+        "initset", "initprotection", "initlionskills", "initrangemdl",
     ];
     PREFIXES.iter().any(|p| action.starts_with(p))
 }
@@ -126,6 +142,22 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initgame3" => {
             let o = obj.clone();
             entity.commands().queue(move |w: &mut World| w.resource_mut::<player::JumpParams>().apply_init_game3(&o));
+        }
+        "initlionskills1" => {
+            let sk = obj.skills.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills1(&sk));
+        }
+        "initlionskills2" => {
+            let sk = obj.skills.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_lion_skills2(&sk));
+        }
+        "initgame6" => {
+            let sk = obj.skills.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_game6(&sk));
+        }
+        "initgame7" => {
+            let sk = obj.skills.clone();
+            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_game7(&sk));
         }
         "initcamera2" => {
             let o = obj.clone();
@@ -174,6 +206,14 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         "initteleport" => {
             platform::init_teleport(obj, entity);
             ActionInit::default()
+        }
+        "initlion" => {
+            let skin = enemy::init_lion(obj, entity);
+            ActionInit { skin, anim: Some(("stand", 3.0)), ..default() }
+        }
+        "initpath" => {
+            enemy::init_path(obj, entity);
+            ActionInit { hidden_but_alive: true, ..default() }
         }
         "initammo1" => {
             let (skin, anim) = wasp::init_ammo(obj, entity);

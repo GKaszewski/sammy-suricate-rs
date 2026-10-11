@@ -96,17 +96,19 @@ pub struct ModelAnimator {
     pub time: f32,
     /// WDL "cycle" mode loops; "frame" mode plays once and holds the last frame.
     pub looping: bool,
+    scene: String,
 }
 
 impl ModelAnimator {
     pub fn new(model: Arc<LoadedModel>, frames: Vec<usize>, fps: f32) -> Self {
-        Self { model, frames, fps, time: 0.0, looping: true }
+        Self { model, frames, fps, time: 0.0, looping: true, scene: String::new() }
     }
 
     /// Starts a scene at `step` percent (WDL `PlayerAnimStep`).
     pub fn play(&mut self, scene: &str, looping: bool, step: f32) {
         self.frames = self.model.animation(scene);
         self.looping = looping;
+        self.scene = scene.to_owned();
         self.time = step / 100.0 * self.span();
     }
 
@@ -119,6 +121,21 @@ impl ModelAnimator {
     fn span(&self) -> f32 {
         let n = self.frames.len() as f32;
         if self.looping { n } else { (n - 1.0).max(1.0) }
+    }
+
+    pub fn scene(&self) -> &str {
+        &self.scene
+    }
+
+    /// Jumps to `step` percent of the current scene (WDL `set_cycle`/`set_frame`).
+    pub fn set_step(&mut self, step: f32) {
+        self.time = step / 100.0 * self.span();
+    }
+
+    /// Model frame shown now (nearest key frame).
+    pub fn current_frame(&self) -> Option<usize> {
+        let n = self.frames.len();
+        (n > 0).then(|| self.frames[(self.time.max(0.0) as usize) % n])
     }
 
     pub fn finished(&self) -> bool {

@@ -104,6 +104,10 @@ pub struct Player {
     pub ground_entity: Option<Entity>,
     /// `BlobZoneScan` (WED Skill5, default 104): pickup scan radius.
     pub scan_radius: f32,
+    /// `BounceForce1`: knockback velocity (quants/tick), decays each tick.
+    pub knock: [f32; 3],
+    /// Last frame's movement in quants/tick (`PlayerSpeed`), what others get pushed by.
+    pub vel: [f32; 3],
     pub state: State,
     snapped: bool,
 }
@@ -143,6 +147,8 @@ pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
         grounded: true,
         ground_entity: None,
         scan_radius,
+        knock: [0.0; 3],
+        vel: [0.0; 3],
         state: State::Stand,
         snapped: false,
     });
@@ -156,16 +162,26 @@ fn floor_below(world: &CollisionWorld, p: [f32; 3]) -> Option<(f32, Option<Entit
     (hit.trace.hit() && !hit.trace.start_solid).then(|| (hit.trace.end[2] - HULL1_HALF, hit.entity))
 }
 
+/// Sammy touched an entity while moving (EVENT_ENTITY on Sammy / EVENT_IMPACT on it).
+#[derive(Message, Clone, Copy)]
+pub struct PlayerTouched(pub Entity);
+
 /// Moves along `delta`, sliding along walls (approximates A4's `MOVE` glide).
-fn slide_move(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 3]) -> [f32; 3] {
+/// Returns the new position and the last entity bumped into.
+pub fn slide_move(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 3], ignore: Option<Entity>) -> ([f32; 3], Option<Entity>) {
+    let mut touched = None;
     for _ in 0..4 {
         if delta.iter().all(|d| d.abs() < 1e-4) {
             break;
         }
         let end = [pos[0] + delta[0], pos[1] + delta[1], pos[2] + delta[2]];
-        let tr = world.trace(HULL, pos, end, None).trace;
+        let hit = world.trace(HULL, pos, end, ignore);
+        let tr = hit.trace;
         if tr.start_solid {
-            return pos;
+            return (pos, touched);
+        }
+        if hit.entity.is_some() && tr.hit() {
+            touched = hit.entity;
         }
         pos = tr.end;
         if !tr.hit() {
@@ -176,7 +192,7 @@ fn slide_move(world: &CollisionWorld, mut pos: [f32; 3], mut delta: [f32; 3]) ->
         let into = rest[0] * tr.normal[0] + rest[1] * tr.normal[1] + rest[2] * tr.normal[2];
         delta = [0, 1, 2].map(|i| rest[i] - tr.normal[i] * into);
     }
-    pos
+    (pos, touched)
 }
 
 pub fn move_player(
@@ -185,7 +201,8 @@ pub fn move_player(
     jump: Res<JumpParams>,
     current: Res<crate::flow::CurrentLevel>,
     world: CollisionWorld,
-    mut q: Query<(&mut Player, &mut Transform, Option<&mut ModelAnimator>)>,
+    mut touched_msgs: MessageWriter<PlayerTouched>,
+    mut q: Query<(Entity, &mut Player, &mut Transform, Option<&mut ModelAnimator>)>,
 ) {
     use crate::flow::Phase;
     // Input only counts while the level is being played (`PartieEncours == 1`).
@@ -194,7 +211,8 @@ pub fn move_player(
         return;
     }
     let t = (time.delta_secs() * TICKS).min(4.0); // `time` in ticks, clamped like A4's time_smooth
-    for (mut p, mut tf, mut anim) in &mut q {
+    for (me, mut p, mut tf, mut anim) in &mut q {
+        let start_pos = p.pos;
         if !p.snapped {
             if let Some((f, _)) = floor_below(&world, p.pos) {
                 p.pos[2] = f + BLOB_HAUT;
@@ -245,7 +263,19 @@ pub fn move_player(
             iy * p.speed * 0.75 * t
         };
         let (s, c) = p.pan.to_radians().sin_cos();
-        p.pos = slide_move(&world, p.pos, [c * v, s * v, 0.0]);
+        let (pos, touched) = slide_move(&world, p.pos, [c * v, s * v, 0.0], Some(me));
+        p.pos = pos;
+        if let Some(e) = touched {
+            touched_msgs.write(PlayerTouched(e));
+        }
+        // Knockback (`BounceForce1`), separate move, decaying by AmortiBouncePlayer
+        // 10 × 80/(fps+1) ≈ 15.7 per tick at the reference 50 fps.
+        if p.knock != [0.0; 3] {
+            let k = p.knock.map(|v| v * t);
+            p.pos = slide_move(&world, p.pos, [k[0], k[1], 0.0], Some(me)).0;
+            let dec = 10.0 * 80.0 / 51.0 * t;
+            p.knock = p.knock.map(|v| if v.abs() <= dec { 0.0 } else { v - dec * v.signum() });
+        }
 
         // 3. Jump (PlayerJump): only from the ground in a normal state. Moving jumps take
         //    off at once; standing jumps play the "sautA" wind-up first.
@@ -297,7 +327,7 @@ pub fn move_player(
         if !p.grounded && p.vz != 0.0 {
             p.vz -= p.fric * t;
             let target = [p.pos[0], p.pos[1], p.pos[2] + p.vz * t];
-            let tr = world.trace(HULL, p.pos, target, None).trace;
+            let tr = world.trace(HULL, p.pos, target, Some(me)).trace;
             if tr.start_solid {
                 // Stuck inside geometry (e.g. a closing door): never sink through it.
                 p.vz = 0.0;
@@ -378,6 +408,9 @@ pub fn move_player(
             }
         }
 
+        if t > 0.0 {
+            p.vel = [0, 1, 2].map(|i| (p.pos[i] - start_pos[i]) / t);
+        }
         tf.translation = coords::pos(p.pos);
         tf.rotation = coords::rotation([p.pan, 0.0, 0.0]);
     }

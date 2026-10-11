@@ -143,6 +143,7 @@ fn load_pending(
     game.apply_debug_env();
     *jump = JumpParams::default();
     *cam = CameraParams::default();
+    commands.insert_resource(crate::actions::enemy::LionGlobals::default());
     for mut f in &mut follow {
         *f = FollowState::default();
     }
