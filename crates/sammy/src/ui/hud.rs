@@ -1,19 +1,20 @@
-//! In-game HUD (`InitPanels`, panels.wdl; docs/hud-saves.md §1): the original PCX
-//! plates, scroll windows and digit fonts at their 640×480 (mode 6) positions, scaled
-//! uniformly to the window height and anchored to the same screen edges.
+//! In-game HUD: [`sammy_present::hud`]'s quads as UI image nodes (one pooled node per
+//! quad), in HUD pixels scaled by [`UiScale`].
+
+use std::collections::HashMap;
 
 use bevy::prelude::*;
+use sammy_present::hud::{DIGIT_GLYPHS, Hud, IMAGES};
+use sammy_core::time::TICKS_PER_SEC as TICKS;
 
 use crate::game::Game;
-use sammy_core::game::{BOOST_MAX, MASTER_KEY, MAX_HEARTS, MAX_LIVES};
-use sammy_core::time::TICKS_PER_SEC as TICKS;
 use crate::platform::vfs::GameFiles;
 
 pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<HudVisible>().add_systems(Startup, setup).add_systems(Update, update);
+        app.init_resource::<HudVisible>().init_resource::<HudState>().add_systems(Startup, setup).add_systems(Update, update);
     }
 }
 
@@ -27,70 +28,19 @@ impl Default for HudVisible {
     }
 }
 
-/// Mode-6 canvas.
-pub const W: f32 = 640.0;
-pub const H: f32 = 480.0;
+/// The HUD's clock.
+#[derive(Resource, Default, Deref, DerefMut)]
+struct HudState(Hud);
 
-/// Digit font glyph count: `0123456789:` (docs/hud-saves.md §2.2).
-const DIGIT_GLYPHS: f32 = 11.0;
+/// The HUD images and their sizes.
+#[derive(Resource)]
+struct HudImages(HashMap<&'static str, (Handle<Image>, UVec2)>);
 
-/// A `w×h` element at mode-6 pixel (x, y).
-#[derive(Clone, Copy)]
-struct Slot {
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-}
+/// Above the world, below menus and the options.
+const Z_HUD: i32 = 5;
 
-impl Slot {
-    const fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
-        Self { x, y, w, h }
-    }
-
-    fn at(self, anchor: Anchor) -> Node {
-        place(anchor, self.x, self.y, self.w, self.h)
-    }
-}
-
-/// Lives plate (panels.wdl `InitPanels`).
-const LIVES_PLATE: Slot = Slot::new(12.0, 2.0, 88.0, 46.0);
-/// Hearts window slot; shows `HEARTS_WINDOW_H` rows of the `vbarhear` strip.
-const HEARTS: Slot = Slot::new(0.0, 2.0, 12.0, 48.0);
-/// Hearts strip width and window height.
-const HEARTS_STRIP_W: f32 = 12.0;
-const HEARTS_WINDOW_H: f32 = 48.0;
-/// Lives tens / ones digit positions (1 cell each).
-const LIVES_TENS_POS: (f32, f32) = (46.0, 22.0);
-const LIVES_ONES_POS: (f32, f32) = (62.0, 22.0);
-/// Score plate.
-const SCORE_PLATE: Slot = Slot::new(464.0, 4.0, 177.0, 51.0);
-/// Score, goal and flashing-goal digit positions and cell count.
-const SCORE_POS: (f32, f32) = (519.0, 7.0);
-const GOAL_POS: (f32, f32) = (499.0, 36.0);
-const GOAL_FLASH_POS: (f32, f32) = (499.0, 34.0);
-const SCORE_DIGITS: u32 = 5;
-/// `WarnScoreGoal`: the goal shows in boink20 while more than this many ticks remain
-/// (4 ticks flashing, 4 normal).
-const WARN_FLASH_TICKS: f32 = 4.0;
-/// Key gem plate (transparent, top-centre).
-const GEM_PLATE: Slot = Slot::new(268.0, 5.0, 103.0, 89.0);
-/// Key gem window over the 8-slot strip; each slot is `GEM_CELL` wide.
-const GEM_ICON: Slot = Slot::new(298.0, 29.0, 42.0, 42.0);
-const GEM_CELL: f32 = 42.0;
-/// Last slot of the key gem strip (7 = master key).
-const GEM_LAST_SLOT: u32 = 7;
-/// The key gem blinks with this half-period (ticks) once the goal is reached.
-const GEM_BLINK_TICKS: f32 = 4.0;
-/// Boost trails (transparent, `panboos2`), drawn at two offsets.
-const BOOST_TRAIL_A: Slot = Slot::new(6.0, 400.0, 73.0, 40.0);
-const BOOST_TRAIL_B: Slot = Slot::new(12.0, 400.0, 73.0, 40.0);
-/// Boost bar window (`BOOST_MAX` columns wide) and its height.
-const BOOST_BAR: Slot = Slot::new(50.0, 438.0, BOOST_MAX, 8.0);
-/// Boost dino icon.
-const BOOST_DINO: Slot = Slot::new(46.0, 400.0, 43.0, 40.0);
-/// Ammo digit position (5 cells).
-const AMMO_POS: (f32, f32) = (540.0, 433.0);
+#[derive(Component)]
+struct HudRoot;
 
 /// Loads a PCX as a UI image: black is transparent (`overlay`), nearest filtering.
 pub fn load_ui_image(files: &GameFiles, images: &mut Assets<Image>, name: &str) -> Option<(Handle<Image>, UVec2)> {
@@ -105,274 +55,54 @@ pub fn load_ui_image(files: &GameFiles, images: &mut Assets<Image>, name: &str) 
     Some((images.add(crate::render::image::to_bevy_filtered(&img, true, false, false)), size))
 }
 
-/// Screen edge a HUD element keeps its mode-6 distance to.
-#[derive(Clone, Copy)]
-pub enum Anchor {
-    TopLeft,
-    TopRight,
-    TopCenter,
-    BottomLeft,
-    BottomRight,
-}
-
-/// Node for a `w×h` element drawn at mode-6 pixel (x, y).
-pub fn place(anchor: Anchor, x: f32, y: f32, w: f32, h: f32) -> Node {
-    let mut n = Node { position_type: PositionType::Absolute, width: px(w), height: px(h), ..default() };
-    match anchor {
-        Anchor::TopLeft => (n.left, n.top) = (px(x), px(y)),
-        Anchor::TopRight => (n.right, n.top) = (px(W - x - w), px(y)),
-        Anchor::TopCenter => {
-            n.left = percent(50);
-            n.margin.left = px(x - W / 2.0);
-            n.top = px(y);
-        }
-        Anchor::BottomLeft => (n.left, n.bottom) = (px(x), px(H - y - h)),
-        Anchor::BottomRight => (n.right, n.bottom) = (px(W - x - w), px(H - y - h)),
-    }
-    n
-}
-
-/// One-row digit font: glyphs `0123456789:` (docs/hud-saves.md §2.2).
-#[derive(Clone)]
-pub struct DigitFont {
-    pub image: Handle<Image>,
-    pub cell: Vec2,
-}
-
-impl DigitFont {
-    fn load(files: &GameFiles, images: &mut Assets<Image>, name: &str) -> Option<Self> {
-        let (image, size) = load_ui_image(files, images, name)?;
-        Some(Self { image, cell: Vec2::new(size.x as f32 / DIGIT_GLYPHS, size.y as f32) })
-    }
-
-    fn glyph(&self, d: u32) -> Rect {
-        Rect::new(d as f32 * self.cell.x, 0.0, (d + 1) as f32 * self.cell.x, self.cell.y)
-    }
-}
-
-/// `DIGITS x,y,n,font`: n right-aligned cells without leading zeros (seen in the
-/// original: score "0", goal "540"), low n digits kept.
-#[derive(Component)]
-pub struct Digits {
-    pub n: u32,
-    pub value: i64,
-}
-
-#[derive(Component)]
-struct DigitCell(u32);
-
-pub fn spawn_digits(parent: &mut ChildSpawnerCommands, font: &DigitFont, anchor: Anchor, x: f32, y: f32, n: u32, marker: impl Bundle) {
-    let w = font.cell.x * n as f32;
-    parent
-        .spawn((place(anchor, x, y, w, font.cell.y), Digits { n, value: 0 }, marker))
-        .with_children(|row| {
-            for i in 0..n {
-                row.spawn((
-                    Node { position_type: PositionType::Absolute, left: px(i as f32 * font.cell.x), width: px(font.cell.x), height: px(font.cell.y), ..default() },
-                    ImageNode { image: font.image.clone(), rect: Some(font.glyph(0)), ..default() },
-                    DigitCell(i),
-                ));
-            }
-        });
-}
-
-fn update_digits<F: bevy::ecs::query::QueryFilter>(digits: &Query<(&Digits, &Children)>, cells: &mut Query<(&DigitCell, &mut ImageNode), F>, fonts: &HudFonts) {
-    for (d, children) in digits.iter() {
-        for c in children.iter() {
-            let Ok((cell, mut img)) = cells.get_mut(c) else { continue };
-            let place = 10u64.pow(d.n - 1 - cell.0);
-            let value = d.value.max(0) as u64;
-            let digit = (value / place % 10) as u32;
-            // Leading zeros are blank; the units cell always shows.
-            let blank = place > value && cell.0 + 1 < d.n;
-            img.color = if blank { Color::NONE } else { Color::WHITE };
-            let font = fonts.by_cell(img.image.id());
-            if let Some(f) = font {
-                img.rect = Some(f.glyph(digit));
-            }
-        }
-    }
-}
-
-#[derive(Resource)]
-struct HudFonts(Vec<DigitFont>);
-
-impl HudFonts {
-    fn by_cell(&self, id: AssetId<Image>) -> Option<&DigitFont> {
-        self.0.iter().find(|f| f.image.id() == id)
-    }
-}
-
-#[derive(Component)]
-struct HudRoot;
-#[derive(Component)]
-struct Hearts;
-#[derive(Component)]
-struct LivesTens;
-#[derive(Component)]
-struct LivesOnes;
-#[derive(Component)]
-struct Score;
-#[derive(Component)]
-struct Goal;
-#[derive(Component)]
-struct GoalFlash;
-#[derive(Component)]
-struct GemPlate;
-#[derive(Component)]
-struct GemIcon;
-#[derive(Component)]
-struct BoostPart;
-#[derive(Component)]
-struct BoostBar;
-#[derive(Component)]
-struct Ammo;
-
 fn setup(mut commands: Commands, files: Res<GameFiles>, mut images: ResMut<Assets<Image>>) {
-    let mut img = |name: &str| load_ui_image(&files, &mut images, name).map(|(h, _)| h).unwrap_or_default();
-    let (fondlife, vbarhear, fondscor, fondgems, hbargems, hbarboos, panboost, panboos2) = (
-        img("fondlife.pcx"),
-        img("vbarhear.pcx"),
-        img("fondscor.pcx"),
-        img("fondgems.pcx"),
-        img("hbargems.pcx"),
-        img("Hbarboos.pcx"),
-        img("panboost.pcx"),
-        img("panboos2.pcx"),
-    );
-    let font = |name: &str, images: &mut Assets<Image>| DigitFont::load(&files, images, name);
-    let (Some(boink22), Some(boink24), Some(lucidd14), Some(boink20)) =
-        (font("boink22.pcx", &mut images), font("boink24.pcx", &mut images), font("lucidd14.pcx", &mut images), font("boink20.pcx", &mut images))
-    else {
-        warn!("HUD fonts missing");
-        return;
-    };
-    let half = Color::srgba(1.0, 1.0, 1.0, 0.5); // `transparent` panels [U: 50 %]
-    commands
-        .spawn((HudRoot, Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), ..default() }, GlobalZIndex(5)))
-        .with_children(|root| {
-            // Lives plate, hearts window (rows [hearts, hearts+48) of vbarhear) and lives digits.
-            root.spawn((LIVES_PLATE.at(Anchor::TopLeft), ImageNode::new(fondlife)));
-            root.spawn((
-                HEARTS.at(Anchor::TopLeft),
-                ImageNode {
-                    image: vbarhear,
-                    rect: Some(Rect::new(0.0, HEARTS_WINDOW_H, HEARTS_STRIP_W, HEARTS_WINDOW_H * 2.0)),
-                    ..default()
-                },
-                Hearts,
-            ));
-            spawn_digits(root, &boink22, Anchor::TopLeft, LIVES_TENS_POS.0, LIVES_TENS_POS.1, 1, LivesTens);
-            spawn_digits(root, &boink22, Anchor::TopLeft, LIVES_ONES_POS.0, LIVES_ONES_POS.1, 1, LivesOnes);
-            // Score plate, score and goal digits; the goal flashes in boink20 (WarnScoreGoal).
-            root.spawn((SCORE_PLATE.at(Anchor::TopRight), ImageNode::new(fondscor)));
-            spawn_digits(root, &boink24, Anchor::TopRight, SCORE_POS.0, SCORE_POS.1, SCORE_DIGITS, Score);
-            spawn_digits(root, &lucidd14, Anchor::TopRight, GOAL_POS.0, GOAL_POS.1, SCORE_DIGITS, Goal);
-            spawn_digits(root, &boink20, Anchor::TopRight, GOAL_FLASH_POS.0, GOAL_FLASH_POS.1, SCORE_DIGITS, GoalFlash);
-            // Key gem: plate (transparent) and a 42×42 window over the 8-slot strip.
-            root.spawn((GEM_PLATE.at(Anchor::TopCenter), ImageNode { image: fondgems, color: half, ..default() }, GemPlate));
-            root.spawn((GEM_ICON.at(Anchor::TopCenter), ImageNode { image: hbargems, rect: Some(Rect::new(0.0, 0.0, GEM_CELL, GEM_CELL)), ..default() }, GemIcon));
-            // Boost: trails (transparent), the bar window, then the dino on top.
-            root.spawn((BOOST_TRAIL_A.at(Anchor::BottomLeft), ImageNode { image: panboos2.clone(), color: half, ..default() }, BoostPart));
-            root.spawn((BOOST_TRAIL_B.at(Anchor::BottomLeft), ImageNode { image: panboos2, color: half, ..default() }, BoostPart));
-            root.spawn((
-                BOOST_BAR.at(Anchor::BottomLeft),
-                ImageNode { image: hbarboos, rect: Some(Rect::new(0.0, 0.0, BOOST_BAR.w, BOOST_BAR.h)), ..default() },
-                BoostPart,
-                BoostBar,
-            ));
-            root.spawn((BOOST_DINO.at(Anchor::BottomLeft), ImageNode::new(panboost), BoostPart));
-            spawn_digits(root, &boink22, Anchor::BottomRight, AMMO_POS.0, AMMO_POS.1, SCORE_DIGITS, Ammo);
-        });
-    commands.insert_resource(HudFonts(vec![boink22, boink24, lucidd14, boink20]));
+    let loaded = IMAGES.iter().filter_map(|n| load_ui_image(&files, &mut images, n).map(|i| (*n, i))).collect();
+    commands.insert_resource(HudImages(loaded));
+    commands.spawn((HudRoot, Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100), ..default() }, GlobalZIndex(Z_HUD)));
 }
 
-#[allow(clippy::type_complexity)]
+/// Places one node per quad, reusing the root's children; extra ones are hidden.
+#[allow(clippy::too_many_arguments)]
 fn update(
+    mut commands: Commands,
     time: Res<Time>,
     sim: Res<Game>,
     visible: Res<HudVisible>,
-    fonts: Option<Res<HudFonts>>,
-    mut blink: Local<f32>,
-    mut root: Query<&mut Visibility, With<HudRoot>>,
-    mut digits: ParamSet<(
-        Query<&mut Digits, With<LivesTens>>,
-        Query<&mut Digits, With<LivesOnes>>,
-        Query<&mut Digits, With<Score>>,
-        Query<(&mut Digits, &mut Node), With<Goal>>,
-        Query<(&mut Digits, &mut Node), With<GoalFlash>>,
-        Query<(&mut Digits, &mut Node), With<Ammo>>,
-        Query<(&Digits, &Children)>,
-    )>,
-    mut cells: Query<(&DigitCell, &mut ImageNode), (Without<Hearts>, Without<GemIcon>, Without<BoostBar>)>,
-    mut images: ParamSet<(
-        Query<&mut ImageNode, With<Hearts>>,
-        Query<(&mut ImageNode, &mut Node), (With<GemIcon>, Without<Digits>)>,
-        Query<&mut Node, (With<GemPlate>, Without<Digits>)>,
-        Query<&mut Node, (With<BoostPart>, Without<Digits>)>,
-        Query<&mut ImageNode, With<BoostBar>>,
-    )>,
+    images: Option<Res<HudImages>>,
+    mut state: ResMut<HudState>,
+    (windows, ui_scale): (Query<&Window>, Res<UiScale>),
+    mut root: Query<(Entity, &mut Visibility, Option<&Children>), With<HudRoot>>,
+    mut nodes: Query<(&mut Node, &mut ImageNode)>,
 ) {
-    let t = time.delta_secs() * TICKS;
-    let game = &sim.game;
-    if let Ok(mut v) = root.single_mut() {
-        *v = if visible.0 { Visibility::Inherited } else { Visibility::Hidden };
+    state.tick(&sim.game, time.delta_secs() * TICKS);
+    let (Some(images), Ok((root, mut vis, children)), Ok(win)) = (images, root.single_mut(), windows.single()) else { return };
+    *vis = if visible.0 { Visibility::Inherited } else { Visibility::Hidden };
+    let size = [win.width() / ui_scale.0, win.height() / ui_scale.0];
+    let cell = |font: &str| images.0.get(font).map_or([0.0, 0.0], |(_, s)| [(s.x / DIGIT_GLYPHS) as f32, s.y as f32]);
+    let quads = state.quads(&sim.game, size, cell);
+    let pool: Vec<Entity> = children.map(|c| c.iter().collect()).unwrap_or_default();
+    for (n, q) in quads.iter().enumerate() {
+        let Some((image, _)) = images.0.get(q.image) else { continue };
+        let node = Node { position_type: PositionType::Absolute, left: px(q.dst[0]), top: px(q.dst[1]), width: px(q.dst[2]), height: px(q.dst[3]), ..default() };
+        let shown = ImageNode {
+            image: image.clone(),
+            rect: q.src.map(|s| Rect::new(s[0], s[1], s[0] + s[2], s[1] + s[3])),
+            color: Color::srgba(1.0, 1.0, 1.0, q.alpha),
+            ..default()
+        };
+        match pool.get(n).and_then(|e| nodes.get_mut(*e).ok()) {
+            Some((mut old_node, mut old_image)) => {
+                *old_node = node;
+                *old_image = shown;
+            }
+            None => {
+                commands.entity(root).with_child((node, shown));
+            }
+        }
     }
-    let show = |n: &mut Node, on: bool| n.display = if on { Display::Flex } else { Display::None };
-
-    // Lives: tens and ones digit (`DIGITS` factor 0.051 and 1).
-    let lives = game.lives.clamp(0, MAX_LIVES) as i64;
-    if let Ok(mut d) = digits.p0().single_mut() {
-        d.value = lives / 10;
-    }
-    if let Ok(mut d) = digits.p1().single_mut() {
-        d.value = lives % 10;
-    }
-    if let Ok(mut d) = digits.p2().single_mut() {
-        d.value = game.score as i64;
-    }
-    // WarnScoreGoal: 4 ticks in boink20, 4 ticks normal.
-    let flash = game.warn_score > WARN_FLASH_TICKS;
-    if let Ok((mut d, mut n)) = digits.p3().single_mut() {
-        d.value = game.goal as i64;
-        show(&mut n, !flash);
-    }
-    if let Ok((mut d, mut n)) = digits.p4().single_mut() {
-        d.value = game.goal as i64;
-        show(&mut n, flash);
-    }
-    if let Ok((mut d, mut n)) = digits.p5().single_mut() {
-        d.value = game.ammo as i64;
-        show(&mut n, game.ammo > 0);
-    }
-
-    // Hearts window: rows [hearts, hearts + 48).
-    if let Ok(mut img) = images.p0().single_mut() {
-        let h = game.hearts.clamp(0.0, MAX_HEARTS).round();
-        img.rect = Some(Rect::new(0.0, h, HEARTS_STRIP_W, h + HEARTS_WINDOW_H));
-    }
-    // Key gem: slot = key bitmask (255 = master → slot 7); blinks every ~4 ticks once the goal is reached.
-    // `WindowKeyPlayer1`: the key actually held (7 = master).
-    let slot = if game.key == MASTER_KEY { GEM_LAST_SLOT } else { game.key.min(GEM_LAST_SLOT) };
-    *blink = if game.goal_reached { *blink + t } else { 0.0 };
-    let blink_on = !game.goal_reached || (*blink / GEM_BLINK_TICKS) as i32 % 2 == 0;
-    if let Ok((mut img, mut n)) = images.p1().single_mut() {
-        img.rect = Some(Rect::new(slot as f32 * GEM_CELL, 0.0, slot as f32 * GEM_CELL + GEM_CELL, GEM_CELL));
-        show(&mut n, slot != 0 && blink_on);
-    }
-    if let Ok(mut n) = images.p2().single_mut() {
-        show(&mut n, slot != 0);
-    }
-    // Boost: visible while not empty; the window shows cols [boost, boost + 150).
-    let boost_on = game.boost < BOOST_MAX;
-    for mut n in &mut images.p3() {
-        show(&mut n, boost_on);
-    }
-    if let Ok(mut img) = images.p4().single_mut() {
-        let b = game.boost.clamp(0.0, BOOST_MAX);
-        img.rect = Some(Rect::new(b, 0.0, b + BOOST_MAX, BOOST_BAR.h));
-    }
-    if let Some(fonts) = fonts {
-        update_digits(&digits.p6(), &mut cells, &fonts);
+    for e in pool.iter().skip(quads.len()) {
+        if let Ok((mut node, _)) = nodes.get_mut(*e) {
+            node.display = Display::None;
+        }
     }
 }
