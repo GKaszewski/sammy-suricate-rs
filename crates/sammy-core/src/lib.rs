@@ -24,3 +24,4 @@ pub mod player;
 pub mod rng;
 pub mod save;
 pub mod time;
+pub mod wasps;
