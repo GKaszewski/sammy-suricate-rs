@@ -142,7 +142,7 @@ fn run() -> anyhow::Result<()> {
         }
         hud.tick(&sim.game, dt * sammy_core::time::TICKS_PER_SEC);
         frames += 1;
-        if frames % LOG_FRAMES == 0 {
+        if frames.is_multiple_of(LOG_FRAMES) {
             log::info!("frame {frames} at {:.1} s", secs() - start);
         }
         let trace = |what: &str| {
