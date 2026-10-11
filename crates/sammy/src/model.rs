@@ -7,6 +7,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::prelude::*;
 use formats::mdl::{Mdl, VertexBuffer};
+use sammy_core::anim::{Anim, Scenes};
 
 use crate::coords;
 
@@ -27,6 +28,8 @@ pub struct LoadedModel {
     pub skins: Vec<Handle<StandardMaterial>>,
     /// Per-frame vertex positions/normals in Bevy space, precomputed.
     frames: Vec<(Vec<[f32; 3]>, Vec<[f32; 3]>)>,
+    /// Scene table for animation clocks.
+    pub scenes: Arc<Scenes>,
 }
 
 impl LoadedModel {
@@ -58,7 +61,8 @@ impl LoadedModel {
         if skins.is_empty() {
             skins.push(materials.add(StandardMaterial::default()));
         }
-        Ok(Self { mdl, vb, material: skins[0].clone(), skins, frames })
+        let scenes = Arc::new(Scenes::of(&mdl));
+        Ok(Self { mdl, vb, material: skins[0].clone(), skins, frames, scenes })
     }
 
     /// Material for A4 skin number `n` (1-based; 0 means the default skin 1).
@@ -96,89 +100,29 @@ impl LoadedModel {
     }
 
     pub fn animation(&self, name: &str) -> Vec<usize> {
-        let name = name.to_lowercase();
-        self.mdl
-            .animations()
-            .into_iter()
-            .find(|a| a.name.to_lowercase() == name)
-            .map(|a| a.frames)
-            .unwrap_or_default()
+        self.scenes.frames(name)
     }
 }
 
-/// Plays an MDL frame sequence by blending vertex frames on the CPU.
-#[derive(Component)]
+/// Plays an MDL frame sequence by blending vertex frames on the CPU; the clock is
+/// [`Anim`] (dereferenced, so `play`, `finished` ... work directly).
+#[derive(Component, Deref, DerefMut)]
 pub struct ModelAnimator {
     pub model: Arc<LoadedModel>,
-    pub frames: Vec<usize>,
-    /// Frames per second (Acknex default: one frame per 1/16 s tick).
-    pub fps: f32,
-    pub time: f32,
-    /// WDL "cycle" mode loops; "frame" mode plays once and holds the last frame.
-    pub looping: bool,
-    scene: String,
+    #[deref]
+    pub anim: Anim,
 }
 
 impl ModelAnimator {
     pub fn new(model: Arc<LoadedModel>, frames: Vec<usize>, fps: f32) -> Self {
-        Self { model, frames, fps, time: 0.0, looping: true, scene: String::new() }
-    }
-
-    /// Starts a scene at `step` percent (WDL `PlayerAnimStep`).
-    pub fn play(&mut self, scene: &str, looping: bool, step: f32) {
-        self.frames = self.model.animation(scene);
-        self.looping = looping;
-        self.scene = scene.to_owned();
-        self.time = step / 100.0 * self.span();
-    }
-
-    /// Sets the speed in percent of the scene per tick (WDL `PlayerAnimSpeed`).
-    pub fn set_speed_pct(&mut self, pct: f32, ticks_per_sec: f32) {
-        self.fps = pct / 100.0 * self.span() * ticks_per_sec;
-    }
-
-    /// Frames covered by 0..100%: all frames when cycling, up to the last when playing once.
-    fn span(&self) -> f32 {
-        let n = self.frames.len() as f32;
-        if self.looping { n } else { (n - 1.0).max(1.0) }
-    }
-
-    pub fn scene(&self) -> &str {
-        &self.scene
-    }
-
-    /// Jumps to `step` percent of the current scene (WDL `set_cycle`/`set_frame`).
-    pub fn set_step(&mut self, step: f32) {
-        self.time = step / 100.0 * self.span();
-    }
-
-    /// Model frame shown now (nearest key frame).
-    pub fn current_frame(&self) -> Option<usize> {
-        let n = self.frames.len();
-        (n > 0).then(|| self.frames[(self.time.max(0.0) as usize) % n])
-    }
-
-    pub fn finished(&self) -> bool {
-        !self.looping && self.time >= self.span()
+        let anim = Anim::new(model.scenes.clone(), frames, fps);
+        Self { model, anim }
     }
 }
 
 fn animate_models(time: Res<Time>, mut meshes: ResMut<Assets<Mesh>>, mut q: Query<(&mut ModelAnimator, &Mesh3d)>) {
     for (mut anim, mesh) in &mut q {
-        if anim.frames.len() < 2 {
-            continue;
-        }
-        anim.time += time.delta_secs() * anim.fps;
-        let n = anim.frames.len();
-        let (i, j, f) = if anim.looping {
-            let t = anim.time.rem_euclid(n as f32);
-            (t as usize % n, (t as usize + 1) % n, t.fract())
-        } else {
-            anim.time = anim.time.clamp(0.0, (n - 1) as f32);
-            let t = anim.time;
-            (t as usize, (t as usize + 1).min(n - 1), t.fract())
-        };
-        let (a, b) = (anim.frames[i], anim.frames[j]);
+        let Some((a, b, f)) = anim.anim.advance(time.delta_secs()) else { continue };
         let Some(mut mesh) = meshes.get_mut(&mesh.0) else { continue };
         let (pa, na) = &anim.model.frames[a];
         let (pb, nb) = &anim.model.frames[b];

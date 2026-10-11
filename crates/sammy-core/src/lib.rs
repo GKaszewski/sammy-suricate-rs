@@ -7,6 +7,7 @@
 //! today) feeds input and presents the state; see `docs/architecture.md`.
 
 pub mod angle;
+pub mod anim;
 pub mod collision;
 pub mod game;
 pub mod levels;
