@@ -127,7 +127,13 @@ fn load_pending(
     files: Res<GameFiles>,
     old: Query<Entity, Or<(With<LevelRoot>, With<LevelScoped>)>>,
     mut follow: Query<&mut FollowState>,
-    (mut game, mut jump, mut cam, mut assets): (ResMut<GameState>, ResMut<JumpParams>, ResMut<CameraParams>, ResMut<crate::level::GameAssets>),
+    (mut game, mut jump, mut cam, mut assets, mut save): (
+        ResMut<GameState>,
+        ResMut<JumpParams>,
+        ResMut<CameraParams>,
+        ResMut<crate::level::GameAssets>,
+        ResMut<crate::save::SaveGame>,
+    ),
     (mut meshes, mut images, mut materials, mut level_materials): (
         ResMut<Assets<Mesh>>,
         ResMut<Assets<Image>>,
@@ -171,6 +177,25 @@ fn load_pending(
         error!("loading {file}: {e}");
         return;
     }
+    if slot == Some(EXTRO_SLOT) && !save.extro_seen {
+        // `ExtroVue = 1` (Extro.wdl:15): unlocks the Bonus menu entry.
+        save.extro_seen = true;
+        crate::save::write(&save);
+    }
+    // AfterLoadInitLevel: start at the checkpoint saved for this level (InitLvl.wdl:232-237).
+    if let Some(cp) = slot.and_then(|s| save.checkpoints.get(s as usize).copied().flatten()) {
+        commands.queue(move |w: &mut World| {
+            let mut q = w.query::<&mut crate::actions::player::Player>();
+            let mut pan = 0.0;
+            for mut p in q.iter_mut(w) {
+                pan = p.pan;
+                p.teleport(cp, pan);
+            }
+            let mut g = w.resource_mut::<GameState>();
+            g.start = Some((cp, pan));
+            g.checkpoint = true; // [I] kept until the next game end stores it again
+        });
+    }
     // Level 10 hard-codes 4 lives (Loads.wdl:80).
     if slot == Some(10) {
         commands.queue(|w: &mut World| w.resource_mut::<GameState>().lives = 4);
@@ -209,6 +234,7 @@ fn run_flow(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     game: Res<GameState>,
+    mut save: ResMut<crate::save::SaveGame>,
     follow: Query<&FollowState>,
     mut current: ResMut<CurrentLevel>,
     mut pending: ResMut<PendingLoad>,
@@ -226,9 +252,20 @@ fn run_flow(
                 Phase::Intro
             }
         }
-        Phase::Playing if game.won => Phase::Won(0.0),
-        // The extro's own loop has no lose check (Extro.wdl:121-145).
-        Phase::Playing if game.lost && current.slot != Some(EXTRO_SLOT) => Phase::Lost(0.0),
+        Phase::Playing if game.won || (game.lost && current.slot != Some(EXTRO_SLOT)) => {
+            // End of a game: StoreCurrentSkills, best score, ValideLevel, Save_Info "BestSco"
+            // (mm1.wdl:972-997).
+            if let Some(slot) = current.slot {
+                let checkpoint = game.checkpoint.then_some(game.start).flatten().map(|(p, _)| p);
+                let next = game.won.then(|| next_slot(slot)).filter(|&n| n != slot);
+                save.record_game(slot, game.score, checkpoint, game.won, next);
+                if game.won && slot == EXTRO_SLOT {
+                    save.extro_seen = true;
+                }
+                crate::save::write(&save);
+            }
+            if game.won { Phase::Won(0.0) } else { Phase::Lost(0.0) }
+        }
         Phase::Won(ticks) | Phase::Lost(ticks) if ticks >= 320.0 || (ticks > 16.0 && any_key(&keys)) => {
             let won = matches!(current.phase, Phase::Won(_));
             pending.0 = match current.slot {

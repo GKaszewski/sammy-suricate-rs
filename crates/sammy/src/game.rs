@@ -40,6 +40,8 @@ pub struct GameState {
     pub hearts: f32,
     /// `Player1Start` / `Player1AngleStart`: respawn point (spawn or checkpoint).
     pub start: Option<([f32; 3], f32)>,
+    /// `DoRestart`: a checkpoint was taken (its position is saved with the level).
+    pub checkpoint: bool,
     /// `EyeOfTruth` ticks left (lion range rings visible while > 0).
     pub eye_ticks: f32,
     /// `DureeEyeTruthOrg` (256; InitGame7 Skill6).
@@ -68,6 +70,7 @@ impl Default for GameState {
             warn_score: 0.0,
             hearts: MAX_HEARTS,
             start: None,
+            checkpoint: false,
             eye_ticks: 0.0,
             boost: crate::actions::player::BOOST_MAX,
             eye_duration: 256.0,

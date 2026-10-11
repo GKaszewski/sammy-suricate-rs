@@ -8,6 +8,7 @@ pub mod lzss;
 pub mod mdl;
 pub mod pcx;
 pub mod reader;
+pub mod sav;
 pub mod trace;
 pub mod wmb;
 pub mod wrs;

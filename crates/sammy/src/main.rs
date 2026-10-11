@@ -14,6 +14,7 @@ mod lights;
 mod material;
 mod model;
 mod particles;
+mod save;
 mod shadow;
 mod vfs;
 
@@ -56,6 +57,7 @@ fn main() -> anyhow::Result<()> {
             ..default()
         }))
         .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin, particles::ParticlePlugin))
+        .insert_resource(save::load(&dir))
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, (audio::load_sounds, setup))

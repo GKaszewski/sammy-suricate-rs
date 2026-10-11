@@ -364,6 +364,7 @@ pub fn collect_health(
         if near(&pos.0) {
             sfx.play("Restart_Son");
             game.start = Some(([c.home[0], c.home[1], c.home[2] + 150.0], c.pan));
+            game.checkpoint = true;
             commands.entity(e).insert(Shrinking);
         }
     }
