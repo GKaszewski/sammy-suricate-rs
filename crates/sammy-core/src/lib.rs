@@ -21,6 +21,7 @@ pub mod gems;
 pub mod health;
 pub mod id;
 pub mod input;
+pub mod intro;
 pub mod keys;
 pub mod level;
 pub mod levels;
