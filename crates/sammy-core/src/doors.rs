@@ -156,8 +156,9 @@ impl Door {
         let p = view.sammy;
         let horiz = ((o[0] - p[0]).powi(2) + (o[1] - p[1]).powi(2)).sqrt();
         let dist = (horiz.powi(2) + (o[2] - p[2]).powi(2)).sqrt();
-        // Sammy's per-tick door scan (id 25) drives `movePortail`.
-        let scanned = self.scan_id == SAMMY_SCAN_ID && dist <= RANGE_SCAN_DOOR && !view.sammy_dead;
+        // Sammy's per-tick door scan (id 25) drives `movePortail`; a door open for good
+        // has no event any more (no recall, no flash).
+        let scanned = self.scan_id == SAMMY_SCAN_ID && dist <= RANGE_SCAN_DOOR && !view.sammy_dead && self.state != DoorState::Open;
         let accepts = self.accepts(game.key);
         self.flash = (self.flash - t).max(0.0);
 
@@ -213,8 +214,8 @@ impl Door {
             }
             DoorState::Up { hold } => {
                 if self.permanent && self.validated {
+                    // Skill14 stays set: a gem still flying in lands and the key is spent.
                     out.push(DoorEvent::MorphDark);
-                    self.gem_flying = false;
                     DoorState::Open
                 } else {
                     let hold = hold - t;
@@ -354,5 +355,29 @@ mod tests {
         assert_eq!(d.state, DoorState::Down);
         assert_eq!(origin[2], 0.0);
         assert!(out.contains(&DoorEvent::Sound("DoorClose_son")));
+    }
+
+    /// Walking under a permanent door validates it while its gem is still flying: the
+    /// door turns dark and still wants the gem, so the key is spent (not returned).
+    #[test]
+    fn validated_door_keeps_the_flying_gem() {
+        let mut d = door(1, flag(5));
+        let mut game = GameState { key: 1, ..Default::default() };
+        let mut origin = [0.0; 3];
+        let mut out = Vec::new();
+        let near = DoorView { sammy: [200.0, 0.0, 0.0], sammy_dead: false, blockers: &[] };
+        d.step(&mut origin, &mut game, &near, 1.0, &mut out);
+        assert!(out.contains(&DoorEvent::LaunchGem { color: 1 }) && d.gem_flying && game.key == 0);
+        let under = DoorView { sammy: [50.0, 0.0, 0.0], ..near };
+        for _ in 0..20 {
+            d.step(&mut origin, &mut game, &under, 1.0, &mut out);
+        }
+        assert!(out.contains(&DoorEvent::MorphDark));
+        assert_eq!(d.state, DoorState::Open);
+        assert!(d.gem_flying && d.validated);
+        // Walking away no longer recalls it.
+        let away = DoorView { sammy: [450.0, 0.0, 0.0], ..near };
+        d.step(&mut origin, &mut game, &away, 1.0, &mut out);
+        assert!(d.gem_flying);
     }
 }
