@@ -690,6 +690,9 @@ pub fn emit_trails(mut ps: ResMut<Particles>, game: Res<Game>) {
         for wasp in w.wasps.values() {
             wasp_trail(&mut ps, wasp.pos, wasp.kind, 1.0);
         }
+        for e in w.escapees.values() {
+            wasp_trail(&mut ps, e.pos, e.kind, sammy_core::wasps::ESCAPE_SCALE);
+        }
         for hw in w.hive_wasps.values() {
             if let Some((kind, p)) = hw.trail() {
                 hive_wasp_trail(&mut ps, p, kind);

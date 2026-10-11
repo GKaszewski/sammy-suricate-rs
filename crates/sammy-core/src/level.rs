@@ -27,6 +27,8 @@ pub struct Presentation {
     pub frame: Option<f32>,
     /// Models: `overlay` colour key (palette index 0 / black is transparent).
     pub overlay: bool,
+    /// Models: `flare` (drawn additively).
+    pub flare: bool,
     /// Models: solid bounding box collider.
     pub solid_box: bool,
 }

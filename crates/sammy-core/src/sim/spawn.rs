@@ -105,6 +105,7 @@ impl Sim {
             let frame = init.frame.or(obj.action.is_empty().then_some(1.0));
             let mut look = Look::new(Visual::Model { file: file.clone(), skin, overlay: init.overlay, frame: None });
             look.sky = init.sky;
+            look.flare = init.flare;
             if let Some(f) = frame {
                 let index = (f.floor().max(1.0) as usize - 1).min(model.mdl.frames.len().saturating_sub(1));
                 look.visual = Visual::Model { file, skin, overlay: init.overlay, frame: Some(index) };
@@ -308,10 +309,7 @@ impl Sim {
                 w.path_nodes.insert(id, crate::enemies::PathNode::from_object(obj));
                 alive
             }
-            "initammo1" => {
-                let (skin, anim) = super::wasps::init_ammo(w, id, obj);
-                Presentation { skin: Some(skin), anim: Some(("stand", anim)), ..Default::default() }
-            }
+            "initammo1" => super::wasps::init_ammo(w, id, obj),
             "initboulder" => {
                 w.boulders.insert(id, crate::gems::Boulder::from_object(obj));
                 Presentation::default()

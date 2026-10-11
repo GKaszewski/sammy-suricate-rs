@@ -335,6 +335,11 @@ impl Enemy {
         self.flag(5) && self.initialised && !self.gone()
     }
 
+    /// Wasps hitting it leave a visible corpse (`Lion_Hit` sets `wasptat` 1004).
+    pub fn keeps_wasp_corpses(&self) -> bool {
+        self.class == LION
+    }
+
     pub fn is_class_target(&self) -> bool {
         self.class == LION || self.class == ELEPHANT
     }

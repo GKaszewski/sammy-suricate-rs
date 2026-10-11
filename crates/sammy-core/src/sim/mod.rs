@@ -252,8 +252,10 @@ impl Sim {
         wasps::collect_ammo(self);
         wasps::fire(self, &controls, dt);
         wasps::spin_pickups(self, dt);
+        wasps::escapees(self, dt);
         enemies::home_wasps(self, dt);
         wasps::fly(self, dt);
+        wasps::corpses(self, dt);
         wasps::weak_doors(self);
         wasps::planks(self, dt);
         wasps::hives(self, dt);

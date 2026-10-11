@@ -134,16 +134,21 @@ impl AmmoPickup {
         (Self { kind, amount: obj.skill(2).max(1.0) as i32, poison }, look)
     }
 
-    /// Taking it: a different type replaces the old ammo (the old wasps "escape").
-    pub fn take(&self, game: &mut GameState) {
+    /// Taking it (`Ammo1_Hit`, bullets.wdl:121-177): a different type replaces the old
+    /// ammo. Returns the old type and how many of its wasps escape
+    /// (`EscapeOldWasps`, at most [`ESCAPE_MAX`]).
+    pub fn take(&self, game: &mut GameState) -> Option<(u32, usize)> {
+        let mut escape = None;
         if game.ammo_type != self.kind {
             if game.ammo_type != 0 {
+                escape = Some((game.ammo_type, game.ammo.clamp(0, ESCAPE_MAX) as usize));
                 game.ammo = 0;
             }
             game.ammo_type = self.kind;
             game.ammo_poison = self.poison;
         }
         game.ammo += self.amount;
+        escape
     }
 }
 
@@ -336,6 +341,134 @@ impl Wasp {
         } else {
             WaspStep::Flying
         }
+    }
+}
+
+/// Escaping wasps on a type switch: at most this many, shown at half size, for this many
+/// ticks, turning `ESCAPE_SPIN` degrees per tick (bullets.wdl:749-921).
+pub const ESCAPE_MAX: i32 = 15;
+pub const ESCAPE_SCALE: f32 = 0.5;
+const ESCAPE_TICKS: f32 = 80.0;
+const ESCAPE_SPIN: f32 = 20.0;
+/// Pan `random(360)`, tilt `60 + random(40)`, speed `20 + random(10)`.
+const ESCAPE_TILT: (f32, f32) = (60.0, 40.0);
+const ESCAPE_SPEED: (f32, f32) = (20.0, 10.0);
+
+/// A wasp of the old type escaping when Sammy takes another type (`WaspEscape`,
+/// bullets.wdl:847-921): it spirals upward and vanishes. Purely cosmetic (passable).
+#[derive(Clone, Debug)]
+pub struct Escapee {
+    pub kind: u32,
+    pub pos: [f32; 3],
+    pub pan: f32,
+    pub tilt: f32,
+    speed: f32,
+    timer: f32,
+}
+
+impl Escapee {
+    pub fn new(kind: u32, pos: [f32; 3], rng: &mut Rng) -> Self {
+        let pan = rng.random(360.0);
+        let tilt = ESCAPE_TILT.0 + rng.random(ESCAPE_TILT.1);
+        let speed = ESCAPE_SPEED.0 + rng.random(ESCAPE_SPEED.1);
+        Self { kind, pos, pan, tilt, speed, timer: 0.0 }
+    }
+
+    /// One frame; true when it is gone.
+    pub fn step(&mut self, t: f32) -> bool {
+        let dir = forward(self.pan, self.tilt);
+        for (p, d) in self.pos.iter_mut().zip(dir) {
+            *p += d * self.speed * t;
+        }
+        self.pan += ESCAPE_SPIN * t;
+        self.timer += t;
+        self.timer >= ESCAPE_TICKS
+    }
+}
+
+/// A wasp that hit a lion (`wasptat` 1004, bullets.wdl:577-644): it stays visible,
+/// puffs `particle_hit1` (counts at ticks after the hit), plays a second death sound,
+/// then recoils backward along its flight while the death animation plays, and
+/// vanishes 4 ticks later.
+#[derive(Clone, Debug)]
+pub struct Corpse {
+    pub kind: u32,
+    pub pos: [f32; 3],
+    bounce: [f32; 3],
+    /// Death animation step (percent).
+    step: f32,
+    elapsed: f32,
+    hidden: f32,
+}
+
+const CORPSE_PUFFS: [(f32, usize); 5] = [(0.0, 10), (3.0, 15), (5.0, 10), (6.0, 5), (7.0, 5)];
+const CORPSE_SOUND_AT: f32 = 3.0;
+const RECOIL_START: f32 = 7.0;
+/// Recoil: share of the flight velocity (horizontal, vertical), clamp, damping and
+/// gravity per tick.
+const RECOIL_XY: f32 = 0.7;
+const RECOIL_Z: f32 = 0.5;
+const RECOIL_MAX: f32 = 50.0;
+const RECOIL_DAMP: f32 = 0.05;
+const RECOIL_GRAVITY: f32 = 0.5;
+/// The death animation runs at 6 % per tick until 99 %, then the corpse hides for 4 ticks.
+const DEATH_ANIM: f32 = 6.0;
+const DEATH_END: f32 = 99.0;
+const CORPSE_HIDDEN: f32 = 4.0;
+
+/// What a corpse does this frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CorpseStep {
+    /// `particle_hit1` puffs to emit at the corpse.
+    pub puffs: usize,
+    /// The second death sound.
+    pub sound: bool,
+    pub visible: bool,
+    pub done: bool,
+}
+
+impl Corpse {
+    /// From the wasp as it hit (its velocity per tick gives the recoil).
+    pub fn new(w: &Wasp) -> Self {
+        let v = forward(w.pan, w.tilt).map(|c| c * w.speed);
+        Self { kind: w.kind, pos: w.pos, bounce: [-v[0] * RECOIL_XY, -v[1] * RECOIL_XY, -v[2] * RECOIL_Z], step: 0.0, elapsed: 0.0, hidden: 0.0 }
+    }
+
+    /// One frame; `trace` sweeps a point through the level (the corpse is passable to
+    /// entities).
+    pub fn step(&mut self, anim: Option<&mut Anim>, t: f32, trace: impl Fn([f32; 3], [f32; 3]) -> Trace) -> CorpseStep {
+        let (before, now) = (self.elapsed, self.elapsed + t);
+        self.elapsed = now;
+        let due = |at: f32| at >= before && at < now;
+        let mut out = CorpseStep { visible: true, ..Default::default() };
+        out.puffs = CORPSE_PUFFS.iter().filter(|(at, _)| due(*at)).map(|(_, n)| n).sum();
+        out.sound = due(CORPSE_SOUND_AT);
+        if now < RECOIL_START {
+            return out;
+        }
+        if self.step < DEATH_END {
+            if let Some(a) = anim {
+                a.set_step(self.step);
+            }
+            self.step += DEATH_ANIM * t;
+            if self.bounce[0] != 0.0 || self.bounce[1] != 0.0 {
+                let mut v = self.bounce;
+                if v[0].abs() > RECOIL_MAX || v[1].abs() > RECOIL_MAX {
+                    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                    v = v.map(|c| c / len * RECOIL_MAX);
+                }
+                let to = [0, 1, 2].map(|i| self.pos[i] + v[i] * t);
+                self.pos = trace(self.pos, to).end;
+                let k = 1.0 - (RECOIL_DAMP * t).min(1.0);
+                self.bounce = v.map(|c| c * k);
+                self.bounce[2] -= RECOIL_GRAVITY * t;
+            }
+            return out;
+        }
+        self.hidden += t;
+        out.visible = false;
+        out.done = self.hidden >= CORPSE_HIDDEN;
+        out
     }
 }
 

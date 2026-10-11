@@ -88,11 +88,13 @@ pub struct Look {
     pub shadow: bool,
     /// Own blended material (fading signs, translucent sprites).
     pub blend: bool,
+    /// Drawn additively (`flare`).
+    pub flare: bool,
 }
 
 impl Look {
     pub fn new(visual: Visual) -> Self {
-        Self { visual, rev: 0, sky: false, near: false, shadow: false, blend: false }
+        Self { visual, rev: 0, sky: false, near: false, shadow: false, blend: false, flare: false }
     }
 
     /// Swaps the visual (WDL `morph`).
@@ -230,6 +232,10 @@ world! {
     hives: Table<crate::wasps::Hive>,
     hive_wasps: Table<crate::wasps::HiveWasp>,
     pickup_lifetimes: Table<f32>,
+    /// Old-type wasps flying off after a type switch.
+    escapees: Table<crate::wasps::Escapee>,
+    /// Wasps that hit a lion, recoiling.
+    wasp_corpses: Table<crate::wasps::Corpse>,
 
     // Enemies.
     enemies: Table<crate::enemies::Enemy>,

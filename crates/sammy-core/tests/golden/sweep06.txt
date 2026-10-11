@@ -22,19 +22,19 @@
  10.5s score 30 goal 570 lives 5 hearts 48 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 2.19 10.74 1.1 pan 369.85 | Playing | entities 51 07356e46fc558f31
  11.0s score 30 goal 570 lives 5 hearts 48 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 8.16 12.35 1.1 pan 396.25 | Playing | entities 50 ac60099519a2845a
  11.5s score 30 goal 570 lives 5 hearts 48 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 11.31 16.78 3.74 pan 417.85 | Playing | entities 50 f000c61a81b322ac
- 12.0s score 30 goal 570 lives 5 hearts 48 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 13.81 20.75 1.79 pan 417.85 | Playing | entities 49 62514b15caadae33
- 12.5s score 30 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 17.05 25.91 1.1 pan 417.85 | Playing | entities 49 2cb52d26f220ec3e
- 13.0s score 60 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 20.38 31.2 1.1 pan 417.85 | Playing | entities 48 2fac582b8bed5c08
- 13.5s score 60 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 23.7 36.49 1.1 pan 417.85 | Playing | entities 48 ee9eff3d002d12de
+ 12.0s score 30 goal 570 lives 5 hearts 48 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 13.81 20.75 1.79 pan 417.85 | Playing | entities 50 f6339c5541a011a3
+ 12.5s score 30 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 17.05 25.91 1.1 pan 417.85 | Playing | entities 50 55b6073da8076800
+ 13.0s score 60 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 20.38 31.2 1.1 pan 417.85 | Playing | entities 49 cccd1f695f19d813
+ 13.5s score 60 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 23.7 36.49 1.1 pan 417.85 | Playing | entities 49 9435969722456f3e
  14.0s score 60 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 26.61 41.12 3.74 pan 417.85 | Playing | entities 47 74e01478a253e278
  14.5s score 90 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 29.11 45.09 1.79 pan 417.85 | Playing | entities 47 862451a45697e8fd
  15.0s score 90 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 31 49.87 1.1 pan 391.45 | Playing | entities 46 75725e84c7c265eb
  15.5s score 90 goal 570 lives 5 hearts 48 key 0 ammo 1x7 boost 150 reached false won false lost false | sammy 31 49.29 1.1 pan 321.85 | Playing | entities 45 940a217a2ae867d6
  16.0s score 90 goal 570 lives 5 hearts 46.75 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 31 50.09 1.1 pan 321.85 | Playing | entities 46 ff69f801078c2e79
- 16.5s score 90 goal 570 lives 5 hearts 46.75 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 31 46.71 3.74 pan 321.85 | Playing | entities 46 f3732bdefcf51e80
- 17.0s score 90 goal 570 lives 5 hearts 46.75 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 33.46 43.81 1.79 pan 321.85 | Playing | entities 46 688b33deea575452
- 17.5s score 90 goal 570 lives 5 hearts 46.75 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 38.09 40.18 1.1 pan 333.85 | Playing | entities 46 61b65d2caf5b548d
- 18.0s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 38.24 40.12 1.1 pan 496.16 | Playing | entities 45 ec482084dcec3398
- 18.5s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 34.21 44.05 1.1 pan 497.31 | Playing | entities 45 c3235817aefbac12
- 19.0s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 30.19 46.49 3.74 pan 497.31 | Playing | entities 45 f826e7e95918f912
- 19.5s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 26.75 49.67 1.79 pan 497.31 | Playing | entities 45 15392521ed07a5ba
+ 16.5s score 90 goal 570 lives 5 hearts 46.75 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 31 46.71 3.74 pan 321.85 | Playing | entities 46 03c986492bc07c51
+ 17.0s score 90 goal 570 lives 5 hearts 46.75 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 33.46 43.81 1.79 pan 321.85 | Playing | entities 46 979572b9a37b59a4
+ 17.5s score 90 goal 570 lives 5 hearts 46.75 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 38.09 40.18 1.1 pan 333.85 | Playing | entities 46 f1f0b537ba5b9405
+ 18.0s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 38.24 40.12 1.1 pan 496.16 | Playing | entities 45 b1108d06743e651a
+ 18.5s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 34.21 44.05 1.1 pan 497.31 | Playing | entities 45 da947d0b667db947
+ 19.0s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 30.19 46.49 3.74 pan 497.31 | Playing | entities 45 b5bee10c818ab75e
+ 19.5s score 90 goal 570 lives 5 hearts 45.25 key 0 ammo 0x0 boost 150 reached false won false lost false | sammy 26.75 49.67 1.79 pan 497.31 | Playing | entities 45 3a3e29c131034bb5

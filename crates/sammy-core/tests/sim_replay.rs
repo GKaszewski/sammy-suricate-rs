@@ -312,3 +312,55 @@ fn lions_hurt_sammy() {
     assert!(min_hearts < sammy_core::game::MAX_HEARTS, "no lion ever hurt Sammy");
     assert!(hits > 0, "no swipe landed");
 }
+
+/// A level loaded with Sammy at `start` (found from a first load) and the debug ammo.
+fn sim_at(slot: u32, ammo: Option<(i32, u32)>, start: impl Fn(&Sim) -> Option<([f32; 3], f32)>) -> Option<Sim> {
+    let files = files()?;
+    let mut sim = new_sim();
+    sim.request_load(file_for(slot)?);
+    sim.tick(0.0, &Controls::default(), files);
+    let (pos, pan) = start(&sim)?;
+    sim.debug.start = Some((pos, Some(pan)));
+    sim.debug.ammo = ammo;
+    sim.request_load(file_for(slot)?);
+    Some(sim)
+}
+
+/// Taking another wasp type: the held ones (at most 15) escape and fly off.
+#[test]
+fn old_wasps_escape_on_type_switch() {
+    // Slot 5 has type 1 and type 7 pickups; Sammy holds 20 of type 7 on a type-1 pickup.
+    let Some(mut sim) = sim_at(5, Some((20, 7)), |s| s.world.ammo_pickups.iter().find(|(_, a)| a.kind == 1).and_then(|(id, _)| s.world.pos(*id)).map(|p| (p, 0.0))) else { return };
+    let files = files().unwrap();
+    let mut most = 0;
+    for f in 0..(10.0 * FPS) as u64 {
+        sim.tick(if f == 0 { 0.0 } else { 1.0 / FPS }, &Controls::default(), files);
+        sim.drain_events().for_each(drop);
+        most = most.max(sim.world.escapees.len());
+    }
+    assert_eq!(most, 15, "escaping wasps");
+    assert!(sim.world.escapees.is_empty(), "they fly off after 80 ticks");
+    assert_eq!((sim.game.ammo_type, sim.game.ammo), (1, 1));
+}
+
+/// A wasp hitting a lion stays as a corpse (hit puffs), then vanishes.
+#[test]
+fn wasp_hitting_a_lion_leaves_a_corpse() {
+    // Facing the first lion of level 4 from 250 quants with type-2 wasps (straight, fast).
+    let Some(mut sim) = sim_at(4, Some((30, 2)), |s| s.world.enemies.values().next().map(|e| ([e.pos[0] + 250.0, e.pos[1], e.pos[2] + 40.0], 180.0))) else { return };
+    let files = files().unwrap();
+    let (mut most, mut puffs) = (0, 0);
+    for f in 0..(20.0 * FPS) as u64 {
+        let c = Controls { fire_hit: f % 60 == 30, ..Default::default() };
+        sim.tick(if f == 0 { 0.0 } else { 1.0 / FPS }, &c, files);
+        puffs += sim.drain_events().filter(|e| matches!(e, sammy_core::sim::Event::Effect(sammy_core::sim::Effect::HitStars { .. }))).count();
+        most = most.max(sim.world.wasp_corpses.len());
+    }
+    eprintln!("corpses at once {most}, puff events {puffs}");
+    assert!(most > 0, "no corpse");
+    assert!(puffs > 0, "no hit puffs");
+    for _ in 0..(3.0 * FPS) as u64 {
+        sim.tick(1.0 / FPS, &Controls::default(), files);
+    }
+    assert!(sim.world.wasp_corpses.is_empty(), "corpses vanish after the recoil");
+}

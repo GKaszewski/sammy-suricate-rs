@@ -99,7 +99,16 @@ fn build(commands: &mut Commands, loader: &mut Loader, game: &Game, id: Id, look
         Visual::Model { file, skin, overlay, frame } => {
             let Some(model) = loader.model(file) else { return e.id() };
             let base = if *overlay { model.overlay_skin(*skin, &mut loader.images, &mut loader.materials) } else { model.skin(*skin) };
-            let material = if look.sky { loader.unlit(&base) } else { base };
+            let material = if look.sky {
+                loader.unlit(&base)
+            } else if look.flare {
+                // `flare`: drawn additively.
+                let mut m = loader.materials.get(&base).cloned().unwrap_or_default();
+                m.alpha_mode = AlphaMode::Add;
+                loader.materials.add(m)
+            } else {
+                base
+            };
             let animated = w.animators.get(&id).filter(|_| frame.is_none());
             let first = frame.or_else(|| animated.and_then(|a| a.anim.sample()).map(|(a, _, _)| a)).unwrap_or(0);
             e.insert((Mesh3d(loader.meshes.add(model.build_mesh(first))), MeshMaterial3d(material.clone())));
