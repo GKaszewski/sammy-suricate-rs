@@ -40,6 +40,12 @@ pub struct GameState {
     pub hearts: f32,
     /// `Player1Start` / `Player1AngleStart`: respawn point (spawn or checkpoint).
     pub start: Option<([f32; 3], f32)>,
+    /// `EyeOfTruth` ticks left (lion range rings visible while > 0).
+    pub eye_ticks: f32,
+    /// `DureeEyeTruthOrg` (256; InitGame7 Skill6).
+    pub eye_duration: f32,
+    /// `EnnemyMustDisplayRange` (1; InitGame7 Skill7).
+    pub display_range: f32,
     /// `NbrAmmo1`, `WaspCurrentType`, `WaspCurrentPoison`.
     pub ammo: i32,
     pub ammo_type: u32,
@@ -60,6 +66,9 @@ impl Default for GameState {
             warn_score: 0.0,
             hearts: MAX_HEARTS,
             start: None,
+            eye_ticks: 0.0,
+            eye_duration: 256.0,
+            display_range: 1.0,
             ammo: 0,
             ammo_type: 0,
             ammo_poison: 0.0,
@@ -78,6 +87,16 @@ impl GameState {
     pub fn apply_init_game2(&mut self, obj: &Object) {
         if obj.skills[0] != 0.0 {
             self.lives = obj.skills[0].abs() as i32;
+        }
+    }
+
+    /// `InitGame7` (mm1.wdl): Skill6 Eye of Truth duration, Skill7 range display mode.
+    pub fn apply_init_game7(&mut self, obj: &Object) {
+        if obj.skills[5] != 0.0 {
+            self.eye_duration = obj.skills[5];
+        }
+        if obj.skills[6] != 0.0 {
+            self.display_range = obj.skills[6];
         }
     }
 

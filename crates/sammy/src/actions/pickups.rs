@@ -100,15 +100,19 @@ pub fn init_key(obj: &Object, entity: &mut EntityCommands) {
     }
 }
 
-pub fn snap_pickups(world: CollisionWorld, mut commands: Commands, mut q: Query<(Entity, &mut PickupPos, &mut Transform), With<SnapToGround>>) {
+pub fn snap_pickups(
+    world: CollisionWorld,
+    mut commands: Commands,
+    mut q: Query<(Entity, &mut PickupPos, &mut Transform, Option<&super::fx::ExtraHeight>), With<SnapToGround>>,
+) {
     if !world.ready() {
         return;
     }
-    for (e, mut p, mut tf) in &mut q {
+    for (e, mut p, mut tf, extra) in &mut q {
         let [x, y, z] = p.0;
         let tr = world.trace(1, [x, y, z + 8.0], [x, y, z - 2000.0], None).trace;
         if tr.hit() && !tr.start_solid {
-            p.0[2] = tr.end[2] - 16.0 + HEIGHT_GEM;
+            p.0[2] = tr.end[2] - 16.0 + HEIGHT_GEM + extra.map_or(0.0, |h| h.0);
             tf.translation = coords::pos(p.0);
         }
         commands.entity(e).remove::<SnapToGround>();

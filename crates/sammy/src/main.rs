@@ -9,6 +9,7 @@ mod game;
 mod hud;
 mod image;
 mod level;
+mod lights;
 mod material;
 mod model;
 mod vfs;
@@ -51,7 +52,7 @@ fn main() -> anyhow::Result<()> {
             primary_window: Some(Window { title: "Sammy Suricate".into(), ..default() }),
             ..default()
         }))
-        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, debug::DebugPlugin))
+        .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin))
         .insert_resource(files)
         .insert_resource(args)
         .add_systems(Startup, (audio::load_sounds, setup))

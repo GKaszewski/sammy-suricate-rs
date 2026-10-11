@@ -176,6 +176,9 @@ fn load_pending(
         if let Some(h) = env("SAMMY_HEARTS") {
             g.hearts = h;
         }
+        if env("SAMMY_EYE").is_some() {
+            g.eye_ticks = 1.0e9; // Eye of Truth for the whole level
+        }
         // SAMMY_AMMO=count,type
         if let Some((n, k)) = std::env::var("SAMMY_AMMO").ok().and_then(|v| {
             let (a, b) = v.split_once(',')?;

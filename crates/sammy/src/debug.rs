@@ -37,6 +37,7 @@ fn screenshot(
     game: Res<crate::game::GameState>,
     current: Res<crate::flow::CurrentLevel>,
     enemies: Query<&crate::actions::enemy::Enemy>,
+    calls: Res<crate::actions::enemy::FriendCalls>,
 ) {
     let now = time.elapsed_secs();
     job.log_timer -= time.delta_secs();
@@ -47,6 +48,7 @@ fn screenshot(
                 "t={now:.1} {} {:?} player {:?} state {:?} on {:?} | score {}/{} key {} lives {} hearts {:.0} start {:?} won {}",
                 current.file, current.phase, p.pos.map(|v| v.round()), p.state, p.ground_entity, game.score, game.goal, game.key, game.lives, game.hearts, game.start.map(|(s, _)| s.map(|v| v.round())), game.won
             );
+            info!("   calls {:?}", *calls);
             for e in &enemies {
                 let d = (0..3).map(|i| (e.pos[i] - p.pos[i]).powi(2)).sum::<f32>().sqrt();
                 info!("   enemy {} dist {:.0}", e.debug_line(), d);

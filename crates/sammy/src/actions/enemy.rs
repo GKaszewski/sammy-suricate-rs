@@ -127,6 +127,52 @@ impl LionGlobals {
     }
 }
 
+/// Friend calls (`CallFriendsToHelp`, lion.wdl:998-1070; §4.5). These globals are
+/// not reset per level in the original (`AnswerFriends` never is).
+#[derive(Resource, Debug)]
+pub struct FriendCalls {
+    /// `AttackCall`: ticks left of an active call.
+    pub attack_call: f32,
+    /// `FriendCall`: caller's `spec + weight`.
+    friend_call: f32,
+    /// `AnswerFriends`: 0 locks friend calls for the rest of the game.
+    answer: i32,
+    pub tempo_call: f32,
+    pub range_call: f32,
+}
+
+impl FriendCalls {
+    /// `InitGame6`: Skill7 = TempoCall; Skill8 ≠ 0 sets RangeCall to *Skill7* (original bug).
+    pub fn apply_game6(&mut self, s: &[f32]) {
+        if s[6] != 0.0 {
+            self.tempo_call = s[6];
+        }
+        if s[7] != 0.0 {
+            self.range_call = s[6];
+        }
+    }
+}
+
+impl Default for FriendCalls {
+    fn default() -> Self {
+        Self { attack_call: 0.0, friend_call: 0.0, answer: 1, tempo_call: 128.0, range_call: 10000.0 }
+    }
+}
+
+/// A call ring spawned by a calling lion: (delay ticks, z offset, skin).
+#[derive(Component)]
+pub struct CallRing {
+    pub delay: f32,
+    pub scale: f32,
+    pub frame: f32,
+    pub origin: [f32; 3],
+    pub skin: u32,
+}
+
+/// A lion started a chase: Sammy gets the orange warning light (`Warning_attack`).
+#[derive(Message, Clone, Copy)]
+pub struct WarningAttack;
+
 /// Patrol path node (`InitPath`, lion.wdl:774-780).
 #[derive(Component)]
 pub struct PathNode {
@@ -205,6 +251,12 @@ pub struct Enemy {
     half: [f32; 3],
     center_z: f32,
     enable_block: bool,
+    /// Result of the last line-of-sight test (`EnnemyAvuPlayer`).
+    avu: bool,
+    /// Range-ring height offset (`CircleZ = 8 + random(12)`).
+    pub circle_z: f32,
+    /// Distance to Sammy from the last `TestDistLionPlayer`.
+    pub dist: f32,
 }
 
 impl Enemy {
@@ -222,12 +274,60 @@ impl Enemy {
         )
     }
 
+    /// `DisplayEnnemyRange` (lion.wdl:1586-1653): (skin, frame %, radius) of the
+    /// range ring while the Eye of Truth is active, or None when hidden.
+    pub fn ring(&self, display_mode: f32) -> Option<(u32, f32, f32)> {
+        if self.etat == 7 || self.class == 0 {
+            return None;
+        }
+        let d = self.dist.max(1.0);
+        let calm = |e: &Enemy| {
+            let skin = if d < e.attack_range + (e.react_range - e.attack_range) * 0.5 { 2 } else { 1 };
+            (skin, (100.0 / (e.attack_range / d)).min(99.0).max(60.0), e.attack_range)
+        };
+        if display_mode > 1.0 {
+            return Some(if self.etat == 2 { self.chase_ring(d) } else { calm(self) });
+        }
+        if self.class != LION || !self.avu {
+            return None;
+        }
+        if self.etat == 2 {
+            return Some(self.chase_ring(d));
+        }
+        (self.etat == 1 || self.random_org2 != 0.0).then(|| calm(self))
+    }
+
+    fn chase_ring(&self, d: f32) -> (u32, f32, f32) {
+        let mut radius = self.attack_range;
+        let mut skin = 2;
+        if self.avu {
+            skin = 3;
+            if self.attack_range < d {
+                radius = d + 128.0;
+            }
+        }
+        (skin, (100.0 / (radius / d)).min(99.0).max(55.0), radius)
+    }
+
     pub fn alive(&self) -> bool {
         !matches!(self.etat, 6 | 7) && (self.class == LION || self.class == ELEPHANT)
     }
 
     pub fn is_class_target(&self) -> bool {
         self.class == LION || self.class == ELEPHANT
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    pub fn floor(&self) -> f32 {
+        self.floor
+    }
+
+    /// Dead and gone (blinked out): no shadow, no ring.
+    pub fn gone(&self) -> bool {
+        self.class == 0 || (self.etat == 7 && self.dying >= 33.0)
     }
 
     fn flag(&self, n: u32) -> bool {
@@ -354,6 +454,9 @@ pub fn init_lion(obj: &mut Object, entity: &mut EntityCommands) -> Option<u32> {
         half: [16.0; 3],
         center_z: 0.0,
         enable_block: true,
+        avu: false,
+        circle_z: 8.0,
+        dist: f32::MAX,
     });
     skin
 }
@@ -395,6 +498,10 @@ struct Ctx<'a, 'w1, 's1, 'w2, 's2> {
     sammy: Option<(Entity, [f32; 3], [f32; 3])>,
     ticks1: u32,
     me: Entity,
+    calls: &'a mut FriendCalls,
+    warn: &'a mut bool,
+    /// Call rings to spawn: (position, delay).
+    call_rings: &'a mut Vec<[f32; 3]>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -410,7 +517,12 @@ pub fn tick_enemies(
     mut touches: MessageReader<PlayerTouched>,
     mut wasp_hits: MessageReader<WaspHit>,
     mut enemies: Query<(Entity, &mut Enemy, &mut ModelAnimator, &mut Visibility)>,
+    mut calls: ResMut<FriendCalls>,
+    mut warnings: MessageWriter<WarningAttack>,
+    mut commands: Commands,
 ) {
+    let mut warn = false;
+    let mut call_rings = Vec::new();
     let touched: Vec<Entity> = touches.read().map(|t| t.0).collect();
     let hits: Vec<WaspHit> = wasp_hits.read().copied().collect();
     let sammy = player.single().ok().map(|(e, p)| (e, p.pos, p.vel));
@@ -427,7 +539,7 @@ pub fn tick_enemies(
     for _ in 0..clock.ticks {
         for (me, mut e, mut anim, mut vis) in &mut enemies {
             if !e.initialised {
-                init_runtime(&mut e, &anim, &world, me);
+                init_runtime(&mut e, &anim, &world, me, &mut rng);
             }
             e.prev_pos = e.pos;
             e.prev_pan = e.pan;
@@ -439,11 +551,33 @@ pub fn tick_enemies(
                 }
             }
             {
-                let mut ctx = Ctx { g: &globals, rng: &mut rng, sfx: &mut sfx, world: &world, sammy, ticks1: clock.ticks1, me };
+                let mut ctx = Ctx {
+                    g: &globals,
+                    rng: &mut rng,
+                    sfx: &mut sfx,
+                    world: &world,
+                    sammy,
+                    ticks1: clock.ticks1,
+                    me,
+                    calls: &mut calls,
+                    warn: &mut warn,
+                    call_rings: &mut call_rings,
+                };
                 enemy_behavior(&mut e, &mut ctx, &nodes, &anim);
                 anim_lion(&mut e, &mut ctx, &mut vis);
             }
             sync_anim(&e, &mut anim);
+        }
+        // `AttackCall -= time` while a call is running.
+        calls.attack_call = (calls.attack_call - 1.0).max(0.0);
+    }
+    if warn {
+        warnings.write(WarningAttack);
+    }
+    // Three expanding rings per call: z+50 (skin 1), +85 after 8 ticks (skin 3), +150 after 18 more (skin 1).
+    for p in call_rings {
+        for (dz, delay, skin) in [(50.0, 0.0, 1), (85.0, 8.0, 3), (150.0, 26.0, 1)] {
+            commands.spawn((CallRing { delay, scale: 0.01, frame: 1.0, origin: [p[0], p[1], p[2] + dz], skin }, crate::flow::LevelScoped));
         }
     }
 }
@@ -459,8 +593,9 @@ fn e_touches(world: &CollisionWorld, e: &Enemy, me: Entity, sammy: Entity) -> bo
     world.trace(HULL, e.pos, end, Some(me)).entity == Some(sammy)
 }
 
-fn init_runtime(e: &mut Enemy, anim: &ModelAnimator, world: &CollisionWorld, me: Entity) {
+fn init_runtime(e: &mut Enemy, anim: &ModelAnimator, world: &CollisionWorld, me: Entity, rng: &mut Rng) {
     e.initialised = true;
+    e.circle_z = 8.0 + rng.random(12.0);
     // `Sonar my,2000`, then hover at 28×scale (15×scale for scorpions) (lion.wdl:151-173).
     let tr = world.trace(0, e.pos, [e.pos[0], e.pos[1], e.pos[2] - 2000.0], Some(me)).trace;
     if tr.hit() {
@@ -485,7 +620,24 @@ fn test_dist(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, g: &LionGlobals) 
     if e.etat == 12 {
         return (0.0, 0.0, 1.0);
     }
-    let d = to_angle([sp[0] - e.pos[0], sp[1] - e.pos[1], sp[2] + 15.0 - e.pos[2]]);
+    let mut d = to_angle([sp[0] - e.pos[0], sp[1] - e.pos[1], sp[2] + 15.0 - e.pos[2]]);
+    e.dist = d.2;
+    if ctx.calls.attack_call != 0.0 {
+        // Answering a friend call: same species+subtype within RangeCall (exact float compare).
+        if e.spec as f32 + e.weight == ctx.calls.friend_call && d.2 < ctx.calls.range_call && d.2 > 128.0 {
+            if matches!(e.etat, 0 | 1 | 4 | 8 | 9) {
+                if d.2 > e.attack_range {
+                    ctx.calls.answer += 1;
+                }
+                e.etat_bis = 0;
+                e.dest_pan = d.0;
+                let r = e.run_speed();
+                e.set_state(2, r);
+            }
+            d.2 = 64.0;
+        }
+        return d; // during a call nobody reverts to idle
+    }
     if d.2 > e.react_range * 1.1 && (e.etat == 1 || e.etat == 2) {
         e.etat = if ctx.rng.random(100.0) > g.random_attack { 4 } else { 0 };
         e.anim_speed = 3.0;
@@ -495,10 +647,14 @@ fn test_dist(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, g: &LionGlobals) 
 }
 
 /// `LionShootPlayer` (§2.6): line of sight from the lion origin to Sammy.
-fn sees_sammy(e: &Enemy, ctx: &Ctx<'_, '_, '_, '_, '_>) -> bool {
+fn sees_sammy(e: &mut Enemy, ctx: &Ctx<'_, '_, '_, '_, '_>) -> bool {
     let Some((s, sp, _)) = ctx.sammy else { return false };
     let hit = ctx.world.trace(0, e.pos, [sp[0], sp[1], sp[2] + 15.0], Some(ctx.me));
-    !hit.trace.hit() || hit.entity == Some(s)
+    let seen = !hit.trace.hit() || hit.entity == Some(s);
+    if hit.trace.hit() {
+        e.avu = seen;
+    }
+    seen
 }
 
 fn second_react_range(e: &mut Enemy) {
@@ -583,6 +739,7 @@ fn enemy_behavior(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, nodes: &[&Pa
                 if e.spec == 3 && ctx.rng.random(100.0) > g.random_attack {
                     ctx.sfx.play("ScorpionAttack_son");
                 }
+                *ctx.warn = true; // Warning_Attack
                 e.etat_bis = 0;
                 e.dest_pan = d.0;
                 let r = e.run_speed();
@@ -682,7 +839,7 @@ fn patrol(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, nodes: &[&PathNode],
             e.target = n.pos;
             e.target_pan = n.pan;
             e.target_tilt = ang(n.tilt);
-            let tr = ctx.world.trace(0, n.pos, e.pos, Some(ctx.me)).trace;
+            let tr = ctx.world.trace_static(0, n.pos, e.pos).trace;
             if !tr.hit() {
                 accepted = true;
             }
@@ -890,7 +1047,7 @@ fn handle_speed(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, anim: &ModelAn
             e.muzzle = Some(head);
             let f = forward(e.pan, e.tilt);
             let tip = [0, 1, 2].map(|i| head[i] + f[i] * ctx.g.dist_muzzle);
-            let tr = ctx.world.trace(0, head, tip, Some(ctx.me));
+            let tr = ctx.world.trace_static(0, head, tip);
             if tr.trace.start_solid {
                 let a = if e.etat == 6 { e.pan } else { e.pan - 180.0 };
                 let (s, c) = a.to_radians().sin_cos();
@@ -923,6 +1080,9 @@ fn head_pos(e: &Enemy, anim: &ModelAnimator) -> Option<[f32; 3]> {
 /// `EnnemyOnBlock` (§2.8): bounce off the wall and re-steer 25-45° off its normal.
 fn on_block(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, n: [f32; 3]) {
     let g = *ctx.g;
+    if stuck_roar(e, ctx) {
+        return;
+    }
     e.guard_stuck += 3.0;
     let mut v = (e.vel[0].abs() + e.vel[1].abs()) * 0.1 * e.weight * g.intensite_bounce;
     if v == 0.0 {
@@ -953,17 +1113,8 @@ fn on_block(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, n: [f32; 3]) {
 fn on_entity(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, other: Entity) {
     let g = *ctx.g;
     e.guard_stuck += e.ball_accel;
-    // Stuck roar (:319-376): running, stuck, with Sammy in clear view.
-    if e.guard_stuck > 10.0 && matches!(e.etat, 2 | 12 | 13) {
-        e.random_time = 0.0;
-        e.guard_stuck = 0.0;
-        if sees_sammy(e, ctx) {
-            e.dest_pan = ang(e.pan - 180.0);
-            ctx.sfx.play(if e.spec == 3 { "ScorpionAttack_son" } else { "tigre_son" });
-            e.random_time = e.time_for_nothing * 2.0;
-            e.set_state(3, 4.0);
-            return;
-        }
+    if stuck_roar(e, ctx) {
+        return;
     }
     if ctx.sammy.is_some_and(|(s, _, _)| s == other) {
         e.random_time = 0.0;
@@ -981,6 +1132,42 @@ fn on_entity(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>, other: Entity) {
     if e.flag(3) && e.etat != 2 && e.random_time <= 0.0 {
         e.random_time = e.time_for_nothing;
     }
+}
+
+/// Stuck roar (Lion_Hit :319-376), checked first on every collision event: a lion
+/// running and stuck (`GuardStuck > 10`) with Sammy in clear view roars, and with
+/// Flag7 calls its friends.
+fn stuck_roar(e: &mut Enemy, ctx: &mut Ctx<'_, '_, '_, '_, '_>) -> bool {
+    if e.guard_stuck > 10.0 && matches!(e.etat, 2 | 12 | 13) {
+        e.random_time = 0.0;
+        e.guard_stuck = 0.0;
+        // The original traces from Sammy+100 to the lion+100 against level geometry only.
+        let clear = ctx.sammy.is_some_and(|(_, sp, _)| {
+            !ctx.world.trace_static(0, [sp[0], sp[1], sp[2] + 100.0], [e.pos[0], e.pos[1], e.pos[2] + 100.0]).trace.hit()
+        });
+        if clear {
+            e.dest_pan = ang(e.pan - 180.0);
+            if e.spec == 3 {
+                ctx.sfx.play("ScorpionAttack_son");
+            } else if e.flag(7) && ctx.calls.attack_call == 0.0 {
+                ctx.sfx.play("tigre_son");
+                ctx.sfx.play("LionAttack1_son");
+            } else {
+                ctx.sfx.play("tigre_son");
+            }
+            e.random_time = e.time_for_nothing * 2.0;
+            e.set_state(3, 4.0);
+            if e.flag(7) && e.dist < e.attack_range && ctx.calls.attack_call == 0.0 && ctx.calls.answer != 0 {
+                // CallFriendsToHelp.
+                ctx.calls.answer = 0;
+                ctx.calls.attack_call = ctx.calls.tempo_call;
+                ctx.calls.friend_call = e.spec as f32 + e.weight;
+                ctx.call_rings.push(e.pos);
+            }
+            return true;
+        }
+    }
+    false
 }
 
 /// Lion touching Sammy (§4.1/4.2): bump damage and swipe start, then the swipe hit.
@@ -1217,4 +1404,11 @@ pub fn sync_player_collider(mut q: Query<(&Player, &PlayerBoxOffset, &mut BoxCol
 
 pub fn bump_clock(mut clock: ResMut<AiClock>) {
     clock.ticks1 = (clock.ticks1 + clock.ticks) % 64;
+}
+
+/// `RestartSammy` sets `AttackCall = 0` (player.wdl:894).
+pub fn reset_calls(mut reset: MessageReader<crate::game::ResetScan>, mut calls: ResMut<FriendCalls>) {
+    if reset.read().count() > 0 {
+        calls.attack_call = 0.0;
+    }
 }

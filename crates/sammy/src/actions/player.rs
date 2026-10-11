@@ -108,6 +108,8 @@ pub struct Player {
     pub knock: [f32; 3],
     /// Last frame's movement in quants/tick (`PlayerSpeed`), what others get pushed by.
     pub vel: [f32; 3],
+    /// Floor height below Sammy (`BlobHautSol`), for his shadow.
+    pub floor: f32,
     pub state: State,
     snapped: bool,
 }
@@ -149,6 +151,7 @@ pub fn init_player(obj: &mut Object, entity: &mut EntityCommands) {
         scan_radius,
         knock: [0.0; 3],
         vel: [0.0; 3],
+        floor: pos[2],
         state: State::Stand,
         snapped: false,
     });
@@ -309,6 +312,9 @@ pub fn move_player(
 
         // 4. Vertical motion: snap to the floor when grounded, else ballistic.
         let floor = floor_below(&world, p.pos);
+        if let Some((f, _)) = floor {
+            p.floor = f;
+        }
         if p.grounded {
             match floor {
                 Some((f, e)) if p.pos[2] - BLOB_HAUT - f <= 1.0 => {

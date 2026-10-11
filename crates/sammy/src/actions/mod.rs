@@ -4,6 +4,7 @@
 mod decor;
 pub mod door;
 pub mod enemy;
+pub mod fx;
 pub mod health;
 pub mod pickups;
 pub mod platform;
@@ -31,6 +32,8 @@ impl Plugin for ActionsPlugin {
             .add_message::<player::PlayerTouched>()
             .init_resource::<enemy::LionGlobals>()
             .init_resource::<enemy::AiClock>()
+            .init_resource::<enemy::FriendCalls>()
+            .add_message::<enemy::WarningAttack>()
             .add_systems(
                 Update,
                 (
@@ -70,6 +73,17 @@ impl Plugin for ActionsPlugin {
                         enemy::add_enemy_colliders,
                         enemy::sync_enemy_colliders,
                         enemy::place_enemies,
+                    )
+                        .chain(),
+                    (
+                        enemy::reset_calls,
+                        fx::warning_light,
+                        fx::spawn_shadows,
+                        fx::place_shadows,
+                        fx::run_eye,
+                        fx::spawn_rings,
+                        fx::update_rings,
+                        fx::run_call_rings,
                     )
                         .chain(),
                     (health::run_death, pickups::reset_keys, health::reset_checkpoints, health::animate_hearts, health::spin_pickups),
@@ -153,11 +167,18 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initgame6" => {
             let sk = obj.skills.clone();
-            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_game6(&sk));
+            entity.commands().queue(move |w: &mut World| {
+                w.resource_mut::<enemy::LionGlobals>().apply_game6(&sk);
+                w.resource_mut::<enemy::FriendCalls>().apply_game6(&sk);
+            });
         }
         "initgame7" => {
             let sk = obj.skills.clone();
-            entity.commands().queue(move |w: &mut World| w.resource_mut::<enemy::LionGlobals>().apply_game7(&sk));
+            let o = obj.clone();
+            entity.commands().queue(move |w: &mut World| {
+                w.resource_mut::<enemy::LionGlobals>().apply_game7(&sk);
+                w.resource_mut::<GameState>().apply_init_game7(&o);
+            });
         }
         "initcamera2" => {
             let o = obj.clone();
@@ -205,6 +226,10 @@ pub fn init(obj: &mut Object, pov_z: f32, entity: &mut EntityCommands) -> Action
         }
         "initteleport" => {
             platform::init_teleport(obj, entity);
+            ActionInit::default()
+        }
+        "initeyeoftruth" => {
+            fx::init_eye(obj, entity);
             ActionInit::default()
         }
         "initlion" => {

@@ -110,8 +110,17 @@ impl CollisionWorld<'_, '_> {
         self.level.is_some()
     }
 
+    /// Trace against level geometry and map entities only (WDL `IGNORE_MODELS`).
+    pub fn trace_static(&self, hull: usize, start: [f32; 3], end: [f32; 3]) -> Hit {
+        self.trace_impl(hull, start, end, None, false)
+    }
+
     /// Sweeps `hull` from `start` to `end`, optionally ignoring one brush entity.
     pub fn trace(&self, hull: usize, start: [f32; 3], end: [f32; 3], ignore: Option<Entity>) -> Hit {
+        self.trace_impl(hull, start, end, ignore, true)
+    }
+
+    fn trace_impl(&self, hull: usize, start: [f32; 3], end: [f32; 3], ignore: Option<Entity>, models: bool) -> Hit {
         let mut best = Hit {
             trace: self.level.as_ref().map_or(
                 Trace { fraction: 1.0, end, normal: [0.0; 3], start_solid: false, all_solid: false },
@@ -143,7 +152,7 @@ impl CollisionWorld<'_, '_> {
         }
         let (below, above) = hull_extents(hull);
         for (e, b) in &self.boxes {
-            if !b.solid || Some(e) == ignore {
+            if !models || !b.solid || Some(e) == ignore {
                 continue;
             }
             let min = [0, 1, 2].map(|i| b.center[i] - b.half[i] - above[i]);

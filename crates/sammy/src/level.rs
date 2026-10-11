@@ -48,6 +48,11 @@ impl GameAssets {
     pub fn prefab(&self, file: &str) -> Option<Prefab> {
         self.prefabs.get(&file.to_lowercase()).cloned().flatten()
     }
+
+    /// Sprite quad, material and frame count of a loaded PCX.
+    pub fn sprite(&self, file: &str) -> Option<(Handle<Mesh>, Handle<StandardMaterial>, u32)> {
+        self.sprites.get(&file.to_lowercase()).cloned().flatten()
+    }
 }
 
 /// Files gameplay may need at runtime (morphs, projectiles, debris), loaded with every level.
@@ -62,6 +67,9 @@ const PRELOAD: &[&str] = &[
     "doorwk4.wmb",
     "doordark.wmb",
     "platfor1.wmb",
+    "circl100.mdl",
+    "shadlio2.pcx",
+    "ombblob2.pcx",
 ];
 
 pub struct Spawner<'a, 'w, 's> {
@@ -104,6 +112,11 @@ impl Spawner<'_, '_, '_> {
         for file in PRELOAD {
             if file.ends_with(".mdl") {
                 self.load_model(file);
+            } else if file.ends_with(".pcx") {
+                if !self.assets.sprites.contains_key(*file) {
+                    let s = self.load_sprite(file);
+                    self.assets.sprites.insert(file.to_string(), s);
+                }
             } else {
                 self.load_prefab(file);
             }
