@@ -13,6 +13,7 @@ pub mod collision;
 pub mod doors;
 pub mod enemies;
 pub mod extro;
+pub mod flow;
 pub mod game;
 pub mod gems;
 pub mod health;

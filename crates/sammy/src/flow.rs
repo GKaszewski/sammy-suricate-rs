@@ -12,26 +12,13 @@ use crate::vfs::GameFiles;
 
 pub use sammy_core::levels::{EXTRO_SLOT, LEVELS, file_for, next_slot, slot_for};
 
-/// `PartieEncours` / `PartieGagnee` reduced to the phases the port needs.
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-pub enum Phase {
-    /// Level-start camera sweep (input disabled), with elapsed ticks.
-    #[default]
-    Intro,
-    Playing,
-    /// Win / lose screens, with elapsed ticks (320 or any key).
-    Won(f32),
-    Lost(f32),
-    /// The 3D main menu scene (no game running).
-    Menu,
-}
+pub use sammy_core::flow::Phase;
 
-#[derive(Resource, Default)]
+/// The level being played ([`sammy_core::flow::LevelFlow`]) and a counter of loads.
+#[derive(Resource, Default, Deref, DerefMut)]
 pub struct CurrentLevel {
-    pub slot: Option<u32>,
-    pub file: String,
-    pub phase: Phase,
-    pub intro_ticks: f32,
+    #[deref]
+    pub flow: sammy_core::flow::LevelFlow,
     /// Bumped by every level load (reloads of the same file included).
     pub loads: u32,
 }
@@ -105,7 +92,7 @@ fn load_pending(
     // `sun_angle`: pan 135 / tilt 85 in levels (mm1.wdl:618-620), pan 90 in the extro (Extro.wdl:81).
     commands.insert_resource(if slot == Some(EXTRO_SLOT) { crate::shadow::SunAngle(90.0, 85.0) } else { crate::shadow::SunAngle::default() });
     let phase = if file.eq_ignore_ascii_case(crate::menu::MENU_FILE) { Phase::Menu } else { Phase::Intro };
-    *current = CurrentLevel { slot, file: file.clone(), phase, intro_ticks: 0.0, loads: current.loads + 1 };
+    *current = CurrentLevel { flow: sammy_core::flow::LevelFlow { slot, file: file.clone(), phase, intro_ticks: 0.0 }, loads: current.loads + 1 };
     let mut spawner = Spawner {
         commands: &mut commands,
         files: &files,
@@ -178,64 +165,21 @@ fn run_flow(
     mut current: ResMut<CurrentLevel>,
     mut pending: ResMut<PendingLoad>,
 ) {
-    let t = time.delta_secs() * TICKS;
-    current.phase = match current.phase {
-        Phase::Intro => {
-            current.intro_ticks += t;
-            let converged = follow.iter().any(|f| f.converged);
-            // Ends when the camera converges, after 128 ticks, or on Enter/Esc (mm1.wdl:744-813).
-            let skip = controls.confirm || controls.options || controls.accept;
-            if (converged && current.intro_ticks > 8.0) || current.intro_ticks >= 128.0 || skip {
-                Phase::Playing
-            } else {
-                Phase::Intro
-            }
-        }
-        Phase::Playing if game.won || (game.lost && current.slot != Some(EXTRO_SLOT)) => {
-            // End of a game: StoreCurrentSkills, best score, ValideLevel, Save_Info "BestSco"
-            // (mm1.wdl:972-997).
-            if let Some(slot) = current.slot {
-                let checkpoint = game.checkpoint.then_some(game.start).flatten().map(|(p, _)| p);
-                let next = game.won.then(|| next_slot(slot)).filter(|&n| n != slot);
-                save.record_game(slot, game.score, checkpoint, game.won, next);
-                if game.won && slot == EXTRO_SLOT {
-                    save.extro_seen = true;
-                }
-                crate::save::write(&save);
-            }
-            if game.won { Phase::Won(0.0) } else { Phase::Lost(0.0) }
-        }
-        // Win: Sammy dances until a key (`AnimGagnee` blocks, mm1.wdl:947); lose: 320 ticks or a key.
-        Phase::Won(ticks) | Phase::Lost(ticks)
-            if (ticks > 16.0 && controls.any) || (matches!(current.phase, Phase::Lost(_)) && ticks >= 320.0) =>
-        {
-            let won = matches!(current.phase, Phase::Won(_));
-            pending.0 = match current.slot {
-                Some(slot) if won => Some(after_win(slot, &save).to_owned()),
-                _ => Some(current.file.clone()), // lose: same level again
-            };
-            current.phase
-        }
-        Phase::Won(ticks) => Phase::Won(ticks + t),
-        Phase::Lost(ticks) => Phase::Lost(ticks + t),
-        p => p,
+    let input = sammy_core::flow::FlowInput {
+        t: time.delta_secs() * TICKS,
+        skip: controls.confirm || controls.options || controls.accept,
+        any: controls.any,
+        converged: follow.iter().any(|f| f.converged),
     };
-}
-
-/// After a win (mm1.wdl:988-1123): the last level of a world returns to the menu, unless
-/// both 28 and 44 are reached, which starts the extro; otherwise the next level starts.
-fn after_win(slot: u32, save: &crate::save::SaveGame) -> &'static str {
-    use crate::save::LevelState::Unlocked;
-    let both = save.state(28) == Unlocked && save.state(44) == Unlocked;
-    if matches!(slot, 28 | 44) && both {
-        return file_for(EXTRO_SLOT).unwrap_or(crate::menu::MENU_FILE);
+    let step = current.flow.step(input, &game, &mut save);
+    if step.saved {
+        crate::save::write(&save);
     }
-    if matches!(slot, 12 | 28 | 44) || slot == EXTRO_SLOT {
-        return crate::menu::MENU_FILE;
+    if let Some(file) = step.load {
+        pending.0 = Some(file);
     }
-    file_for(next_slot(slot)).unwrap_or(crate::menu::MENU_FILE)
 }
 
 pub fn playing(current: &CurrentLevel) -> bool {
-    current.phase == Phase::Playing
+    current.flow.playing()
 }
