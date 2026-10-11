@@ -70,6 +70,13 @@ const PRELOAD: &[&str] = &[
     "circl100.mdl",
     "shadlio2.pcx",
     "ombblob2.pcx",
+    // HUD and end-of-game screens (docs/hud-saves.md §1.6, §1.7, §3).
+    "panwasp.mdl",
+    "paneye.mdl",
+    "lose.mdl",
+    "win.mdl",
+    "plus50+6.pcx",
+    "plu100+2.pcx",
 ];
 
 pub struct Spawner<'a, 'w, 's> {

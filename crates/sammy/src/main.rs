@@ -8,6 +8,7 @@ mod effects;
 mod flow;
 mod game;
 mod hud;
+mod hud3d;
 mod image;
 mod level;
 mod lights;
@@ -57,6 +58,7 @@ fn main() -> anyhow::Result<()> {
             ..default()
         }))
         .add_plugins((CameraPlugin, ModelPlugin, actions::ActionsPlugin, material::LevelMaterialPlugin, hud::HudPlugin, flow::FlowPlugin, lights::LightsPlugin, debug::DebugPlugin, shadow::ShadowPlugin, particles::ParticlePlugin))
+        .add_plugins(hud3d::Hud3dPlugin)
         .insert_resource(save::load(&dir))
         .insert_resource(files)
         .insert_resource(args)

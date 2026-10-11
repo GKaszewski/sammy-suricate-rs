@@ -266,7 +266,10 @@ fn run_flow(
             }
             if game.won { Phase::Won(0.0) } else { Phase::Lost(0.0) }
         }
-        Phase::Won(ticks) | Phase::Lost(ticks) if ticks >= 320.0 || (ticks > 16.0 && any_key(&keys)) => {
+        // Win: Sammy dances until a key (`AnimGagnee` blocks, mm1.wdl:947); lose: 320 ticks or a key.
+        Phase::Won(ticks) | Phase::Lost(ticks)
+            if (ticks > 16.0 && any_key(&keys)) || (matches!(current.phase, Phase::Lost(_)) && ticks >= 320.0) =>
+        {
             let won = matches!(current.phase, Phase::Won(_));
             pending.0 = match current.slot {
                 Some(slot) if won => file_for(next_slot(slot)).map(str::to_owned),

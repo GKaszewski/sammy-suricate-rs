@@ -167,6 +167,7 @@ pub fn collect(
             sfx.play("Diam_son");
             if d.points == 50 || d.points == 100 {
                 sfx.play("clog3");
+                crate::hud3d::queue_popup(&mut commands, pos.0, d.points);
             }
             game.add_points(d.points, &mut sfx);
         }

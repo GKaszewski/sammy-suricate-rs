@@ -19,7 +19,7 @@ Reference for the Rust/Bevy port. It goes deeper than `gameplay.md` §1 and corr
 | 3 | Locked icon: click gives `beep2` | `LevelNotReady` has a click branch (`interfac.wdl:1107`) but `InitMainMenu` sets `enable_Click = 0` for locked icons (`:140`, `:158`), so the click never fires [Q]. |
 | 4 | Y/O keys "do nothing" in Yes/No | Y, O and Esc all end the wait loop with no result: the dialog closes and **nothing** happens (`options.wdl:687`, `:738-759`). Only J and N answer. |
 | 5 | Tooltip "Szkolenie N :" + title | The second tooltip line (`Titre*_Str`) is an **empty string** for every level (`panels.wdl:82-190`). Only the first line is ever visible. |
-| 6 | Win: `Facilite++` "no live consumer" | `Facilite` feeds `VitesseBonusMin/Max` (`InitLvl.wdl:127-128`) but those two variables are never read anywhere else, so it is effectively dead. Correct. |
+| 6 | `Facilite++` has "no live consumer" | Confirmed, with a nuance: `Facilite` feeds `VitesseBonusMin/Max` (`InitLvl.wdl:127-128`), but those two variables are never read anywhere else. |
 | 7 | "levels 21/37 unlocked once level 20/36 is unlocked" | Correct, and it is evaluated on the **unlocked** state of 20/36 (value 2), not on having beaten them (§3.8). |
 | 8 | Extro when both 28 and 44 completed | The test is `LevelsInfo[28]==2 && LevelsInfo[44]==2`, i.e. both **unlocked** (reached), and `PreviousLevel` is 28 or 44 (§7.4). |
 | 9 | Version text visible on the menu | `Texte_Version` is switched off on the first click and **not** switched back on when the menu loop resumes (`interfac.wdl:416`, `:442`, `:430`) [Q]. |
@@ -102,7 +102,7 @@ Entity (from the level): `suricat1.MDL` at (2790.5, -1073.7, 193.7), pan 180, sc
 **Per-tick loop (`MoveSammyonPath`, while Flag1 = 1, which is never cleared, so Sammy keeps walking after the intro):**
 1. `Call PlayerPatrol` (below).
 2. `Pan += Ang(PlayerDestpan - Pan) * 0.25 * time` (smooth heading).
-3. `PlayerIntention = (0, 1)` (full forward, no turn); `Call HandleSpeedPlayer`. Forward speed `VitesseRaq.X = 1 * time * SpeedBalle = 15 * time` quants per tick (local-X `Move`, `player.wdl:1156`, `:1397`) [U: exact `Move` smoothing]. Walk animation advances `0.5 * VitesseRaq.X` per tick (`PlayerAnimSpeedWalk 0.5`, `anims.wdl:361-366`) and emits walk dust every 4 ticks.
+3. `PlayerIntention = (0, 1)` (full forward, no turn); `Call HandleSpeedPlayer`. Forward speed `VitesseRaq.X = 1 * time * SpeedBalle = 15 * time` quants per tick (local-X `Move`, `player.wdl:1156`, `:1397`) [U: exact `Move` smoothing]. Walk animation advances `0.5 * VitesseRaq.X` per tick (`PlayerAnimSpeedWalk 0.5`, `anims.wdl:361-366`) and emits walk dust particles (`DustUnderSammy`).
 4. If `BlobZoneScan != 0`: `SCAN` sphere range 300, id **25** (camera zones and hint titles).
 5. `SCAN` from Sammy's pos/angle, cone `pan 60, tilt 90`, range 600, id **30** (path nodes).
 6. `AnimPlayer`; `Accel VitesseRaq, 0, 0.8`.
@@ -274,7 +274,7 @@ Whether spin and `facing = 1` combine visibly on the `.wmb` pieces is [U] (the s
 - Clickable set: all entities with Skill1 != 0 and `enable_Click` = 1: Play (3 pieces), Tutorial (2), Jump (2), Think (2), Options, Quit, Bonus (2, hidden), 4 Back arrows, and unlocked level icons.
 
 ### 3.6 `ChoixMenu` state machine (`MainMenuSammy`, `interfac.wdl:403-624`)
-`debut:` loop: `while ChoixMenu == 0 { if mouse_mode == 0 { Call mouse_toggle }; waitt 1 }`. On exit: hide version/username text, `CameraSpeed = 0`, `Camera1Friction = 0.01`. Each branch except 1 and ">= 101" first waits for **left-button release** (`Mouse_Left != 0 || joypad button`).
+`debut:` loop: `while ChoixMenu == 0 { if mouse_mode == 0 { Call mouse_toggle }; waitt 1 }`. On exit: hide version/username text, `CameraSpeed = 0`, `Camera1Friction = 0.01`. Every branch except ">= 101" first waits for **left-button release** (`Mouse_Left != 0 || joypad button`).
 
 | ChoixMenu | Action |
 |---|---|
@@ -300,7 +300,7 @@ While in a sub-menu `Esc` still opens Options (`On_Esc = InitGameOptions`); clos
 | `Singer` | Only used for levels 21/37 and the unlock messages (§3.8). Treat as 1. |
 
 ### 3.8 Icon state from `LevelsInfo[N]` (`InitMainMenu :94-175`, `LevelNotReady :1016-1112`)
-`LevelsInfo[N]` is a per-boot copy of each file's `LevelsExist[N]`: **0 = no save file (absent), 1 = exists but locked, 2 = unlocked** (reached; set by `ValideLevel`). Shipped files give: 1 = 2; 2-5 = 2 for the original author's progress, but a clean install has 1 = 2 and 2-12 = 1; 17 = 2, 18-28 = 1; 33 = 2, 34-44 = 1; 49 = 1; 13-16, 29-32, 45-48 = 0 (decoded from the files in the install).
+`LevelsInfo[N]` is a per-boot copy of each file's `LevelsExist[N]`: **0 = no save file (absent), 1 = exists but locked, 2 = unlocked** (reached; set by `ValideLevel`). The `levelN.SAV` files in the install directory (a copy that has been played up to level 5) give: 1-5 = 2, 6-12 = 1; 17 = 2, 18-28 = 1; 33 = 2, 34-44 = 1; 49 = 1; 13-16, 29-32, 45-48 = 0 (no file). A clean install is therefore 1 = 2 and 2-5 = 1 as well [I]; levels 1, 17 and 33 are always 2.
 
 Special cases for `Singer == 1`:
 - Level 21: if `LevelsInfo[21] != 0`: `LevelsInfo[21] = 2` if `LevelsInfo[20] == 2` else 1 (the local `V` follows). Level 37 likewise from 36. Evaluated each time the menu inits; since `2` means "unlocked", level 21 opens as soon as 20 is unlocked, i.e. when 19 is won [Q] (`:103-131`).
@@ -425,7 +425,7 @@ Quirk: freezing the game (`Freeze_mode`) is released in `Fin_MenuOptions` even i
 ---
 
 ## 5. Yes/No dialog (`options.wdl:668-776`, `paninter.wdl:368-389`)
-- Panel `PANYesNo` (layer 10): `fondyn.pcx` (199x68) at **(223, 135)**; Yes button `oui1/oui2.pcx` (68x28, "TAK") at panel (12, 36) = **(235, 171)**; No button `non1/non2.pcx` ("NIE") at panel (118, 36) = **(341, 171)**. Button images: 2 = normal... [same convention as 4.2: image 2 normal, image 1 hover; the montage shows `oui1` white "TAK" on black key and `oui2` green]. Sound `Ding1` on release.
+- Panel `PANYesNo` (layer 10): `fondyn.pcx` (199x68) at **(223, 135)**; Yes button `oui1/oui2.pcx` (68x28, "TAK") at panel (12, 36) = **(235, 171)**; No button `non1/non2.pcx` ("NIE") at panel (118, 36) = **(341, 171)**. Button images (same convention as 4.2): normal = `oui1.pcx` / `non1.pcx` (white "TAK" / "NIE"), hover and pressed = `oui2.pcx` / `non2.pcx` (green). Sound `Ding1` on release.
 - Text `Texte_YesNo` (layer 11, font `FonteF_1216`) at (228, 138) (`SetPosPanelsOptions :586-589`). Strings: `QuitYesNo_Str` = **"Wyjście?"** ("Exit?"); `RestartYesNo_Str` = **"Uruchomić\nponownie?"** ("Restart?").
 - Open (`InitChoixOuiNon`): `ResultChoixOuiNon = 0`, show panel and text, cursor to (panel.x + 100, panel.y + 20) = (323, 155), **cursor clamped** to x in [panel.x + 1, panel.x + 199 - 17], y in [panel.y + 1, panel.y + 68 - 17] (`LimitMin/MaxCursor`; in this mode the cursor moves by 2 x mouse deltas instead of following the pointer, `Mouse.wdl:16-41` [U]). Wait up to 16 ticks for all keys to be released.
 - Keys: **J = yes**, **N = no** (`language == 1`; also hard-coded first, `:695-702`). Y and O are not mapped for language 1 but still exit the wait loop (`:687`) and **dismiss the dialog without any action**; Esc likewise. For the port: accept T/Y/J for Yes and N for No; Esc = cancel (no action).
@@ -451,7 +451,7 @@ Quirk: freezing the game (`Freeze_mode`) is released in `Fin_MenuOptions` even i
 ## 7. Level flow from and to the menu
 
 ### 7.1 Save data used by the front-end (`.SAV`, see `gameplay.md` §2)
-- `levelN.SAV` (N = 1..12, 17..28, 33..44, 49, 50): holds `LevelsExist[]` where only index N matters at boot. Clean install: level1 file: `LevelsExist[1] = 2`; level2-5 files hold cumulative author progress 2; 6-12, 18-28, 34-44, 49: 1; 17 and 33: 2. Files 13-16, 29-32, 45-48 do not exist (and the `b113..b148.wmb` in the install dir are 4756-byte stubs). Every level file has `BonusState = 0`.
+- `levelN.SAV` (N = 1..12, 17..28, 33..44, 49, 50): holds `LevelsExist[]` where only index N matters at boot (the files on disk are a copy played to level 5: levels 1-5 hold 2, 6-12, 18-28, 34-44 and 49 hold 1, 17 and 33 hold 2; `level2.SAV`..`level5.SAV` also contain the lower indices as 2, which is irrelevant). Files 13-16, 29-32, 45-48 do not exist (and the `b113..b148.wmb` in the install dir are 4756-byte stubs). Every level file has `BonusState = 0`.
 - `Ver1.SAV`: `Siger = 1`, `NumberLast* = 12/28/44`, `LevelEnCours = 999`, `NeverPlayed = 0`.
 - `BestSco0.SAV`: `BestScores[1..]`, `LevelsExist` of the last save, `LevelEnCours` (the "Play" target), `PreviousLevel`, `NbrLevelsReach`, `Player1Start` (checkpoint of the last level), `VideoMode*`, `LastOptionChoose`, `NeverPlayed`, sliders, `JoyPad`. (In the author's save `LevelEnCours = 5`, `NeverPlayed = 1`, levels 1-5 = 2.)
 
@@ -524,3 +524,170 @@ Entry: `InitExtro` after the win test above (or the dev key Shift + X + E). It s
 
 ## Appendix A: verbatim Polish strings (`SamTexts.wdl`)
 Copied from the file, CP1250 decoded. Newlines inside the strings are real line breaks of the original (they define the text wrapping in the 13x20 font); trailing spaces are kept. Line numbers refer to `SamTexts.wdl`.
+
+### `QuitYesNo_Str` (`SamTexts.wdl:6`)
+
+```text
+Wyjście?
+```
+
+### `RestartYesNo_Str` (`SamTexts.wdl:7`)
+
+```text
+Uruchomić
+ponownie?
+```
+
+### `Help1_Str` (`SamTexts.wdl:12`)
+
+```text
+Sammy musi osiągnąć 
+ustalony wynik by opuścić
+dany poziom. Otrzymuje 
+punkty za każdy klejnot,
+który zbierze. W górnym
+prawym rogu wyświetla się
+wynik osiągnięć naszego
+bohatera, oraz ilość 
+zebranych przez niego 
+klejnotów. Kiedy Sammy
+osiągnie ustalony wynik
+może opuścić poziom
+i udać się do wyjścia.
+
+```
+
+### `Help2_Str` (`SamTexts.wdl:30`)
+
+```text
+Kierowanie:
+
+Użyj klawiszy do
+poruszania Sammy-ego.
+
+Użyj CTRL do skoku.
+
+Użyj SPACE do rzucania os.
+
+Użyj SHIFT do 
+przyspieszenia Sammy-ego
+(musi mieć wystarczającą 
+ilość zebranych-bonusów).
+
+Użyj ALT, żeby
+szybko się obrócić.
+
+Użyj ESC, aby wrócić do
+menu.
+
+
+```
+
+### `Help3_Str` (`SamTexts.wdl:53`)
+
+```text
+Kolorowe drzwi
+otwierają się jeśli Sammy 
+posiada klejnot z 
+odpowiednim kolorem.
+Sammy może nieść tylko
+jeden klejnot w tym 
+samym czasie.
+Niektóre klejnoty mogą być 
+'zmieszane'. Wynikiem może
+być klejnot o nowym 
+kolorze.
+
+Właściwości mieszania:
+
+```
+
+### `Help4_Str` (`SamTexts.wdl:69`)
+
+```text
+-Drzwi 1 otwierają się gdy
+Sammy podejdzie blisko i 
+posiada pasujący klejnot.
+Zamykają się gdy
+znika , a Sammy trzyma
+klejnot.
+-Drzwi 2 otwierają się 
+Sammy znika.
+Sammy trzyma klejnot.
+-Drzwi 3  również 
+otwierają się. Ale te Drzwi
+'łapią' klejnot a Sammy
+traci go.
+```
+
+### `Help5_Str` (`SamTexts.wdl:85`)
+
+```text
+Sammy może łapać osy
+i używać os do walki
+przeciwko lwom.
+Każdy rodzaj os
+posiada inne właściwości.
+Jedne osy posiadają 
+truciznę, ale są szybkie. 
+Inne mają więcej trucizny,
+są powolne, ale podążają 
+za lwami. Sammy może 
+nosić tylko jeden rodzaj 
+os jednocześnie. Kiedy
+łapie osę innego rodzaju, 
+traci wszystkie które miał 
+poprzednio.
+
+```
+
+### `Help6_Str` (`SamTexts.wdl:104`)
+
+```text
+Teleporty transportują 
+Sammy-ego do innych miejsc.
+Musi jedynie nadepnąć na
+nie. W przypadku gdy Sammy
+nadepnie na śmiertelny 
+punkt, traci życie i wraca 
+do pozycji startowej.
+Kiedy Sammy dotrze do
+dużej zielonej strzały, 
+będzie mógł rozpocząć grę 
+z tej pozycji w której był 
+tracąc życie.
+
+```
+
+### `Help7_Str` (`SamTexts.wdl:119`)
+
+```text
+
+Kiedy Sammy znajdzie duże
+serce, zdobywa dodatkowe
+życie.
+
+Sammy może powiększyć swój 
+status życia (lewy górny 
+róg) zbierając małe serca.
+```
+
+### `Help8_Str` (`SamTexts.wdl:129`)
+
+```text
+
+
+```
+
+### `Thanksto_Str` (`SamTexts.wdl:134`)
+
+```text
+Podziękowania dla :
+Dan Silverman
+(adt. textures)
+Cécile, Sylvain,Héloise,
+Guillaume,Aurélien,
+Birgit,Manfred... 
+(beta testerzy)
+
+```
