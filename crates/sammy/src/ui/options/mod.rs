@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy::window::{Monitor, PrimaryMonitor, PrimaryWindow};
+use bevy::window::{Monitor, PrimaryWindow};
 use sammy_core::flow::Phase;
 use sammy_present::options::{DisplayInfo, Effect, Element, FRAME_BORDER, FRAME_FILL_ALPHA, FRAME_PAD, FRAME_RGB, H, Input, Item, OVERLAY_ALPHA, Options, Tab, W};
 

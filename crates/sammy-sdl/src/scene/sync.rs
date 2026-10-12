@@ -10,7 +10,7 @@ pub(super) const CHUNK: f32 = 1024.0;
 /// bounding sphere.
 pub(super) fn chunks(positions: &[[f32; 3]], indices: &[u32]) -> Vec<(Vec<u32>, Sphere)> {
     let mut cells: std::collections::BTreeMap<[i32; 3], Vec<u32>> = Default::default();
-    for tri in indices.chunks_exact(3) {
+    for tri in indices.as_chunks::<3>().0.iter() {
         let c = tri.iter().map(|&i| Vec3::from(positions[i as usize])).sum::<Vec3>() / 3.0;
         cells.entry((c / CHUNK).floor().as_ivec3().to_array()).or_default().extend_from_slice(tri);
     }

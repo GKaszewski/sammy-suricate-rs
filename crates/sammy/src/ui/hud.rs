@@ -46,7 +46,7 @@ struct HudRoot;
 pub fn load_ui_image(files: &GameFiles, images: &mut Assets<Image>, name: &str) -> Option<(Handle<Image>, UVec2)> {
     let pcx = formats::pcx::parse(&files.read(name).ok()?).ok()?;
     let mut img = pcx.image;
-    for px in img.data.chunks_exact_mut(4) {
+    for px in img.data.as_chunks_mut::<4>().0.iter_mut() {
         if crate::render::image::is_key(px) {
             px[3] = 0;
         }

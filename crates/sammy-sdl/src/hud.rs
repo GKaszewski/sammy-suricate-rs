@@ -18,7 +18,7 @@ pub struct HudView {
 /// A UI image from a PCX: near-black is transparent (`overlay`), sharp pixels.
 pub fn load_ui_image(gfx: &Gfx, files: &GameFiles, name: &str) -> Option<Texture> {
     let mut img = formats::pcx::parse(&files.read(name).ok()?).ok()?.image;
-    for px in img.data.chunks_exact_mut(4) {
+    for px in img.data.as_chunks_mut::<4>().0.iter_mut() {
         if formats::image::is_color_key(px) {
             px[3] = 0;
         }

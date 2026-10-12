@@ -71,7 +71,7 @@ impl Wmb {
     pub fn face_lightmap(&self, rect: &LightmapRect) -> RgbaImage {
         let n = (rect.width * rect.height) as usize;
         let raw = &self.lightmaps[rect.offset..rect.offset + n * 2];
-        RgbaImage::from_rgb565(rect.width, rect.height, raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])))
+        RgbaImage::from_rgb565(rect.width, rect.height, raw.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]])))
     }
 
     /// Decompresses the PVS row of a leaf (Quake RLE: a 0 byte is followed by a

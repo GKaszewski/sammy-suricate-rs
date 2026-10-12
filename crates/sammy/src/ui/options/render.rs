@@ -12,7 +12,7 @@ pub(super) fn render(
     strings: Option<Res<Strings>>,
     files: Res<GameFiles>,
     mut images: ResMut<Assets<Image>>,
-    (windows, monitors, ui_scale, controls): (Query<&Window, With<PrimaryWindow>>, Query<&Monitor, With<PrimaryMonitor>>, Res<UiScale>, Res<crate::platform::input::Controls>),
+    (windows, monitors, ui_scale, controls): (Query<&Window, With<PrimaryWindow>>, crate::platform::display::Monitors, Res<UiScale>, Res<crate::platform::input::Controls>),
     roots: Query<Entity, With<OptionsRoot>>,
     mut cache: Local<HashMap<String, Handle<Image>>>,
     mut shown: Local<Vec<Item>>,
@@ -26,7 +26,7 @@ pub(super) fn render(
         return;
     }
     let (origin, p) = pointer(window, ui_scale.0);
-    let info = display(&game, monitors.single().ok());
+    let info = display(&game, crate::platform::display::game_monitor(&monitors));
     let items = state.elements(&strings, &game.save, info.as_ref(), p, controls.pad);
     let focus = controls.pad.then(|| state.focus_area(info.as_ref())).flatten();
     if items == *shown && !roots.is_empty() && focus.is_none() {

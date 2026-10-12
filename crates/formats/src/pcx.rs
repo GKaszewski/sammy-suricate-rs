@@ -51,7 +51,7 @@ pub fn parse(data: &[u8]) -> Result<Pcx> {
             return Err(Error::Invalid("8-bit PCX missing palette".into()));
         }
         let mut palette = [[0u8; 3]; 256];
-        for (i, c) in data[data.len() - 768..].chunks_exact(3).enumerate() {
+        for (i, c) in data[data.len() - 768..].as_chunks::<3>().0.iter().enumerate() {
             palette[i] = [c[0], c[1], c[2]];
         }
         let indices: Vec<u8> = raw

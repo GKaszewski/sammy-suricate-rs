@@ -42,7 +42,7 @@ pub(super) fn update(
     mut game: ResMut<Game>,
     storage: Res<crate::platform::storage::Storage>,
     (mouse, keys, controls): (Res<ButtonInput<MouseButton>>, Res<ButtonInput<KeyCode>>, Res<crate::platform::input::Controls>),
-    (windows, monitors, ui_scale): (Query<&Window, With<PrimaryWindow>>, Query<&Monitor, With<PrimaryMonitor>>, Res<UiScale>),
+    (windows, monitors, ui_scale): (Query<&Window, With<PrimaryWindow>>, crate::platform::display::Monitors, Res<UiScale>),
     mut time: ResMut<Time<Virtual>>,
     mut sfx: crate::platform::audio::Sfx,
     mut volume: ResMut<GlobalVolume>,
@@ -71,7 +71,7 @@ pub(super) fn update(
         no: keys.just_pressed(KeyCode::KeyN),
         pad: controls.pad,
     };
-    let info = display(&game, monitors.single().ok());
+    let info = display(&game, crate::platform::display::game_monitor(&monitors));
     let fx = state.update(&input, &mut game.save, info.as_ref());
     apply(fx, &mut game, &storage, &mut time, &mut sfx, &mut volume, &mut exit);
     menu.modal = state.open();

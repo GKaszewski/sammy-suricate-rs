@@ -51,7 +51,7 @@ impl LoadedModel {
             .skins
             .iter()
             .map(|s| {
-                let alpha = s.image.data.chunks_exact(4).any(|p| p[3] < 255);
+                let alpha = s.image.data.as_chunks::<4>().0.iter().any(|p| p[3] < 255);
                 materials.add(StandardMaterial {
                     base_color_texture: Some(images.add(crate::render::image::to_bevy(&s.image, true, false))),
                     perceptual_roughness: 1.0,
@@ -75,8 +75,8 @@ impl LoadedModel {
         };
         let mut img = skin.image.clone();
         match &skin.indices {
-            Some(idx) => img.data.chunks_exact_mut(4).zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
-            None => img.data.chunks_exact_mut(4).filter(|px| crate::render::image::is_key(px)).for_each(|px| px[3] = 0),
+            Some(idx) => img.data.as_chunks_mut::<4>().0.iter_mut().zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
+            None => img.data.as_chunks_mut::<4>().0.iter_mut().filter(|px| crate::render::image::is_key(&px[..])).for_each(|px| px[3] = 0),
         }
         materials.add(StandardMaterial {
             base_color_texture: Some(images.add(crate::render::image::to_bevy(&img, true, false))),

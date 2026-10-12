@@ -54,7 +54,7 @@ pub fn decode_wav(data: &[u8]) -> Option<Pcm> {
     let ((channels, rate, bits), body) = (fmt?, pcm?);
     let samples = match bits {
         8 => body.iter().map(|&b| (b as i16 - 128) << 8).collect(),
-        16 => body.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect(),
+        16 => body.as_chunks::<2>().0.iter().map(|c| i16::from_le_bytes([c[0], c[1]])).collect(),
         _ => return None,
     };
     Some(Pcm { rate, channels: channels.max(1), samples })

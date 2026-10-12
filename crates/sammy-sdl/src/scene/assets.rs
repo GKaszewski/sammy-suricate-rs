@@ -61,8 +61,8 @@ pub(super) fn overlay_skin(gfx: &Gfx, asset: &ModelAsset, n: u32) -> Texture {
     let Some(skin) = asset.mdl.skins.get(i) else { return asset.skin(n) };
     let mut img = skin.image.clone();
     match &skin.indices {
-        Some(idx) => img.data.chunks_exact_mut(4).zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
-        None => img.data.chunks_exact_mut(4).filter(|px| formats::image::is_color_key(px)).for_each(|px| px[3] = 0),
+        Some(idx) => img.data.as_chunks_mut::<4>().0.iter_mut().zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
+        None => img.data.as_chunks_mut::<4>().0.iter_mut().filter(|px| formats::image::is_color_key(&px[..])).for_each(|px| px[3] = 0),
     }
     let t = gfx.texture(&img, false, true);
     asset.overlay.borrow_mut().insert(n, t);
@@ -77,8 +77,8 @@ pub(super) fn load_sprite(gfx: &Gfx, files: &GameFiles, file: &str) -> Option<Rc
     let mut img = pcx.image.clone();
     // Colour key: palette index 0 (8-bit) or near-black (24-bit).
     match &pcx.indices {
-        Some(idx) => img.data.chunks_exact_mut(4).zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
-        None => img.data.chunks_exact_mut(4).filter(|px| formats::image::is_color_key(px)).for_each(|px| px[3] = 0),
+        Some(idx) => img.data.as_chunks_mut::<4>().0.iter_mut().zip(idx).filter(|(_, i)| **i == 0).for_each(|(px, _)| px[3] = 0),
+        None => img.data.as_chunks_mut::<4>().0.iter_mut().filter(|px| formats::image::is_color_key(&px[..])).for_each(|px| px[3] = 0),
     }
     let (w, h) = (img.width as f32 / frames as f32 / 2.0, img.height as f32 / 2.0);
     let mesh = quad(gfx, w, h, 1.0 / frames as f32);

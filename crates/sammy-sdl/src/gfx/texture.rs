@@ -34,7 +34,7 @@ pub(super) fn upload(gl: &glow::Context, img: &formats::image::RgbaImage, repeat
             glow::UNSIGNED_BYTE,
             glow::PixelUnpackData::Slice(Some(&img.data)),
         );
-        Texture { tex, width: img.width, height: img.height, alpha: img.data.chunks_exact(4).any(|p| p[3] < 255) }
+        Texture { tex, width: img.width, height: img.height, alpha: img.data.as_chunks::<4>().0.iter().any(|p| p[3] < 255) }
     }
 }
 
@@ -49,7 +49,7 @@ impl Gfx {
     pub fn lightmap(&self, img: &formats::image::RgbaImage) -> Texture {
         let lut: Vec<u8> = (0..=255).map(|v| ((v as f32 / 255.0 * LIGHTMAP_SCALE).powf(1.0 / 2.2) / GAMMA_MAX * 255.0).round() as u8).collect();
         let mut img = img.clone();
-        for px in img.data.chunks_exact_mut(4) {
+        for px in img.data.as_chunks_mut::<4>().0.iter_mut() {
             for c in &mut px[..3] {
                 *c = lut[*c as usize];
             }

@@ -49,7 +49,7 @@ impl AudioCallback for Mixer {
             self.left.resize(frames, 0.0);
             self.right.resize(frames, 0.0);
             if song.render(&mut self.left, &mut self.right) {
-                for (i, frame) in out.chunks_exact_mut(2).enumerate() {
+                for (i, frame) in out.as_chunks_mut::<2>().0.iter_mut().enumerate() {
                     frame[0] = self.left[i] * self.music_volume;
                     frame[1] = self.right[i] * self.music_volume;
                 }
@@ -59,7 +59,7 @@ impl AudioCallback for Mixer {
             self.music_busy += now() - t0;
         }
         for v in &mut self.voices {
-            for frame in out.chunks_exact_mut(2) {
+            for frame in out.as_chunks_mut::<2>().0.iter_mut() {
                 let Some(s) = v.data.get(v.at) else { break };
                 let s = s * v.volume * self.volume;
                 frame[0] += s;

@@ -70,7 +70,7 @@ pub fn parse(data: &[u8]) -> Result<Mdl> {
             2 | 3 => {
                 check_fits(&r, px, 2)?;
                 let raw = r.bytes(px * 2)?;
-                let words = raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]]));
+                let words = raw.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]]));
                 if ty == 2 {
                     Skin { format: SkinFormat::Rgb565, image: RgbaImage::from_rgb565(w32, h32, words), indices: None }
                 } else {

@@ -41,7 +41,7 @@ pub(super) fn parse_textures(b: &[u8], palette: Option<&[[u8; 3]; 256]>) -> Resu
             let mut r = Reader::at(b, base + mips[0] as usize);
             let (image, indices) = if bits == 16 {
                 let raw = r.bytes(px * 2)?;
-                let px = raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]]));
+                let px = raw.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]]));
                 (RgbaImage::from_rgb565(width, height, px), None)
             } else {
                 let idx = r.bytes(px)?;

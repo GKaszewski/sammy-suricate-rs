@@ -62,7 +62,7 @@ fn parse_all() {
             assert!(!b.lit || b.lightmap_uvs.len() == b.positions.len());
             assert!(b.indices.iter().all(|&i| (i as usize) < b.positions.len()));
             // Emitted triangles are CCW around the face normal.
-            for tri in b.indices.chunks_exact(3) {
+            for tri in b.indices.as_chunks::<3>().0 {
                 let [a, bb, c] = [0, 1, 2].map(|k| b.positions[tri[k] as usize]);
                 let e1 = [bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]];
                 let e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];

@@ -16,6 +16,15 @@ impl Plugin for DisplayPlugin {
     }
 }
 
+/// The monitors, with whether each is the primary one.
+pub type Monitors<'w, 's> = Query<'w, 's, (&'static Monitor, Has<PrimaryMonitor>)>;
+
+/// The monitor the game uses: the primary one, else the first (Wayland reports no
+/// primary monitor).
+pub fn game_monitor<'a>(monitors: &'a Monitors) -> Option<&'a Monitor> {
+    monitors.iter().find(|(_, primary)| *primary).or_else(|| monitors.iter().next()).map(|(m, _)| m)
+}
+
 /// The options screen's display choices on this monitor.
 pub fn display_info(d: &DisplaySettings, monitor: Option<&Monitor>) -> sammy_present::options::DisplayInfo {
     let desktop = monitor.map(|m| [m.physical_width, m.physical_height]);
@@ -45,14 +54,14 @@ fn hotkeys(keys: Res<ButtonInput<KeyCode>>, storage: Res<crate::platform::storag
 }
 
 /// Applies `game.save.display` to the window whenever it changes (and at start).
-fn apply(game: Res<Game>, monitors: Query<&Monitor, With<PrimaryMonitor>>, mut windows: Query<&mut Window, With<PrimaryWindow>>, mut applied: Local<Option<DisplaySettings>>) {
+fn apply(game: Res<Game>, monitors: Monitors, mut windows: Query<&mut Window, With<PrimaryWindow>>, mut applied: Local<Option<DisplaySettings>>) {
     // Scripted screenshot runs keep the default window.
     if std::env::var_os("SAMMY_SCREENSHOT").is_some() || *applied == Some(game.save.display) {
         return;
     }
     let Ok(mut win) = windows.single_mut() else { return };
     let d = game.save.display;
-    let monitor = monitors.single().ok();
+    let monitor = game_monitor(&monitors);
     win.mode = match d.mode {
         DisplayMode::Windowed => WindowMode::Windowed,
         DisplayMode::Borderless => WindowMode::BorderlessFullscreen(MonitorSelection::Current),

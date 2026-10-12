@@ -109,13 +109,13 @@ impl Loader<'_> {
         let mut img = pcx.image.clone();
         // Acknex sprites are colour-keyed: palette index 0 (8-bit) or pure black (24-bit).
         if let Some(idx) = &pcx.indices {
-            for (px, &i) in img.data.chunks_exact_mut(4).zip(idx) {
+            for (px, &i) in img.data.as_chunks_mut::<4>().0.iter_mut().zip(idx) {
                 if i == 0 {
                     px[3] = 0;
                 }
             }
         } else {
-            for px in img.data.chunks_exact_mut(4) {
+            for px in img.data.as_chunks_mut::<4>().0.iter_mut() {
                 if crate::render::image::is_key(px) {
                     px[3] = 0;
                 }
