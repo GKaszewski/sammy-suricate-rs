@@ -68,7 +68,7 @@ fn draw_particles(
     let Ok(cam) = cam.single() else { return };
     // Batches despawned with the level are recreated on demand.
     batches.0.retain(|_, (e, _)| alive.contains(*e));
-    let groups = particles.quads(coords::native(cam.right().as_vec3()), coords::native(cam.up().as_vec3()));
+    let groups = particles.quads(coords::native_dir(cam.right().as_vec3()), coords::native_dir(cam.up().as_vec3()));
     // Empty the batches that have no particles this frame.
     for (key, (_, mesh)) in &batches.0 {
         if !groups.contains_key(key)

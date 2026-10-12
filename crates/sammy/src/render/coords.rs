@@ -16,8 +16,14 @@ pub fn native(v: Vec3) -> [f32; 3] {
     [-v.z * QUANTS_PER_UNIT, -v.x * QUANTS_PER_UNIT, v.y * QUANTS_PER_UNIT]
 }
 
+/// A native direction (unit length kept) in Bevy space.
 pub fn dir([x, y, z]: [f32; 3]) -> Vec3 {
     Vec3::new(-y, z, -x)
+}
+
+/// Inverse of [`dir`]: a Bevy direction in native axes, unscaled (not a position).
+pub fn native_dir(v: Vec3) -> [f32; 3] {
+    [-v.z, -v.x, v.y]
 }
 
 /// Acknex euler angles in degrees: pan (around Z, CCW from above), tilt (pitch up),

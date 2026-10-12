@@ -175,9 +175,13 @@ impl Player {
     }
 
     /// After a spawn or teleport, Sammy stands on the floor below him.
+    /// A start marker placed at his feet (tutorial level 9) puts the probe inside the
+    /// floor; it is then retried from his standing height above the marker.
     fn snap_once<S: Space>(&mut self, space: &S) {
         if !self.snapped {
-            if let Some((fl, ..)) = floor_below(space, self.pos.get()) {
+            let p = self.pos.get();
+            let floor = floor_below(space, p).or_else(|| floor_below(space, [p[0], p[1], p[2] + BLOB_HAUT]));
+            if let Some((fl, ..)) = floor {
                 self.pos[2] = fl + BLOB_HAUT;
             }
             self.snapped = true;

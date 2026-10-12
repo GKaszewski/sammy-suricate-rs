@@ -16,7 +16,7 @@ pub(crate) fn place_logo(
     mut fog: Query<(&mut Transform, &MeshMaterial3d<StandardMaterial>, &mut Visibility), With<FogQuad>>,
 ) {
     let Ok(cam) = cam.single() else { return };
-    let (logo, fog_alpha) = sammy_present::intro::overlay(&game, coords::native(cam.translation), coords::native(*cam.forward()));
+    let (logo, fog_alpha) = sammy_present::intro::overlay(&game, coords::native(cam.translation), coords::native_dir(*cam.forward()));
     let shown = logo.map_or(0, |l| l.id);
     // Respawn the entity when the logo changes.
     for (e, v, ..) in &logos {

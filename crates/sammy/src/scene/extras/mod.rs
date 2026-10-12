@@ -57,6 +57,6 @@ pub(super) fn update(
     for GameEvent(e) in events.read() {
         extras.event(&game, e);
     }
-    let view = cam.single().map_or(View::default(), |g| View::looking(coords::native(g.translation()), coords::native(g.forward().as_vec3())));
+    let view = cam.single().map_or(View::default(), |g| View::looking(coords::native(g.translation()), coords::native_dir(g.forward().as_vec3())));
     extras.update(&game, view, Secs(time.delta_secs()), &mut particles);
 }
